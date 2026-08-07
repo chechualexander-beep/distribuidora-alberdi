@@ -24,7 +24,9 @@ class DistribuidoraAlberdiApp extends StatelessWidget {
         useMaterial3: true,
         colorSchemeSeed: Colors.indigo,
       ),
-      home: const LoginPage(),
+      home: Supabase.instance.client.auth.currentSession == null
+          ? const LoginPage()
+          : const HomePage(),
     );
   }
 }
@@ -71,7 +73,7 @@ class _LoginPageState extends State<LoginPage> {
       }
     } on AuthException catch (error) {
       _mostrarMensaje('No se pudo iniciar sesión: ${error.message}');
-    } catch (error) {
+    } catch (_) {
       _mostrarMensaje('Ocurrió un error al iniciar sesión.');
     } finally {
       if (mounted) {
@@ -86,9 +88,7 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-      ),
+      SnackBar(content: Text(mensaje)),
     );
   }
 
@@ -109,7 +109,6 @@ class _LoginPageState extends State<LoginPage> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(
                     Icons.inventory_2_outlined,
@@ -133,7 +132,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 40),
-
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -144,9 +142,7 @@ class _LoginPageState extends State<LoginPage> {
                       border: OutlineInputBorder(),
                     ),
                   ),
-
                   const SizedBox(height: 18),
-
                   TextField(
                     controller: _passwordController,
                     obscureText: _ocultarPassword,
@@ -169,9 +165,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 26),
-
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -203,13 +197,77 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
-  Future<void> _cerrarSesion(BuildContext context) async {
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  bool _cargandoPerfil = true;
+  String? _nombre;
+  String? _rol;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarPerfil();
+  }
+
+  Future<void> _cargarPerfil() async {
+    try {
+      final usuarioAuth = Supabase.instance.client.auth.currentUser;
+
+      if (usuarioAuth == null) {
+        setState(() {
+          _error = 'No hay una sesión iniciada.';
+          _cargandoPerfil = false;
+        });
+        return;
+      }
+
+      final perfil = await Supabase.instance.client
+          .from('usuarios')
+          .select('nombre, apellido, rol, activo')
+          .eq('id', usuarioAuth.id)
+          .single();
+
+      final nombre = perfil['nombre'] as String?;
+      final apellido = perfil['apellido'] as String?;
+      final rol = perfil['rol'] as String?;
+      final activo = perfil['activo'] as bool? ?? false;
+
+      if (!activo) {
+        setState(() {
+          _error = 'Este usuario está desactivado.';
+          _cargandoPerfil = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _nombre = [
+          if (nombre != null && nombre.isNotEmpty) nombre,
+          if (apellido != null && apellido.isNotEmpty) apellido,
+        ].join(' ');
+
+        _rol = rol;
+        _cargandoPerfil = false;
+      });
+    } catch (error) {
+      setState(() {
+        _error = 'No se pudo cargar el perfil del usuario.';
+        _cargandoPerfil = false;
+      });
+    }
+  }
+
+  Future<void> _cerrarSesion() async {
     await Supabase.instance.client.auth.signOut();
 
-    if (!context.mounted) return;
+    if (!mounted) return;
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
@@ -221,7 +279,33 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final usuario = Supabase.instance.client.auth.currentUser;
+    if (_cargandoPerfil) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Distribuidora Alberdi'),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final esAdministrador = _rol == 'administrador';
 
     return Scaffold(
       appBar: AppBar(
@@ -229,40 +313,75 @@ class HomePage extends StatelessWidget {
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
-            onPressed: () => _cerrarSesion(context),
+            onPressed: _cerrarSesion,
             icon: const Icon(Icons.logout),
           ),
         ],
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.check_circle_outline,
-                size: 80,
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Hola, ${_nombre ?? 'Usuario'}',
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: 20),
-              const Text(
-                '¡Sesión iniciada!',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              esAdministrador ? 'Administrador' : 'Preventista',
+              style: const TextStyle(
+                fontSize: 17,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.people_outline),
+                title: const Text('Clientes'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {},
+              ),
+            ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: const Text('Productos'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {},
+              ),
+            ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.shopping_cart_outlined),
+                title: const Text('Nuevo pedido'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {},
+              ),
+            ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: const Text('Pedidos'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {},
+              ),
+            ),
+            if (esAdministrador)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.admin_panel_settings_outlined),
+                  title: const Text('Administración'),
+                  subtitle: const Text('Solo administrador'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {},
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                usuario?.email ?? '',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Bienvenido a Distribuidora Alberdi',
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
