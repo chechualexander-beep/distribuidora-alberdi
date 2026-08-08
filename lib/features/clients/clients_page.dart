@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'new_client_page.dart';
+
 class ClientsPage extends StatefulWidget {
   const ClientsPage({super.key});
 
@@ -11,6 +13,7 @@ class ClientsPage extends StatefulWidget {
 class _ClientsPageState extends State<ClientsPage> {
   bool _cargando = true;
   String? _error;
+
   List<Map<String, dynamic>> _clientes = [];
 
   @override
@@ -20,26 +23,29 @@ class _ClientsPageState extends State<ClientsPage> {
   }
 
   Future<void> _cargarClientes() async {
+    setState(() {
+      _cargando = true;
+      _error = null;
+    });
+
     try {
-      final datos = await Supabase.instance.client
+      final respuesta = await Supabase.instance.client
           .from('clientes')
-          .select(
-            'id, nombre_comercio, propietario, telefono, direccion, localidad, zona',
-          )
+          .select()
           .eq('activo', true)
           .order('nombre_comercio');
 
       if (!mounted) return;
 
       setState(() {
-        _clientes = List<Map<String, dynamic>>.from(datos);
+        _clientes = List<Map<String, dynamic>>.from(respuesta);
         _cargando = false;
       });
     } catch (error) {
       if (!mounted) return;
 
       setState(() {
-        _error = 'No se pudieron cargar los clientes.';
+        _error = error.toString();
         _cargando = false;
       });
     }
@@ -51,82 +57,136 @@ class _ClientsPageState extends State<ClientsPage> {
       appBar: AppBar(
         title: const Text('Clientes'),
       ),
-      body: _cargando
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : _error != null
-              ? Center(
-                  child: Text(_error!),
-                )
-              : _clientes.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.people_outline,
-                            size: 70,
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            'Todavía no hay clientes cargados',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            'En el próximo paso agregaremos el primero.',
-                          ),
-                        ],
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _cargarClientes,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _clientes.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final cliente = _clientes[index];
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final clienteCreado = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => const NewClientPage(),
+            ),
+          );
 
-                          final nombre =
-                              cliente['nombre_comercio']?.toString() ?? '';
+          if (clienteCreado == true) {
+            _cargarClientes();
+          }
+        },
+        icon: const Icon(Icons.person_add_alt_1),
+        label: const Text('Nuevo cliente'),
+      ),
+      body: _construirContenido(),
+    );
+  }
 
-                          final direccion =
-                              cliente['direccion']?.toString() ?? '';
+  Widget _construirContenido() {
+    if (_cargando) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
 
-                          final localidad =
-                              cliente['localidad']?.toString() ?? '';
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                size: 60,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'No se pudieron cargar los clientes.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _cargarClientes,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-                          return Card(
-                            child: ListTile(
-                              leading: const CircleAvatar(
-                                child: Icon(Icons.store_outlined),
-                              ),
-                              title: Text(
-                                nombre,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Text(
-                                [
-                                  direccion,
-                                  if (localidad.isNotEmpty) localidad,
-                                ].join(' • '),
-                              ),
-                              trailing:
-                                  const Icon(Icons.chevron_right),
-                              onTap: () {},
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+    if (_clientes.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.people_outline,
+              size: 80,
+            ),
+            SizedBox(height: 20),
+            Text(
+              'Todavía no hay clientes cargados',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Presioná "Nuevo cliente" para agregar el primero.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _cargarClientes,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _clientes.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          final cliente = _clientes[index];
+
+          final comercio =
+              cliente['nombre_comercio']?.toString() ?? 'Sin nombre';
+
+          final propietario = cliente['propietario']?.toString();
+
+          final direccion = cliente['direccion']?.toString() ?? '';
+
+          final localidad = cliente['localidad']?.toString();
+
+          return Card(
+            child: ListTile(
+              leading: const CircleAvatar(
+                child: Icon(Icons.storefront),
+              ),
+              title: Text(
+                comercio,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (propietario != null && propietario.isNotEmpty)
+                    Text(propietario),
+                  Text(direccion),
+                  if (localidad != null && localidad.isNotEmpty)
+                    Text(localidad),
+                ],
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {},
+            ),
+          );
+        },
+      ),
     );
   }
 }
