@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'features/clients/clients_page.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -59,7 +61,8 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final respuesta = await Supabase.instance.client.auth.signInWithPassword(
+      final respuesta =
+          await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
       );
@@ -72,9 +75,13 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     } on AuthException catch (error) {
-      _mostrarMensaje('No se pudo iniciar sesión: ${error.message}');
+      _mostrarMensaje(
+        'No se pudo iniciar sesión: ${error.message}',
+      );
     } catch (_) {
-      _mostrarMensaje('Ocurrió un error al iniciar sesión.');
+      _mostrarMensaje(
+        'Ocurrió un error al iniciar sesión.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -88,7 +95,9 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje)),
+      SnackBar(
+        content: Text(mensaje),
+      ),
     );
   }
 
@@ -107,7 +116,9 @@ class _LoginPageState extends State<LoginPage> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(28),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
+              constraints: const BoxConstraints(
+                maxWidth: 420,
+              ),
               child: Column(
                 children: [
                   const Icon(
@@ -134,11 +145,13 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 40),
                   TextField(
                     controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
+                    keyboardType:
+                        TextInputType.emailAddress,
                     autocorrect: false,
                     decoration: const InputDecoration(
                       labelText: 'Correo electrónico',
-                      prefixIcon: Icon(Icons.email_outlined),
+                      prefixIcon:
+                          Icon(Icons.email_outlined),
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -146,21 +159,26 @@ class _LoginPageState extends State<LoginPage> {
                   TextField(
                     controller: _passwordController,
                     obscureText: _ocultarPassword,
-                    onSubmitted: (_) => _iniciarSesion(),
+                    onSubmitted: (_) =>
+                        _iniciarSesion(),
                     decoration: InputDecoration(
                       labelText: 'Contraseña',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: const OutlineInputBorder(),
+                      prefixIcon:
+                          const Icon(Icons.lock_outline),
+                      border:
+                          const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         onPressed: () {
                           setState(() {
-                            _ocultarPassword = !_ocultarPassword;
+                            _ocultarPassword =
+                                !_ocultarPassword;
                           });
                         },
                         icon: Icon(
                           _ocultarPassword
                               ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
+                              : Icons
+                                  .visibility_off_outlined,
                         ),
                       ),
                     ),
@@ -170,19 +188,23 @@ class _LoginPageState extends State<LoginPage> {
                     width: double.infinity,
                     height: 52,
                     child: FilledButton(
-                      onPressed: _cargando ? null : _iniciarSesion,
+                      onPressed: _cargando
+                          ? null
+                          : _iniciarSesion,
                       child: _cargando
                           ? const SizedBox(
                               width: 24,
                               height: 24,
-                              child: CircularProgressIndicator(
+                              child:
+                                  CircularProgressIndicator(
                                 strokeWidth: 2,
                               ),
                             )
                           : const Text(
                               'INICIAR SESIÓN',
                               style: TextStyle(
-                                fontWeight: FontWeight.bold,
+                                fontWeight:
+                                    FontWeight.bold,
                               ),
                             ),
                     ),
@@ -201,11 +223,13 @@ class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomePage> createState() =>
+      _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   bool _cargandoPerfil = true;
+
   String? _nombre;
   String? _rol;
   String? _error;
@@ -218,47 +242,71 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _cargarPerfil() async {
     try {
-      final usuarioAuth = Supabase.instance.client.auth.currentUser;
+      final usuarioAuth =
+          Supabase.instance.client.auth.currentUser;
 
       if (usuarioAuth == null) {
+        if (!mounted) return;
+
         setState(() {
           _error = 'No hay una sesión iniciada.';
           _cargandoPerfil = false;
         });
+
         return;
       }
 
       final perfil = await Supabase.instance.client
           .from('usuarios')
-          .select('nombre, apellido, rol, activo')
+          .select(
+            'nombre, apellido, rol, activo',
+          )
           .eq('id', usuarioAuth.id)
           .single();
 
-      final nombre = perfil['nombre'] as String?;
-      final apellido = perfil['apellido'] as String?;
-      final rol = perfil['rol'] as String?;
-      final activo = perfil['activo'] as bool? ?? false;
+      final nombre =
+          perfil['nombre'] as String?;
+
+      final apellido =
+          perfil['apellido'] as String?;
+
+      final rol =
+          perfil['rol'] as String?;
+
+      final activo =
+          perfil['activo'] as bool? ?? false;
+
+      if (!mounted) return;
 
       if (!activo) {
         setState(() {
-          _error = 'Este usuario está desactivado.';
+          _error =
+              'Este usuario está desactivado.';
           _cargandoPerfil = false;
         });
+
         return;
       }
 
       setState(() {
         _nombre = [
-          if (nombre != null && nombre.isNotEmpty) nombre,
-          if (apellido != null && apellido.isNotEmpty) apellido,
+          if (nombre != null &&
+              nombre.isNotEmpty)
+            nombre,
+          if (apellido != null &&
+              apellido.isNotEmpty)
+            apellido,
         ].join(' ');
 
         _rol = rol;
         _cargandoPerfil = false;
       });
-    } catch (error) {
+    } catch (_) {
+      if (!mounted) return;
+
       setState(() {
-        _error = 'No se pudo cargar el perfil del usuario.';
+        _error =
+            'No se pudo cargar el perfil del usuario.';
         _cargandoPerfil = false;
       });
     }
@@ -290,7 +338,8 @@ class _HomePageState extends State<HomePage> {
     if (_error != null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Distribuidora Alberdi'),
+          title:
+              const Text('Distribuidora Alberdi'),
         ),
         body: Center(
           child: Padding(
@@ -298,18 +347,21 @@ class _HomePageState extends State<HomePage> {
             child: Text(
               _error!,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18),
+              style:
+                  const TextStyle(fontSize: 18),
             ),
           ),
         ),
       );
     }
 
-    final esAdministrador = _rol == 'administrador';
+    final esAdministrador =
+        _rol == 'administrador';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Distribuidora Alberdi'),
+        title:
+            const Text('Distribuidora Alberdi'),
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
@@ -321,7 +373,8 @@ class _HomePageState extends State<HomePage> {
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment:
+              CrossAxisAlignment.stretch,
           children: [
             Text(
               'Hola, ${_nombre ?? 'Usuario'}',
@@ -332,52 +385,100 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 6),
             Text(
-              esAdministrador ? 'Administrador' : 'Preventista',
+              esAdministrador
+                  ? 'Administrador'
+                  : 'Preventista',
               style: const TextStyle(
                 fontSize: 17,
                 color: Colors.grey,
               ),
             ),
             const SizedBox(height: 32),
+
+            // CLIENTES
             Card(
               child: ListTile(
-                leading: const Icon(Icons.people_outline),
-                title: const Text('Clientes'),
-                trailing: const Icon(Icons.chevron_right),
+                leading: const Icon(
+                  Icons.people_outline,
+                ),
+                title:
+                    const Text('Clientes'),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                ),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const ClientsPage(),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // PRODUCTOS
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.inventory_2_outlined,
+                ),
+                title:
+                    const Text('Productos'),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                ),
                 onTap: () {},
               ),
             ),
+
+            // NUEVO PEDIDO
             Card(
               child: ListTile(
-                leading: const Icon(Icons.inventory_2_outlined),
-                title: const Text('Productos'),
-                trailing: const Icon(Icons.chevron_right),
+                leading: const Icon(
+                  Icons.shopping_cart_outlined,
+                ),
+                title:
+                    const Text('Nuevo pedido'),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                ),
                 onTap: () {},
               ),
             ),
+
+            // PEDIDOS
             Card(
               child: ListTile(
-                leading: const Icon(Icons.shopping_cart_outlined),
-                title: const Text('Nuevo pedido'),
-                trailing: const Icon(Icons.chevron_right),
+                leading: const Icon(
+                  Icons.receipt_long_outlined,
+                ),
+                title:
+                    const Text('Pedidos'),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                ),
                 onTap: () {},
               ),
             ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.receipt_long_outlined),
-                title: const Text('Pedidos'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {},
-              ),
-            ),
+
+            // ADMINISTRACIÓN
             if (esAdministrador)
               Card(
                 child: ListTile(
-                  leading: const Icon(Icons.admin_panel_settings_outlined),
-                  title: const Text('Administración'),
-                  subtitle: const Text('Solo administrador'),
-                  trailing: const Icon(Icons.chevron_right),
+                  leading: const Icon(
+                    Icons
+                        .admin_panel_settings_outlined,
+                  ),
+                  title: const Text(
+                    'Administración',
+                  ),
+                  subtitle: const Text(
+                    'Solo administrador',
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right,
+                  ),
                   onTap: () {},
                 ),
               ),
