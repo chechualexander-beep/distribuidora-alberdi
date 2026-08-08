@@ -15,6 +15,7 @@ class _ClientsPageState extends State<ClientsPage> {
   String? _error;
 
   List<Map<String, dynamic>> _clientes = [];
+  String _busqueda = '';
 
   @override
   void initState() {
@@ -66,7 +67,7 @@ class _ClientsPageState extends State<ClientsPage> {
           );
 
           if (clienteCreado == true) {
-            _cargarClientes();
+            await _cargarClientes();
           }
         },
         icon: const Icon(Icons.person_add_alt_1),
@@ -142,51 +143,107 @@ class _ClientsPageState extends State<ClientsPage> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _cargarClientes,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: _clientes.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 8),
-        itemBuilder: (context, index) {
-          final cliente = _clientes[index];
+    final texto = _busqueda.toLowerCase();
 
-          final comercio =
-              cliente['nombre_comercio']?.toString() ?? 'Sin nombre';
+    final clientesFiltrados = _clientes.where((cliente) {
+      final comercio =
+          cliente['nombre_comercio']?.toString().toLowerCase() ?? '';
 
-          final propietario = cliente['propietario']?.toString();
+      final propietario =
+          cliente['propietario']?.toString().toLowerCase() ?? '';
 
-          final direccion = cliente['direccion']?.toString() ?? '';
+      final direccion =
+          cliente['direccion']?.toString().toLowerCase() ?? '';
 
-          final localidad = cliente['localidad']?.toString();
+      final telefono =
+          cliente['telefono']?.toString().toLowerCase() ?? '';
 
-          return Card(
-            child: ListTile(
-              leading: const CircleAvatar(
-                child: Icon(Icons.storefront),
-              ),
-              title: Text(
-                comercio,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (propietario != null && propietario.isNotEmpty)
-                    Text(propietario),
-                  Text(direccion),
-                  if (localidad != null && localidad.isNotEmpty)
-                    Text(localidad),
-                ],
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {},
+      return comercio.contains(texto) ||
+          propietario.contains(texto) ||
+          direccion.contains(texto) ||
+          telefono.contains(texto);
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: TextField(
+            decoration: const InputDecoration(
+              hintText: 'Buscar cliente...',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
             ),
-          );
-        },
-      ),
+            onChanged: (valor) {
+              setState(() {
+                _busqueda = valor.trim();
+              });
+            },
+          ),
+        ),
+        Expanded(
+          child: clientesFiltrados.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No se encontraron clientes',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _cargarClientes,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: clientesFiltrados.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final cliente = clientesFiltrados[index];
+
+                      final comercio =
+                          cliente['nombre_comercio']?.toString() ??
+                              'Sin nombre';
+
+                      final propietario =
+                          cliente['propietario']?.toString();
+
+                      final direccion =
+                          cliente['direccion']?.toString() ?? '';
+
+                      final localidad =
+                          cliente['localidad']?.toString();
+
+                      return Card(
+                        child: ListTile(
+                          leading: const CircleAvatar(
+                            child: Icon(Icons.storefront),
+                          ),
+                          title: Text(
+                            comercio,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (propietario != null &&
+                                  propietario.isNotEmpty)
+                                Text(propietario),
+                              Text(direccion),
+                              if (localidad != null &&
+                                  localidad.isNotEmpty)
+                                Text(localidad),
+                            ],
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {},
+                        ),
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
     );
   }
 }
