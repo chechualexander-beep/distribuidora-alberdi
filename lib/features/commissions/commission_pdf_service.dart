@@ -22,7 +22,7 @@ class CommissionPdfService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        margin: const pw.EdgeInsets.all(20),
         header: (context) {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -41,7 +41,7 @@ class CommissionPdfService {
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
-              pw.SizedBox(height: 8),
+              pw.SizedBox(height: 4),
               pw.Divider(),
             ],
           );
@@ -97,7 +97,7 @@ class CommissionPdfService {
               ),
             ),
 
-            pw.SizedBox(height: 18),
+            pw.SizedBox(height: 10),
 
             pw.Text(
               'Resumen',
@@ -127,7 +127,7 @@ class CommissionPdfService {
               destacado: true,
             ),
 
-            pw.SizedBox(height: 22),
+            pw.SizedBox(height: 12),
 
             pw.Text(
               'Detalle por cliente y pedido',
@@ -153,7 +153,7 @@ class CommissionPdfService {
               },
             ),
 
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 10),
 
             pw.Container(
               padding: const pw.EdgeInsets.all(16),
