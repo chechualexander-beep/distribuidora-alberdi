@@ -44,21 +44,24 @@ class _OrdersPageState extends State<OrdersPage> {
 
       final respuesta = await Supabase.instance.client
           .from('pedidos')
-          .select(
-            '''
-            id,
-            created_at,
-            estado,
-            total,
-            cliente_id,
-            preventista_id,
-            clientes (
-              nombre_comercio,
-              direccion,
-              localidad
-            )
-            ''',
-          )
+         .select(
+  '''
+  id,
+  created_at,
+  estado,
+  total,
+  cliente_id,
+  preventista_id,
+  clientes (
+    nombre_comercio,
+    direccion,
+    localidad
+  ),
+  pedido_detalles (
+    cantidad
+  )
+  ''',
+)
           .eq('preventista_id', usuario.id)
           .order('created_at', ascending: false);
 
@@ -211,7 +214,28 @@ class _OrdersPageState extends State<OrdersPage> {
 
           final estado =
               pedido['estado']?.toString() ?? 'pendiente';
+final detalles =
+    pedido['pedido_detalles'] as List<dynamic>? ?? [];
 
+final renglones = detalles.length;
+
+final unidades = detalles.fold<int>(
+  0,
+  (total, detalle) {
+    final cantidad = double.tryParse(
+          detalle['cantidad']?.toString() ?? '0',
+        )?.round() ??
+    0;
+
+    return total + cantidad;
+  },
+);
+
+final idPedido = pedido['id']?.toString() ?? '';
+
+final numeroPedido = idPedido.length >= 8
+    ? idPedido.substring(0, 8).toUpperCase()
+    : idPedido.toUpperCase();
           return Card(
             child: ListTile(
               leading: const CircleAvatar(
@@ -236,6 +260,10 @@ class _OrdersPageState extends State<OrdersPage> {
                   Text(
                     'Estado: ${estado.toUpperCase()}',
                   ),
+                  const SizedBox(height: 4),
+Text('Pedido: #$numeroPedido'),
+const SizedBox(height: 4),
+Text('$renglones renglones • $unidades unidades'),
                 ],
               ),
               trailing: Column(
