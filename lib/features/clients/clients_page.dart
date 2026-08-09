@@ -43,11 +43,11 @@ class _ClientsPageState extends State<ClientsPage> {
         _clientes = List<Map<String, dynamic>>.from(respuesta);
         _cargando = false;
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
-        _error = error.toString();
+        _error = 'No se pudieron cargar los clientes.';
         _cargando = false;
       });
     }
@@ -97,10 +97,10 @@ class _ClientsPageState extends State<ClientsPage> {
                 size: 60,
               ),
               const SizedBox(height: 16),
-              const Text(
-                'No se pudieron cargar los clientes.',
+              Text(
+                _error!,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -238,15 +238,26 @@ class _ClientsPageState extends State<ClientsPage> {
                           ),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () async {
-  final actualizado = await Navigator.of(context).push<bool>(
-    MaterialPageRoute(
-      builder: (_) => ClientDetailPage(
-        cliente: cliente,
-      ),
-    ),
-  );
+                            final actualizado =
+                                await Navigator.of(context).push<bool>(
+                              MaterialPageRoute(
+                                builder: (_) => ClientDetailPage(
+                                  cliente: cliente,
+                                ),
+                              ),
+                            );
 
-  if (actualizado == true) {
-    await _cargarClientes();
+                            if (actualizado == true) {
+                              await _cargarClientes();
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
   }
-},
+}
