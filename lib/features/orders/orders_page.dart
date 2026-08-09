@@ -49,6 +49,8 @@ class _OrdersPageState extends State<OrdersPage> {
   id,
   created_at,
   estado,
+  resultado_entrega,
+motivo_no_entrega,
   total,
   cliente_id,
   preventista_id,
@@ -214,6 +216,11 @@ class _OrdersPageState extends State<OrdersPage> {
 
           final estado =
               pedido['estado']?.toString() ?? 'pendiente';
+              final resultadoEntrega =
+    pedido['resultado_entrega']?.toString() ?? 'pendiente';
+
+final motivoNoEntrega =
+    pedido['motivo_no_entrega']?.toString() ?? '';
 final detalles =
     pedido['pedido_detalles'] as List<dynamic>? ?? [];
 
@@ -260,6 +267,17 @@ final numeroPedido = idPedido.length >= 8
                   Text(
                     'Estado: ${estado.toUpperCase()}',
                   ),
+                  const SizedBox(height: 4),
+Text(
+  'Entrega: ${resultadoEntrega.toUpperCase()}',
+),
+if (resultadoEntrega == 'no_entregado' &&
+    motivoNoEntrega.isNotEmpty) ...[
+  const SizedBox(height: 4),
+  Text(
+    'Motivo: $motivoNoEntrega',
+  ),
+],
                   const SizedBox(height: 4),
 Text('Pedido: #$numeroPedido'),
 const SizedBox(height: 4),
