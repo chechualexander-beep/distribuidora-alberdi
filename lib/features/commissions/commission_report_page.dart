@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
+import 'commission_pdf_service.dart';
 class CommissionReportPage extends StatelessWidget {
   final String preventista;
   final DateTime desde;
@@ -315,10 +317,24 @@ class CommissionReportPage extends StatelessWidget {
           const SizedBox(height: 24),
 
           FilledButton.icon(
-            onPressed: () {
-              // Próximo paso:
-              // generar PDF o compartir la liquidación.
-            },
+            onPressed: () async {
+  final pdf = await CommissionPdfService.generarPdf(
+    preventista: preventista,
+    desde: desde,
+    hasta: hasta,
+    ventaPedida: ventaPedida,
+    ventaEntregada: ventaEntregada,
+    ventaNoEntregada: ventaNoEntregada,
+    comisionTotal: comisionTotal,
+    detalles: detalles,
+  );
+
+  await Printing.layoutPdf(
+    name:
+        'Liquidacion_${preventista.replaceAll(' ', '_')}_${_formatearFecha(desde).replaceAll('/', '-')}_${_formatearFecha(hasta).replaceAll('/', '-')}.pdf',
+    onLayout: (_) async => pdf,
+  );
+},
             icon: const Icon(
               Icons.picture_as_pdf_outlined,
             ),
