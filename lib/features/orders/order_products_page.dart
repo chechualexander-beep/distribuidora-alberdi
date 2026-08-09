@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'order_summary_page.dart';
+
 class OrderProductsPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
 
@@ -23,6 +25,8 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   String _tipoPrecio = 'normal';
 
   final Map<String, int> _cantidades = {};
+  final Map<String, double> _preciosFijados = {};
+  final Map<String, String> _tiposPrecioFijados = {};
 
   @override
   void initState() {
@@ -61,7 +65,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     }
   }
 
-  double _precioProducto(Map<String, dynamic> producto) {
+  double _precioActual(Map<String, dynamic> producto) {
     dynamic valor;
 
     switch (_tipoPrecio) {
@@ -83,11 +87,28 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     return _cantidades[id] ?? 0;
   }
 
+  double _precioUsado(Map<String, dynamic> producto) {
+    final id = producto['id'].toString();
+
+    if (_preciosFijados.containsKey(id)) {
+      return _preciosFijados[id]!;
+    }
+
+    return _precioActual(producto);
+  }
+
   void _sumarProducto(Map<String, dynamic> producto) {
     final id = producto['id'].toString();
 
     setState(() {
-      _cantidades[id] = (_cantidades[id] ?? 0) + 1;
+      final cantidadActual = _cantidades[id] ?? 0;
+
+      if (cantidadActual == 0) {
+        _preciosFijados[id] = _precioActual(producto);
+        _tiposPrecioFijados[id] = _tipoPrecio;
+      }
+
+      _cantidades[id] = cantidadActual + 1;
     });
   }
 
@@ -100,6 +121,8 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     setState(() {
       if (cantidadActual == 1) {
         _cantidades.remove(id);
+        _preciosFijados.remove(id);
+        _tiposPrecioFijados.remove(id);
       } else {
         _cantidades[id] = cantidadActual - 1;
       }
@@ -120,7 +143,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
       final cantidad = _cantidadProducto(producto);
 
       if (cantidad > 0) {
-        total += _precioProducto(producto) * cantidad;
+        total += _precioUsado(producto) * cantidad;
       }
     }
 
@@ -146,6 +169,22 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     return '\$${buffer.toString().split('').reversed.join()}';
   }
 
+  void _verPedido() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => OrderSummaryPage(
+          cliente: widget.cliente,
+          productos: _productos,
+          cantidades: Map<String, int>.from(_cantidades),
+          tipoPrecio: _tipoPrecio,
+          preciosFijados: Map<String, double>.from(_preciosFijados),
+          tiposPrecioFijados:
+              Map<String, String>.from(_tiposPrecioFijados),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -158,18 +197,17 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: FilledButton(
-                  onPressed: () {
-                    // En el próximo paso abriremos el resumen del pedido.
-                  },
+                  onPressed: _verPedido,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          '$_totalUnidades unidades',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
+                        Expanded(
+                          child: Text(
+                            '$_totalUnidades unidades',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         Text(
@@ -178,6 +216,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        const SizedBox(width: 16),
                         const Text(
                           'VER PEDIDO',
                           style: TextStyle(
@@ -272,7 +311,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                   ),
                   const SizedBox(height: 14),
                   const Text(
-                    'Tipo de precio',
+                    'Tipo de precio para nuevos productos',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                     ),
@@ -280,15 +319,15 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                   const SizedBox(height: 8),
                   SegmentedButton<String>(
                     segments: const [
-                      ButtonSegment(
+                      ButtonSegment<String>(
                         value: 'normal',
                         label: Text('Normal'),
                       ),
-                      ButtonSegment(
+                      ButtonSegment<String>(
                         value: 'promo',
                         label: Text('Promo'),
                       ),
-                      ButtonSegment(
+                      ButtonSegment<String>(
                         value: 'interior',
                         label: Text('Interior'),
                       ),
@@ -323,9 +362,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
         Expanded(
           child: productosFiltrados.isEmpty
               ? const Center(
-                  child: Text(
-                    'No se encontraron productos',
-                  ),
+                  child: Text('No se encontraron productos'),
                 )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -341,8 +378,10 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                     final codigo =
                         producto['codigo']?.toString() ?? '';
 
-                    final precio = _precioProducto(producto);
+                    final precio = _precioUsado(producto);
                     final cantidad = _cantidadProducto(producto);
+                    final id = producto['id'].toString();
+                    final listaFijada = _tiposPrecioFijados[id];
 
                     return Card(
                       child: Padding(
@@ -351,7 +390,8 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                           children: [
                             Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     nombre,
@@ -377,6 +417,17 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
+                                  if (cantidad > 0 &&
+                                      listaFijada != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Precio fijado: ${_nombreLista(listaFijada)}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -402,7 +453,8 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                                   ),
                                 ),
                                 IconButton(
-                                  onPressed: () => _sumarProducto(producto),
+                                  onPressed: () =>
+                                      _sumarProducto(producto),
                                   icon: const Icon(
                                     Icons.add_circle,
                                   ),
@@ -418,5 +470,16 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
         ),
       ],
     );
+  }
+
+  String _nombreLista(String tipo) {
+    switch (tipo) {
+      case 'promo':
+        return 'Promo';
+      case 'interior':
+        return 'Interior';
+      default:
+        return 'Normal';
+    }
   }
 }
