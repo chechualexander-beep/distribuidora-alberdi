@@ -1,0 +1,422 @@
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class OrderProductsPage extends StatefulWidget {
+  final Map<String, dynamic> cliente;
+
+  const OrderProductsPage({
+    super.key,
+    required this.cliente,
+  });
+
+  @override
+  State<OrderProductsPage> createState() => _OrderProductsPageState();
+}
+
+class _OrderProductsPageState extends State<OrderProductsPage> {
+  bool _cargando = true;
+  String? _error;
+
+  List<Map<String, dynamic>> _productos = [];
+
+  String _busqueda = '';
+  String _tipoPrecio = 'normal';
+
+  final Map<String, int> _cantidades = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarProductos();
+  }
+
+  Future<void> _cargarProductos() async {
+    setState(() {
+      _cargando = true;
+      _error = null;
+    });
+
+    try {
+      final respuesta = await Supabase.instance.client
+          .from('productos')
+          .select(
+            'id, codigo, nombre, precio_normal, precio_promo, precio_interior',
+          )
+          .eq('activo', true)
+          .order('nombre');
+
+      if (!mounted) return;
+
+      setState(() {
+        _productos = List<Map<String, dynamic>>.from(respuesta);
+        _cargando = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = 'No se pudieron cargar los productos.';
+        _cargando = false;
+      });
+    }
+  }
+
+  double _precioProducto(Map<String, dynamic> producto) {
+    dynamic valor;
+
+    switch (_tipoPrecio) {
+      case 'promo':
+        valor = producto['precio_promo'];
+        break;
+      case 'interior':
+        valor = producto['precio_interior'];
+        break;
+      default:
+        valor = producto['precio_normal'];
+    }
+
+    return double.tryParse(valor?.toString() ?? '') ?? 0;
+  }
+
+  int _cantidadProducto(Map<String, dynamic> producto) {
+    final id = producto['id'].toString();
+    return _cantidades[id] ?? 0;
+  }
+
+  void _sumarProducto(Map<String, dynamic> producto) {
+    final id = producto['id'].toString();
+
+    setState(() {
+      _cantidades[id] = (_cantidades[id] ?? 0) + 1;
+    });
+  }
+
+  void _restarProducto(Map<String, dynamic> producto) {
+    final id = producto['id'].toString();
+    final cantidadActual = _cantidades[id] ?? 0;
+
+    if (cantidadActual <= 0) return;
+
+    setState(() {
+      if (cantidadActual == 1) {
+        _cantidades.remove(id);
+      } else {
+        _cantidades[id] = cantidadActual - 1;
+      }
+    });
+  }
+
+  int get _totalUnidades {
+    return _cantidades.values.fold(
+      0,
+      (total, cantidad) => total + cantidad,
+    );
+  }
+
+  double get _totalPedido {
+    double total = 0;
+
+    for (final producto in _productos) {
+      final cantidad = _cantidadProducto(producto);
+
+      if (cantidad > 0) {
+        total += _precioProducto(producto) * cantidad;
+      }
+    }
+
+    return total;
+  }
+
+  String _formatearPrecio(double valor) {
+    final entero = valor.round().toString();
+
+    final buffer = StringBuffer();
+    int contador = 0;
+
+    for (int i = entero.length - 1; i >= 0; i--) {
+      buffer.write(entero[i]);
+      contador++;
+
+      if (contador == 3 && i != 0) {
+        buffer.write('.');
+        contador = 0;
+      }
+    }
+
+    return '\$${buffer.toString().split('').reversed.join()}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Productos del pedido'),
+      ),
+      body: _construirContenido(),
+      bottomNavigationBar: _totalUnidades > 0
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: FilledButton(
+                  onPressed: () {
+                    // En el próximo paso abriremos el resumen del pedido.
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '$_totalUnidades unidades',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          _formatearPrecio(_totalPedido),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Text(
+                          'VER PEDIDO',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+
+  Widget _construirContenido() {
+    if (_cargando) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                size: 60,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _cargarProductos,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final texto = _busqueda.toLowerCase();
+
+    final productosFiltrados = _productos.where((producto) {
+      final nombre =
+          producto['nombre']?.toString().toLowerCase() ?? '';
+
+      final codigo =
+          producto['codigo']?.toString().toLowerCase() ?? '';
+
+      return nombre.contains(texto) || codigo.contains(texto);
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Cliente',
+                    style: TextStyle(
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.cliente['nombre_comercio']?.toString() ??
+                        'Sin nombre',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Tipo de precio',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'normal',
+                        label: Text('Normal'),
+                      ),
+                      ButtonSegment(
+                        value: 'promo',
+                        label: Text('Promo'),
+                      ),
+                      ButtonSegment(
+                        value: 'interior',
+                        label: Text('Interior'),
+                      ),
+                    ],
+                    selected: {_tipoPrecio},
+                    onSelectionChanged: (seleccion) {
+                      setState(() {
+                        _tipoPrecio = seleccion.first;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: TextField(
+            decoration: const InputDecoration(
+              hintText: 'Buscar producto...',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (valor) {
+              setState(() {
+                _busqueda = valor.trim();
+              });
+            },
+          ),
+        ),
+        Expanded(
+          child: productosFiltrados.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No se encontraron productos',
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  itemCount: productosFiltrados.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final producto = productosFiltrados[index];
+
+                    final nombre =
+                        producto['nombre']?.toString() ?? 'Sin nombre';
+
+                    final codigo =
+                        producto['codigo']?.toString() ?? '';
+
+                    final precio = _precioProducto(producto);
+                    final cantidad = _cantidadProducto(producto);
+
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    nombre,
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (codigo.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Código: $codigo',
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _formatearPrecio(precio),
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                IconButton(
+                                  onPressed: cantidad > 0
+                                      ? () => _restarProducto(producto)
+                                      : null,
+                                  icon: const Icon(
+                                    Icons.remove_circle_outline,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 32,
+                                  child: Text(
+                                    '$cantidad',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () => _sumarProducto(producto),
+                                  icon: const Icon(
+                                    Icons.add_circle,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}

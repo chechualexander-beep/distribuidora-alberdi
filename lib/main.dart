@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import 'features/orders/new_order_page.dart';
 import 'features/clients/clients_page.dart';
 import 'features/products/products_page.dart';
 Future<void> main() async {
@@ -449,7 +449,13 @@ class _HomePageState extends State<HomePage> {
                 trailing: const Icon(
                   Icons.chevron_right,
                 ),
-                onTap: () {},
+                onTap: () {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => const NewOrderPage(),
+    ),
+  );
+},
               ),
             ),
 
