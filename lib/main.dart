@@ -5,6 +5,7 @@ import 'features/clients/clients_page.dart';
 import 'features/products/products_page.dart';
 import 'features/orders/orders_page.dart';
 import 'features/orders/admin_orders_page.dart';
+import 'features/admin/admin_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -502,10 +503,11 @@ class _HomePageState extends State<HomePage> {
                   onTap: () {
   Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) => const AdminOrdersPage(),
+      builder: (_) => const AdminPage(),
     ),
   );
 },
+  
                 ),
               ),
           ],
