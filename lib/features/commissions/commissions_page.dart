@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_order_detail.dart';
+import 'commission_report_page.dart';
 class CommissionsPage extends StatefulWidget {
   const CommissionsPage({super.key});
 
@@ -607,6 +608,51 @@ CommissionOrderDetail(
     ),
   );
 }),
+const SizedBox(height: 24),
+
+FilledButton.icon(
+  onPressed: () {
+    if (_preventistaId == null) return;
+
+    final usuario = _usuarios.firstWhere(
+      (u) => u['id'].toString() == _preventistaId,
+    );
+
+    final nombre =
+        usuario['nombre']?.toString() ?? '';
+
+    final apellido =
+        usuario['apellido']?.toString() ?? '';
+
+    final preventista = [
+      nombre,
+      apellido,
+    ].where((e) => e.isNotEmpty).join(' ');
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CommissionReportPage(
+          preventista: preventista.isEmpty
+              ? 'Preventista'
+              : preventista,
+          desde: _desde,
+          hasta: _hasta,
+          ventaPedida: _ventaPedida,
+          ventaEntregada: _ventaEntregada,
+          ventaNoEntregada: _ventaNoEntregada,
+          comisionTotal: _comisionTotal,
+          detalles: _detalles,
+        ),
+      ),
+    );
+  },
+  icon: const Icon(
+    Icons.receipt_long_outlined,
+  ),
+  label: const Text(
+    'VER LIQUIDACIÓN',
+  ),
+),
                 ] else ...[
                   const SizedBox(height: 50),
                   const Center(
