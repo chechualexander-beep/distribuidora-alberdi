@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
 import 'commission_pdf_service.dart';
+import 'package:share_plus/share_plus.dart';
+
 class CommissionReportPage extends StatelessWidget {
   final String preventista;
   final DateTime desde;
@@ -343,7 +345,44 @@ class CommissionReportPage extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
+
+OutlinedButton.icon(
+  onPressed: () async {
+    final pdf = await CommissionPdfService.generarPdf(
+      preventista: preventista,
+      desde: desde,
+      hasta: hasta,
+      ventaPedida: ventaPedida,
+      ventaEntregada: ventaEntregada,
+      ventaNoEntregada: ventaNoEntregada,
+      comisionTotal: comisionTotal,
+      detalles: detalles,
+    );
+
+    final nombreArchivo =
+        'Liquidacion_${preventista.replaceAll(' ', '_')}_${_formatearFecha(desde).replaceAll('/', '-')}_${_formatearFecha(hasta).replaceAll('/', '-')}.pdf';
+
+    final archivo = XFile.fromData(
+      pdf,
+      mimeType: 'application/pdf',
+      name: nombreArchivo,
+    );
+
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [archivo],
+        subject: 'Liquidación de comisiones',
+        text:
+            'Liquidación de comisiones de $preventista - ${_formatearFecha(desde)} al ${_formatearFecha(hasta)}',
+      ),
+    );
+  },
+  icon: const Icon(Icons.share_outlined),
+  label: const Text('COMPARTIR PDF'),
+),
+
+const SizedBox(height: 20),
         ],
       ),
     );
