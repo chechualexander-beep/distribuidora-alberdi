@@ -1,3 +1,4 @@
+// ignore_for_file: dead_code
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_order_detail.dart';
@@ -550,6 +551,7 @@ class _CommissionsPageState extends State<CommissionsPage> {
 CommissionOrderDetail(
   detalles: detallesPedido,
 ),
+
           if (false)
   ...detallesPedido.map((detalle) {
             final producto =
