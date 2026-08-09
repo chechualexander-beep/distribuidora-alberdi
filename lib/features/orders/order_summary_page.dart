@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class OrderSummaryPage extends StatelessWidget {
+class OrderSummaryPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
   final List<Map<String, dynamic>> productos;
   final Map<String, int> cantidades;
@@ -18,23 +19,30 @@ class OrderSummaryPage extends StatelessWidget {
     required this.tiposPrecioFijados,
   });
 
+  @override
+  State<OrderSummaryPage> createState() => _OrderSummaryPageState();
+}
+
+class _OrderSummaryPageState extends State<OrderSummaryPage> {
+  bool _guardando = false;
+
   List<Map<String, dynamic>> get _productosSeleccionados {
-    return productos.where((producto) {
+    return widget.productos.where((producto) {
       final id = producto['id'].toString();
-      return (cantidades[id] ?? 0) > 0;
+      return (widget.cantidades[id] ?? 0) > 0;
     }).toList();
   }
 
   double _precioProducto(Map<String, dynamic> producto) {
     final id = producto['id'].toString();
 
-    if (preciosFijados.containsKey(id)) {
-      return preciosFijados[id]!;
+    if (widget.preciosFijados.containsKey(id)) {
+      return widget.preciosFijados[id]!;
     }
 
     dynamic valor;
 
-    switch (tipoPrecio) {
+    switch (widget.tipoPrecio) {
       case 'promo':
         valor = producto['precio_promo'];
         break;
@@ -48,11 +56,14 @@ class OrderSummaryPage extends StatelessWidget {
     return double.tryParse(valor?.toString() ?? '') ?? 0;
   }
 
-  String _nombreListaProducto(Map<String, dynamic> producto) {
+  String _tipoPrecioProducto(Map<String, dynamic> producto) {
     final id = producto['id'].toString();
-    final tipo = tiposPrecioFijados[id] ?? tipoPrecio;
 
-    switch (tipo) {
+    return widget.tiposPrecioFijados[id] ?? widget.tipoPrecio;
+  }
+
+  String _nombreListaProducto(Map<String, dynamic> producto) {
+    switch (_tipoPrecioProducto(producto)) {
       case 'promo':
         return 'Promo';
       case 'interior':
@@ -63,7 +74,7 @@ class OrderSummaryPage extends StatelessWidget {
   }
 
   int get _totalUnidades {
-    return cantidades.values.fold(
+    return widget.cantidades.values.fold(
       0,
       (total, cantidad) => total + cantidad,
     );
@@ -74,10 +85,9 @@ class OrderSummaryPage extends StatelessWidget {
 
     for (final producto in _productosSeleccionados) {
       final id = producto['id'].toString();
-      final cantidad = cantidades[id] ?? 0;
-      final precio = _precioProducto(producto);
+      final cantidad = widget.cantidades[id] ?? 0;
 
-      total += precio * cantidad;
+      total += _precioProducto(producto) * cantidad;
     }
 
     return total;
@@ -100,6 +110,120 @@ class OrderSummaryPage extends StatelessWidget {
     }
 
     return '\$${buffer.toString().split('').reversed.join()}';
+  }
+
+  Future<void> _confirmarPedido() async {
+    if (_guardando) return;
+
+    final usuario = Supabase.instance.client.auth.currentUser;
+
+    if (usuario == null) {
+      _mostrarMensaje('No hay una sesión iniciada.');
+      return;
+    }
+
+    if (_productosSeleccionados.isEmpty) {
+      _mostrarMensaje('El pedido no tiene productos.');
+      return;
+    }
+
+    setState(() {
+      _guardando = true;
+    });
+
+    try {
+      final pedido = await Supabase.instance.client
+          .from('pedidos')
+          .insert({
+            'cliente_id': widget.cliente['id'],
+            'preventista_id': usuario.id,
+            'tipo_precio': widget.tipoPrecio,
+            'estado': 'pendiente',
+            'total': _totalPedido,
+          })
+          .select('id')
+          .single();
+
+      final pedidoId = pedido['id'];
+
+      final detalles = _productosSeleccionados.map((producto) {
+        final productoId = producto['id'].toString();
+        final cantidad = widget.cantidades[productoId] ?? 0;
+        final precio = _precioProducto(producto);
+        final subtotal = precio * cantidad;
+
+        return {
+          'pedido_id': pedidoId,
+          'producto_id': producto['id'],
+          'cantidad': cantidad,
+          'precio_unitario': precio,
+          'subtotal': subtotal,
+          'tipo_precio': _tipoPrecioProducto(producto),
+        };
+      }).toList();
+
+      await Supabase.instance.client
+          .from('pedido_detalles')
+          .insert(detalles);
+
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            icon: const Icon(
+              Icons.check_circle_outline,
+              size: 48,
+            ),
+            title: const Text('Pedido guardado'),
+            content: Text(
+              'El pedido fue registrado correctamente.\n\n'
+              'Total: ${_formatearPrecio(_totalPedido)}',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text('ACEPTAR'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).popUntil(
+        (route) => route.isFirst,
+      );
+    } on PostgrestException catch (error) {
+      _mostrarMensaje(
+        'No se pudo guardar el pedido: ${error.message}',
+      );
+    } catch (_) {
+      _mostrarMensaje(
+        'Ocurrió un error al guardar el pedido.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _guardando = false;
+        });
+      }
+    }
+  }
+
+  void _mostrarMensaje(String mensaje) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+      ),
+    );
   }
 
   @override
@@ -126,7 +250,7 @@ class OrderSummaryPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      cliente['nombre_comercio']?.toString() ??
+                      widget.cliente['nombre_comercio']?.toString() ??
                           'Sin nombre',
                       style: const TextStyle(
                         fontSize: 20,
@@ -135,8 +259,7 @@ class OrderSummaryPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      'Los precios de cada producto quedaron fijados '
-                      'al momento de agregarlos.',
+                      'Cada producto conserva el precio con el que fue agregado.',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey,
@@ -157,7 +280,7 @@ class OrderSummaryPage extends StatelessWidget {
                 final producto = _productosSeleccionados[index];
 
                 final id = producto['id'].toString();
-                final cantidad = cantidades[id] ?? 0;
+                final cantidad = widget.cantidades[id] ?? 0;
                 final precio = _precioProducto(producto);
                 final subtotal = precio * cantidad;
                 final lista = _nombreListaProducto(producto);
@@ -239,19 +362,34 @@ class OrderSummaryPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
+                    onPressed: _guardando
+                        ? null
+                        : () {
+                            Navigator.of(context).pop();
+                          },
                     icon: const Icon(Icons.arrow_back),
                     label: const Text('VOLVER A PRODUCTOS'),
                   ),
                   const SizedBox(height: 10),
                   FilledButton.icon(
-                    onPressed: () {
-                      // En el siguiente paso se guarda en Supabase.
-                    },
-                    icon: const Icon(Icons.check_circle_outline),
-                    label: const Text('CONFIRMAR PEDIDO'),
+                    onPressed:
+                        _guardando ? null : _confirmarPedido,
+                    icon: _guardando
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.check_circle_outline,
+                          ),
+                    label: Text(
+                      _guardando
+                          ? 'GUARDANDO...'
+                          : 'CONFIRMAR PEDIDO',
+                    ),
                   ),
                 ],
               ),
