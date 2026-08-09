@@ -237,22 +237,16 @@ class _ClientsPageState extends State<ClientsPage> {
                             ],
                           ),
                           trailing: const Icon(Icons.chevron_right),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ClientDetailPage(
-                                  cliente: cliente,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                ),
-        ),
-      ],
-    );
+                          onTap: () async {
+  final actualizado = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (_) => ClientDetailPage(
+        cliente: cliente,
+      ),
+    ),
+  );
+
+  if (actualizado == true) {
+    await _cargarClientes();
   }
-}
+},

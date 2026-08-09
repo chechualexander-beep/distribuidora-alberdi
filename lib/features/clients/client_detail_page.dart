@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'edit_client_page.dart';
+
 class ClientDetailPage extends StatelessWidget {
   final Map<String, dynamic> cliente;
 
@@ -34,9 +36,7 @@ class ClientDetailPage extends StatelessWidget {
               size: 42,
             ),
           ),
-
           const SizedBox(height: 18),
-
           Text(
             comercio,
             textAlign: TextAlign.center,
@@ -45,7 +45,6 @@ class ClientDetailPage extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 30),
 
           _DatoCliente(
@@ -89,8 +88,19 @@ class ClientDetailPage extends StatelessWidget {
           SizedBox(
             height: 52,
             child: FilledButton.icon(
-              onPressed: () {
-                // En el próximo paso agregaremos la edición.
+              onPressed: () async {
+                final actualizado =
+                    await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => EditClientPage(
+                      cliente: cliente,
+                    ),
+                  ),
+                );
+
+                if (actualizado == true && context.mounted) {
+                  Navigator.of(context).pop(true);
+                }
               },
               icon: const Icon(Icons.edit_outlined),
               label: const Text('EDITAR CLIENTE'),
