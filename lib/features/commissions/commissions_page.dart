@@ -202,6 +202,26 @@ class _CommissionsPageState extends State<CommissionsPage> {
 
     return total;
   }
+  Map<String, List<Map<String, dynamic>>> get _detallesPorPedido {
+  final grupos = <String, List<Map<String, dynamic>>>{};
+
+  for (final detalle in _detalles) {
+    final pedido =
+        detalle['pedidos'] as Map<String, dynamic>?;
+
+    final pedidoId =
+        pedido?['id']?.toString() ?? 'sin-pedido';
+
+    grupos.putIfAbsent(
+      pedidoId,
+      () => <Map<String, dynamic>>[],
+    );
+
+    grupos[pedidoId]!.add(detalle);
+  }
+
+  return grupos;
+}
 
   String _formatearPrecio(double valor) {
     final entero = valor.round().toString();
@@ -433,80 +453,157 @@ class _CommissionsPageState extends State<CommissionsPage> {
 
                   const SizedBox(height: 10),
 
-                  ..._detalles.map((detalle) {
-                    final producto =
-                        detalle['productos']
-                            as Map<String, dynamic>?;
+        ..._detallesPorPedido.entries.map((entrada) {
+  final detallesPedido = entrada.value;
 
-                    final pedido =
-                        detalle['pedidos']
-                            as Map<String, dynamic>?;
+  if (detallesPedido.isEmpty) {
+    return const SizedBox.shrink();
+  }
 
-                    final cliente =
-                        pedido?['clientes']
-                            as Map<String, dynamic>?;
+  final primerDetalle = detallesPedido.first;
 
-                    final nombreProducto =
-                        producto?['nombre']?.toString() ??
-                            'Producto';
+  final pedido =
+      primerDetalle['pedidos'] as Map<String, dynamic>?;
 
-                    final clienteNombre =
-                        cliente?['nombre_comercio']
-                                ?.toString() ??
-                            'Cliente';
+  final cliente =
+      pedido?['clientes'] as Map<String, dynamic>?;
 
-                    final entregada = _numero(
-                      detalle['cantidad_entregada'],
-                    );
+  final clienteNombre =
+      cliente?['nombre_comercio']?.toString() ??
+          'Cliente';
 
-                    final precio = _numero(
-                      detalle['precio_unitario'],
-                    );
+  final pedidoId =
+      pedido?['id']?.toString() ?? '';
 
-                    final porcentaje = _numero(
-                      detalle['porcentaje_comision'],
-                    );
+  final numeroPedido = pedidoId.length >= 8
+      ? pedidoId.substring(0, 8).toUpperCase()
+      : pedidoId.toUpperCase();
 
-                    final comision = _numero(
-                      detalle['importe_comision'],
-                    );
+  double ventaPedidaPedido = 0;
+  double ventaEntregadaPedido = 0;
+  double ventaNoEntregadaPedido = 0;
+  double comisionPedido = 0;
 
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              nombreProducto,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(clienteNombre),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Entregado: ${entregada.toStringAsFixed(0)} × ${_formatearPrecio(precio)}',
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Comisión: ${porcentaje.toStringAsFixed(0)}%',
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Generada: ${_formatearPrecio(comision)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
+  for (final detalle in detallesPedido) {
+    final cantidad =
+        _numero(detalle['cantidad']);
+
+    final entregada =
+        _numero(detalle['cantidad_entregada']);
+
+    final noEntregada =
+        _numero(detalle['cantidad_no_entregada']);
+
+    final precio =
+        _numero(detalle['precio_unitario']);
+
+    ventaPedidaPedido += cantidad * precio;
+    ventaEntregadaPedido += entregada * precio;
+    ventaNoEntregadaPedido += noEntregada * precio;
+
+    comisionPedido +=
+        _numero(detalle['importe_comision']);
+  }
+
+  return Card(
+    margin: const EdgeInsets.only(bottom: 14),
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            clienteNombre,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Pedido #$numeroPedido',
+            style: const TextStyle(
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Pedido: ${_formatearPrecio(ventaPedidaPedido)}',
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Entregado: ${_formatearPrecio(ventaEntregadaPedido)}',
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'No entregado: ${_formatearPrecio(ventaNoEntregadaPedido)}',
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Comisión: ${_formatearPrecio(comisionPedido)}',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const Divider(height: 24),
+
+          ...detallesPedido.map((detalle) {
+            final producto =
+                detalle['productos']
+                    as Map<String, dynamic>?;
+
+            final nombreProducto =
+                producto?['nombre']?.toString() ??
+                    'Producto';
+
+            final entregada =
+                _numero(detalle['cantidad_entregada']);
+
+            final precio =
+                _numero(detalle['precio_unitario']);
+
+            final porcentaje =
+                _numero(detalle['porcentaje_comision']);
+
+            final comision =
+                _numero(detalle['importe_comision']);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    nombreProducto,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Entregado: ${entregada.toStringAsFixed(0)} × ${_formatearPrecio(precio)}',
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Comisión: ${porcentaje.toStringAsFixed(0)}%',
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Generada: ${_formatearPrecio(comision)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    ),
+  );
+}),
                 ] else ...[
                   const SizedBox(height: 50),
                   const Center(
