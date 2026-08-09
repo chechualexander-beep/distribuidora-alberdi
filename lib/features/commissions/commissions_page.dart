@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import 'commission_order_detail.dart';
 class CommissionsPage extends StatefulWidget {
   const CommissionsPage({super.key});
 
@@ -546,8 +546,11 @@ class _CommissionsPageState extends State<CommissionsPage> {
             ),
           ),
           const Divider(height: 24),
-
-          ...detallesPedido.map((detalle) {
+CommissionOrderDetail(
+  detalles: detallesPedido,
+),
+          if (false)
+  ...detallesPedido.map((detalle) {
             final producto =
                 detalle['productos']
                     as Map<String, dynamic>?;
