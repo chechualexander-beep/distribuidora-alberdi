@@ -4,14 +4,14 @@ import 'features/orders/new_order_page.dart';
 import 'features/clients/clients_page.dart';
 import 'features/products/products_page.dart';
 import 'features/orders/orders_page.dart';
-import 'features/orders/admin_orders_page.dart';
+
 import 'features/admin/admin_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Supabase.initialize(
     url: 'https://vmbncsqapqdyffscwfwo.supabase.co',
-    anonKey: 'sb_publishable_w_nz47b753qQkzv2pr7lhA_Yl4eZsTB',
+    publishableKey: 'sb_publishable_w_nz47b753qQkzv2pr7lhA_Yl4eZsTB',
   );
 
   runApp(const DistribuidoraAlberdiApp());

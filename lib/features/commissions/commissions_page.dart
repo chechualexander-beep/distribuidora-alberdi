@@ -338,7 +338,7 @@ class _CommissionsPageState extends State<CommissionsPage> {
               padding: const EdgeInsets.all(16),
               children: [
                 DropdownButtonFormField<String>(
-                  value: _preventistaId,
+                  initialValue: _preventistaId,
                   decoration: const InputDecoration(
                     labelText: 'Preventista',
                     border: OutlineInputBorder(),

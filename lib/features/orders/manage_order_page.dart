@@ -446,7 +446,7 @@ if (_modoEntrega == null) {
                   ),
                   const SizedBox(height: 18),
                   DropdownButtonFormField<String>(
-                    value: _estado,
+                    initialValue: _estado,
                     decoration: const InputDecoration(
                       labelText: 'Estado operativo',
                       border: OutlineInputBorder(),
