@@ -4,6 +4,7 @@ import 'features/orders/new_order_page.dart';
 import 'features/clients/clients_page.dart';
 import 'features/products/products_page.dart';
 import 'features/orders/orders_page.dart';
+import 'features/orders/admin_orders_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -498,7 +499,13 @@ class _HomePageState extends State<HomePage> {
                   trailing: const Icon(
                     Icons.chevron_right,
                   ),
-                  onTap: () {},
+                  onTap: () {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => const AdminOrdersPage(),
+    ),
+  );
+},
                 ),
               ),
           ],
