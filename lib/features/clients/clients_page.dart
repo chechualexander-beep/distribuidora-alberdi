@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'client_detail_page.dart';
 import 'new_client_page.dart';
 
 class ClientsPage extends StatefulWidget {
@@ -236,7 +237,15 @@ class _ClientsPageState extends State<ClientsPage> {
                             ],
                           ),
                           trailing: const Icon(Icons.chevron_right),
-                          onTap: () {},
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ClientDetailPage(
+                                  cliente: cliente,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       );
                     },
