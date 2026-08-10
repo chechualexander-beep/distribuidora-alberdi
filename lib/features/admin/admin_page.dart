@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../commissions/commissions_page.dart';
 import '../orders/admin_orders_page.dart';
-
+import '../commissions/commission_history_page.dart';
 class AdminPage extends StatelessWidget {
   const AdminPage({super.key});
 
@@ -68,6 +68,33 @@ class AdminPage extends StatelessWidget {
               },
             ),
           ),
+  const SizedBox(height: 10),
+  Card(
+  child: ListTile(
+    leading: const CircleAvatar(
+      child: Icon(Icons.history_outlined),
+    ),
+    title: const Text(
+      'Historial de liquidaciones',
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+    subtitle: const Text(
+      'Consultar liquidaciones registradas y pagadas',
+    ),
+    trailing: const Icon(
+      Icons.chevron_right,
+    ),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const CommissionHistoryPage(),
+        ),
+      );
+    },
+  ),
+),
         ],
       ),
     );
