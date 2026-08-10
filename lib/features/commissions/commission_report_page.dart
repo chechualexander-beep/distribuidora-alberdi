@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_pdf_service.dart';
 import 'package:share_plus/share_plus.dart';
 
 class CommissionReportPage extends StatelessWidget {
   final String preventista;
+  final String preventistaId;
   final DateTime desde;
   final DateTime hasta;
 
@@ -19,6 +20,7 @@ class CommissionReportPage extends StatelessWidget {
   const CommissionReportPage({
     super.key,
     required this.preventista,
+    required this.preventistaId,
     required this.desde,
     required this.hasta,
     required this.ventaPedida,
@@ -381,7 +383,59 @@ OutlinedButton.icon(
   icon: const Icon(Icons.share_outlined),
   label: const Text('COMPARTIR PDF'),
 ),
+const SizedBox(height: 10),
 
+FilledButton.icon(
+  onPressed: () async {
+  try {
+    final detallesLiquidacion = detalles.map((detalle) {
+      return {
+        'pedido_detalle_id': detalle['id'].toString(),
+        'importe_comision': _numero(
+          detalle['importe_comision'],
+        ),
+      };
+    }).toList();
+
+    final liquidacionId =
+        await Supabase.instance.client.rpc(
+      'registrar_liquidacion',
+      params: {
+        'p_preventista_id': preventistaId,
+        'p_fecha_desde':
+            desde.toIso8601String().split('T').first,
+        'p_fecha_hasta':
+            hasta.toIso8601String().split('T').first,
+        'p_venta_entregada': ventaEntregada,
+        'p_comision_total': comisionTotal,
+        'p_detalles': detallesLiquidacion,
+      },
+    );
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Liquidación registrada correctamente. ID: $liquidacionId',
+        ),
+      ),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'No se pudo registrar la liquidación: $e',
+        ),
+      ),
+    );
+  }
+},
+  icon: const Icon(Icons.payments_outlined),
+  label: const Text('REGISTRAR LIQUIDACIÓN'),
+),
 const SizedBox(height: 20),
         ],
       ),

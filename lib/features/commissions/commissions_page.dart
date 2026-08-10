@@ -24,7 +24,7 @@ class _CommissionsPageState extends State<CommissionsPage> {
   DateTime _hasta = DateTime.now();
 
   List<Map<String, dynamic>> _detalles = [];
-
+bool _calculoRealizado = false;
   @override
   void initState() {
     super.initState();
@@ -133,11 +133,42 @@ class _CommissionsPageState extends State<CommissionsPage> {
           );
 
       if (!mounted) return;
+final idsRespuesta = List<Map<String, dynamic>>.from(
+  respuesta,
+)
+    .map((detalle) => detalle['id']?.toString())
+    .whereType<String>()
+    .toList();
 
+List<Map<String, dynamic>> detallesPendientes =
+    List<Map<String, dynamic>>.from(respuesta);
+
+if (idsRespuesta.isNotEmpty) {
+  final liquidados = await Supabase.instance.client
+      .from('liquidacion_detalles')
+      .select('pedido_detalle_id')
+      .inFilter('pedido_detalle_id', idsRespuesta);
+
+  final idsLiquidados =
+      List<Map<String, dynamic>>.from(liquidados)
+          .map(
+            (fila) =>
+                fila['pedido_detalle_id']?.toString(),
+          )
+          .whereType<String>()
+          .toSet();
+
+  detallesPendientes = detallesPendientes
+      .where(
+        (detalle) => !idsLiquidados.contains(
+          detalle['id']?.toString(),
+        ),
+      )
+      .toList();
+}
       setState(() {
-        _detalles = List<Map<String, dynamic>>.from(
-          respuesta,
-        );
+        _detalles = detallesPendientes;
+        _calculoRealizado = true;
         _cargando = false;
       });
     } catch (_) {
@@ -637,6 +668,7 @@ FilledButton.icon(
           preventista: preventista.isEmpty
               ? 'Preventista'
               : preventista,
+              preventistaId: _preventistaId!,
           desde: _desde,
           hasta: _hasta,
           ventaPedida: _ventaPedida,
@@ -655,17 +687,19 @@ FilledButton.icon(
     'VER LIQUIDACIÓN',
   ),
 ),
-                ] else ...[
-                  const SizedBox(height: 50),
-                  const Center(
-                    child: Text(
-                      'Seleccioná un preventista y un período.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+  ] else ...[
+  const SizedBox(height: 50),
+  Center(
+    child: Text(
+      _calculoRealizado
+          ? 'No hay comisiones pendientes de liquidar.'
+          : 'Seleccioná un preventista y un período.',
+      textAlign: TextAlign.center,
+    ),
+  ),
+],
+],
+),
     );
   }
 }
