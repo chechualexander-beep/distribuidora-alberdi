@@ -248,7 +248,7 @@ for (final liquidacion in _liquidaciones) {
       onRefresh: _cargarHistorial,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: liquidacionesFiltradas.length + 1,
+        itemCount: liquidacionesFiltradas.length + 3,
         separatorBuilder: (_, _) =>
             const SizedBox(height: 10),
         itemBuilder: (context, index) {
@@ -278,8 +278,56 @@ for (final liquidacion in _liquidaciones) {
     },
   );
 }
+if (index == 1) {
+  return OutlinedButton.icon(
+    onPressed: () async {
+      final fecha = await showDatePicker(
+        context: context,
+        initialDate: _fechaDesdeFiltro ?? DateTime.now(),
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100),
+      );
+
+      if (fecha != null) {
+        setState(() {
+          _fechaDesdeFiltro = fecha;
+        });
+      }
+    },
+    icon: const Icon(Icons.calendar_month),
+    label: Text(
+      _fechaDesdeFiltro == null
+          ? 'Fecha desde'
+          : 'Desde: ${_fechaDesdeFiltro!.day.toString().padLeft(2, '0')}/${_fechaDesdeFiltro!.month.toString().padLeft(2, '0')}/${_fechaDesdeFiltro!.year}',
+    ),
+  );
+}
+if (index == 2) {
+  return OutlinedButton.icon(
+    onPressed: () async {
+      final fecha = await showDatePicker(
+        context: context,
+        initialDate: _fechaHastaFiltro ?? DateTime.now(),
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100),
+      );
+
+      if (fecha != null) {
+        setState(() {
+          _fechaHastaFiltro = fecha;
+        });
+      }
+    },
+    icon: const Icon(Icons.calendar_month),
+    label: Text(
+      _fechaHastaFiltro == null
+          ? 'Fecha hasta'
+          : 'Hasta: ${_fechaHastaFiltro!.day.toString().padLeft(2, '0')}/${_fechaHastaFiltro!.month.toString().padLeft(2, '0')}/${_fechaHastaFiltro!.year}',
+    ),
+  );
+}
           final liquidacion =
-    liquidacionesFiltradas[index - 1];
+    liquidacionesFiltradas[index - 3];
 
           final preventista =
               _nombrePreventista(liquidacion);
