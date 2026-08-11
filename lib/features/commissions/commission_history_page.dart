@@ -190,18 +190,46 @@ DateTime? _fechaHastaFiltro;
       );
     }
 final liquidacionesFiltradas =
-    _preventistaSeleccionado == null
-        ? _liquidaciones
-        : _liquidaciones.where((liquidacion) {
-            final usuario =
-                liquidacion['usuarios']
-                    as Map<String, dynamic>?;
+    _liquidaciones.where((liquidacion) {
+  // Filtro por preventista
+  if (_preventistaSeleccionado != null) {
+    final usuario =
+        liquidacion['usuarios']
+            as Map<String, dynamic>?;
 
-            final id =
-                usuario?['id']?.toString();
+    final id = usuario?['id']?.toString();
 
-            return id == _preventistaSeleccionado;
-          }).toList();
+    if (id != _preventistaSeleccionado) {
+      return false;
+    }
+  }
+
+  // Filtro Fecha desde
+  if (_fechaDesdeFiltro != null) {
+    final fechaDesde =
+        DateTime.tryParse(
+          liquidacion['fecha_desde']?.toString() ?? '',
+        );
+
+    if (fechaDesde == null ||
+        fechaDesde.isBefore(_fechaDesdeFiltro!)) {
+      return false;
+    }
+  }
+// Filtro Fecha hasta
+if (_fechaHastaFiltro != null) {
+  final fechaHasta =
+      DateTime.tryParse(
+        liquidacion['fecha_hasta']?.toString() ?? '',
+      );
+
+  if (fechaHasta == null ||
+      fechaHasta.isAfter(_fechaHastaFiltro!)) {
+    return false;
+  }
+}
+  return true;
+}).toList();
           final preventistasDisponibles = <String, String>{};
 
 for (final liquidacion in _liquidaciones) {
