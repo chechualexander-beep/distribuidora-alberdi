@@ -248,7 +248,9 @@ for (final liquidacion in _liquidaciones) {
       onRefresh: _cargarHistorial,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: liquidacionesFiltradas.length + 4,
+        itemCount: liquidacionesFiltradas.isEmpty
+    ? 5
+    : liquidacionesFiltradas.length + 4,
         separatorBuilder: (_, _) =>
             const SizedBox(height: 10),
         itemBuilder: (context, index) {
@@ -337,6 +339,21 @@ if (index == 3) {
     },
     icon: const Icon(Icons.filter_alt_off),
     label: const Text('Limpiar filtros'),
+  );
+}
+if (index == 4 && liquidacionesFiltradas.isEmpty) {
+  return const Padding(
+    padding: EdgeInsets.symmetric(vertical: 24),
+    child: Center(
+      child: Text(
+        'No hay liquidaciones para los filtros seleccionados.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Colors.grey,
+          fontSize: 14,
+        ),
+      ),
+    ),
   );
 }
           final liquidacion =
