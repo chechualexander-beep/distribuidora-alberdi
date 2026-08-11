@@ -248,7 +248,7 @@ for (final liquidacion in _liquidaciones) {
       onRefresh: _cargarHistorial,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: liquidacionesFiltradas.length + 3,
+        itemCount: liquidacionesFiltradas.length + 4,
         separatorBuilder: (_, _) =>
             const SizedBox(height: 10),
         itemBuilder: (context, index) {
@@ -326,8 +326,21 @@ if (index == 2) {
     ),
   );
 }
+if (index == 3) {
+  return OutlinedButton.icon(
+    onPressed: () {
+      setState(() {
+        _preventistaSeleccionado = null;
+        _fechaDesdeFiltro = null;
+        _fechaHastaFiltro = null;
+      });
+    },
+    icon: const Icon(Icons.filter_alt_off),
+    label: const Text('Limpiar filtros'),
+  );
+}
           final liquidacion =
-    liquidacionesFiltradas[index - 3];
+    liquidacionesFiltradas[index - 4];
 
           final preventista =
               _nombrePreventista(liquidacion);
