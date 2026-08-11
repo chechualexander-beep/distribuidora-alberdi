@@ -15,7 +15,9 @@ class _CommissionHistoryPageState
   String? _error;
 
   List<Map<String, dynamic>> _liquidaciones = [];
-
+String? _preventistaSeleccionado;
+DateTime? _fechaDesdeFiltro;
+DateTime? _fechaHastaFiltro;
   @override
   void initState() {
     super.initState();
@@ -42,6 +44,7 @@ class _CommissionHistoryPageState
             fecha_pago,
             created_at,
             usuarios (
+            id,
               nombre,
               apellido
             )
@@ -186,17 +189,69 @@ class _CommissionHistoryPageState
         ),
       );
     }
+final liquidacionesFiltradas =
+    _preventistaSeleccionado == null
+        ? _liquidaciones
+        : _liquidaciones.where((liquidacion) {
+            final usuario =
+                liquidacion['usuarios']
+                    as Map<String, dynamic>?;
 
+            final id =
+                usuario?['id']?.toString();
+
+            return id == _preventistaSeleccionado;
+          }).toList();
+          final preventistasDisponibles = <String, String>{};
+
+for (final liquidacion in _liquidaciones) {
+  final usuario =
+      liquidacion['usuarios']
+          as Map<String, dynamic>?;
+
+  final id = usuario?['id']?.toString();
+
+  if (id != null && id.isNotEmpty) {
+    preventistasDisponibles[id] =
+        _nombrePreventista(liquidacion);
+  }
+}
     return RefreshIndicator(
       onRefresh: _cargarHistorial,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: _liquidaciones.length,
+        itemCount: liquidacionesFiltradas.length + 1,
         separatorBuilder: (_, _) =>
             const SizedBox(height: 10),
         itemBuilder: (context, index) {
+          if (index == 0) {
+  return DropdownButtonFormField<String?>(
+    initialValue: _preventistaSeleccionado,
+    decoration: const InputDecoration(
+      labelText: 'Preventista',
+      border: OutlineInputBorder(),
+    ),
+    items: [
+      const DropdownMenuItem<String?>(
+        value: null,
+        child: Text('Todos los preventistas'),
+      ),
+      ...preventistasDisponibles.entries.map(
+        (entry) => DropdownMenuItem<String?>(
+          value: entry.key,
+          child: Text(entry.value),
+        ),
+      ),
+    ],
+    onChanged: (valor) {
+      setState(() {
+        _preventistaSeleccionado = valor;
+      });
+    },
+  );
+}
           final liquidacion =
-              _liquidaciones[index];
+    liquidacionesFiltradas[index - 1];
 
           final preventista =
               _nombrePreventista(liquidacion);
