@@ -16,6 +16,33 @@ class CommissionHistoryDetailPage extends StatefulWidget {
 class _CommissionHistoryDetailPageState
     extends State<CommissionHistoryDetailPage> {
   Map<String, dynamic> get liquidacion => widget.liquidacion;
+  Map<String, List<Map<String, dynamic>>> get _detallesPorPedido {
+  final grupos =
+      <String, List<Map<String, dynamic>>>{};
+
+  for (final registro in _detalles) {
+    final detalle =
+        registro['pedido_detalles']
+            as Map<String, dynamic>?;
+
+    final pedido =
+        detalle?['pedidos']
+            as Map<String, dynamic>?;
+
+    final pedidoId =
+        pedido?['id']?.toString() ??
+        'sin-pedido';
+
+    grupos.putIfAbsent(
+      pedidoId,
+      () => <Map<String, dynamic>>[],
+    );
+
+    grupos[pedidoId]!.add(registro);
+  }
+
+  return grupos;
+}
 bool _cargandoDetalles = true;
 String? _errorDetalles;
 
@@ -277,80 +304,127 @@ else if (_detalles.isEmpty)
     ),
   )
 else
-  ..._detalles.map((registro) {
-    final detalle =
-        registro['pedido_detalles']
-            as Map<String, dynamic>?;
+  ..._detallesPorPedido.entries.map((grupo) {
+  final registros = grupo.value;
+  final primerRegistro = registros.first;
 
-    final producto =
-        detalle?['productos']
-            as Map<String, dynamic>?;
+  final primerDetalle =
+      primerRegistro['pedido_detalles']
+          as Map<String, dynamic>?;
 
-    final pedido =
-        detalle?['pedidos']
-            as Map<String, dynamic>?;
+  final pedido =
+      primerDetalle?['pedidos']
+          as Map<String, dynamic>?;
 
-    final cliente =
-        pedido?['clientes']
-            as Map<String, dynamic>?;
+  final cliente =
+      pedido?['clientes']
+          as Map<String, dynamic>?;
 
-    final nombreProducto =
-        producto?['nombre']?.toString() ??
-        'Producto';
+  final nombreCliente =
+      cliente?['nombre_comercio']?.toString() ??
+      'Cliente';
 
-    final nombreCliente =
-        cliente?['nombre_comercio']?.toString() ??
-        'Cliente';
+  final comisionPedido = registros.fold<double>(
+    0,
+    (total, registro) =>
+        total + _numero(registro['importe_comision']),
+  );
 
-    final cantidadEntregada =
-        _numero(detalle?['cantidad_entregada']);
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              nombreCliente,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
 
-    final precioUnitario =
-        _numero(detalle?['precio_unitario']);
+            ...registros.map((registro) {
+              final detalle =
+                  registro['pedido_detalles']
+                      as Map<String, dynamic>?;
 
-    final porcentaje =
-        _numero(detalle?['porcentaje_comision']);
+              final producto =
+                  detalle?['productos']
+                      as Map<String, dynamic>?;
 
-    final comision =
-        _numero(registro['importe_comision']);
+              final nombreProducto =
+                  producto?['nombre']?.toString() ??
+                  'Producto';
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                nombreCliente,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
+              final cantidadEntregada =
+                  _numero(detalle?['cantidad_entregada']);
+
+              final precioUnitario =
+                  _numero(detalle?['precio_unitario']);
+
+              final porcentaje =
+                  _numero(detalle?['porcentaje_comision']);
+
+              final comision =
+                  _numero(registro['importe_comision']);
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(nombreProducto),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Entregado: ${cantidadEntregada.toStringAsFixed(0)} × ${_formatearPrecio(precioUnitario)}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Comisión: ${porcentaje.toStringAsFixed(0)}%',
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Generada: ${_formatearPrecio(comision)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(nombreProducto),
-              const SizedBox(height: 4),
-              Text(
-                'Entregado: ${cantidadEntregada.toStringAsFixed(0)} × ${_formatearPrecio(precioUnitario)}',
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Comisión: ${porcentaje.toStringAsFixed(0)}%',
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Generada: ${_formatearPrecio(comision)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
+              );
+            }),
+
+            const Divider(),
+
+            Row(
+              mainAxisAlignment:
+                  MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Comisión del pedido',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-            ],
-          ),
+                Text(
+                  _formatearPrecio(comisionPedido),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-    );
-  }),
+    ),
+  );
+}),
   ],
       ),
     );
