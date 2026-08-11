@@ -315,7 +315,13 @@ else
   final pedido =
       primerDetalle?['pedidos']
           as Map<String, dynamic>?;
+final pedidoId =
+    pedido?['id']?.toString() ?? '';
 
+final pedidoCorto =
+    pedidoId.length >= 8
+        ? pedidoId.substring(0, 8).toUpperCase()
+        : pedidoId.toUpperCase();
   final cliente =
       pedido?['clientes']
           as Map<String, dynamic>?;
@@ -345,7 +351,15 @@ else
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
+Text(
+  'Pedido #$pedidoCorto',
+  style: const TextStyle(
+    fontSize: 12,
+    color: Colors.grey,
+  ),
+),
+const SizedBox(height: 12),
 
             ...registros.map((registro) {
               final detalle =
