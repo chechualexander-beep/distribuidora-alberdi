@@ -145,7 +145,8 @@ Future<void> _cargarHistorialPagos() async {
           observacion,
           pedidos!inner (
             id,
-            cliente_id
+            cliente_id,
+            created_at
           )
         ''')
         .eq('pedidos.cliente_id', clienteId)
@@ -630,6 +631,18 @@ if (_historialPagos.isNotEmpty) ...[
     final observacion =
         pago['observacion']?.toString().trim() ?? '';
 
+final pedidoData = pago['pedidos'];
+
+final fechaPedido = DateTime.tryParse(
+  pedidoData?['created_at']?.toString() ?? '',
+)?.toLocal();
+
+final fechaPedidoTexto = fechaPedido == null
+    ? 'Pedido sin fecha'
+    : 'Pedido del '
+        '${fechaPedido.day.toString().padLeft(2, '0')}/'
+        '${fechaPedido.month.toString().padLeft(2, '0')}/'
+        '${fechaPedido.year}';
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
@@ -638,10 +651,12 @@ if (_historialPagos.isNotEmpty) ...[
           '$fechaTexto — \$${importe.toStringAsFixed(0)}',
         ),
         subtitle: Text(
-          observacion.isEmpty
-              ? 'Medio de pago: $medio'
-              : 'Medio de pago: $medio\n$observacion',
-        ),
+  observacion.isEmpty
+      ? 'Medio de pago: $medio\n$fechaPedidoTexto'
+      : 'Medio de pago: $medio\n'
+          '$fechaPedidoTexto\n'
+          '$observacion',
+),
       ),
     );
   }),
