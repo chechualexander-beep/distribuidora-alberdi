@@ -251,6 +251,38 @@ if (_modoEntrega == null) {
     if (!_validarCantidades()) return;
 
     final resultado = _resultadoEntrega();
+    final totalPedido = double.tryParse(
+  widget.pedido['total']?.toString() ?? '',
+) ?? 0;
+String? medioPagoCompleto;
+
+if (resultado == 'entregado') {
+  medioPagoCompleto = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('¿Cómo quedó el pago?'),
+        content: const Text(
+          'Si el cliente pagó todo el pedido, seleccioná el medio de pago.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('DEJÓ SALDO'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'Efectivo'),
+            child: const Text('EFECTIVO'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'Transferencia'),
+            child: const Text('TRANSFERENCIA'),
+          ),
+        ],
+      );
+    },
+  );
+}
 
     if ((resultado == 'no_entregado' || resultado == 'parcial') &&
         _motivoController.text.trim().isEmpty) {
@@ -294,6 +326,35 @@ if (_modoEntrega == null) {
                     : _motivoController.text.trim(),
           })
           .eq('id', widget.pedido['id']);
+         if (resultado == 'entregado' &&
+    medioPagoCompleto != null &&
+    totalPedido > 0) {
+  final pagosExistentes = await Supabase.instance.client
+      .from('pedido_pagos')
+      .select('importe')
+      .eq('pedido_id', widget.pedido['id']);
+
+  double pagadoPedido = 0;
+
+  for (final pago in pagosExistentes) {
+    pagadoPedido +=
+        double.tryParse(pago['importe']?.toString() ?? '') ?? 0;
+  }
+
+  final saldoPedido = totalPedido - pagadoPedido;
+
+  if (saldoPedido > 0) {
+    await Supabase.instance.client
+        .from('pedido_pagos')
+        .insert({
+          'pedido_id': widget.pedido['id'],
+          'importe': saldoPedido,
+          'medio_pago': medioPagoCompleto,
+          'fecha_pago': DateTime.now().toIso8601String(),
+          'observacion': 'Pago completo al entregar el pedido',
+        });
+  }
+}
 
       if (!mounted) return;
 
