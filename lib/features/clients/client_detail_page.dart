@@ -55,7 +55,7 @@ Future<void> _cargarSaldoPendiente() async {
 
     final pedidos = await Supabase.instance.client
         .from('pedidos')
-        .select('id, total, estado, resultado_entrega')
+        .select('id, total, estado, resultado_entrega, created_at')
         .eq('cliente_id', clienteId);
 
     double totalCompras = 0;
@@ -94,6 +94,7 @@ final saldoPedido = totalPedido - pagadoPedido;
 if (saldoPedido > 0) {
   pedidosPendientes.add({
     'id': pedido['id']?.toString(),
+    'created_at': pedido['created_at'],
     'total': totalPedido,
     'pagado': pagadoPedido,
     'saldo': saldoPedido,
@@ -353,8 +354,16 @@ else
   const SizedBox(height: 12),
 
   ..._pedidosPendientes.asMap().entries.map((entry) {
-    final numero = entry.key + 1;
     final pedido = entry.value;
+    final createdAt = DateTime.tryParse(
+  pedido['created_at']?.toString() ?? '',
+);
+
+final fechaPedido = createdAt == null
+    ? 'Sin fecha'
+    : '${createdAt.day.toString().padLeft(2, '0')}/'
+        '${createdAt.month.toString().padLeft(2, '0')}/'
+        '${createdAt.year}';
 
     final total =
         double.tryParse(pedido['total'].toString()) ?? 0;
@@ -366,7 +375,7 @@ else
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
-        'Pedido $numero — Total \$${total.toStringAsFixed(0)} — '
+        'Pedido $fechaPedido — Total \$${total.toStringAsFixed(0)} — '
         'Pagado \$${pagado.toStringAsFixed(0)} — '
         'Saldo \$${saldo.toStringAsFixed(0)}',
       ),
@@ -387,6 +396,7 @@ else
   mainAxisSize: MainAxisSize.min,
   children: [
     DropdownButtonFormField<String>(
+      isExpanded: true,
   decoration: const InputDecoration(
     labelText: 'Pedido a pagar',
     border: OutlineInputBorder(),
@@ -394,6 +404,15 @@ else
   initialValue: _pedidoPendienteId,
   items: _pedidosPendientes.map((pedido) {
     final id = pedido['id'].toString();
+    final createdAt = DateTime.tryParse(
+  pedido['created_at']?.toString() ?? '',
+)?.toLocal();
+
+final fechaPedido = createdAt == null
+    ? 'Sin fecha'
+    : '${createdAt.day.toString().padLeft(2, '0')}/'
+        '${createdAt.month.toString().padLeft(2, '0')}/'
+        '${createdAt.year}';
     final total = double.tryParse(pedido['total'].toString()) ?? 0;
     final pagado =
         double.tryParse(pedido['pagado'].toString()) ?? 0;
@@ -401,9 +420,10 @@ else
 
     return DropdownMenuItem<String>(
       value: id,
-      child: Text(
-        'Pedido \$${total.toStringAsFixed(0)} - Saldo \$${saldo.toStringAsFixed(0)}',
-      ),
+    child: Text(
+  '$fechaPedido · \$${saldo.toStringAsFixed(0)} pendiente',
+  overflow: TextOverflow.ellipsis,
+),
     );
   }).toList(),
   onChanged: (value) {
