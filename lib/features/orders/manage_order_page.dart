@@ -307,7 +307,7 @@ if (resultado == 'entregado' && medioPagoCompleto == 'Parcial') {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('CANCELAR'),
+            child: const Text('NO PAGÓ NADA'),
           ),
           FilledButton(
             onPressed: () {
@@ -409,6 +409,7 @@ if (importe != null) {
           .eq('id', widget.pedido['id']);
          if (resultado == 'entregado' &&
     medioPagoCompleto != null &&
+    medioPagoCompleto != 'Parcial' &&
     totalPedido > 0) {
       if (resultado == 'entregado' &&
     importePagoParcial != null &&
