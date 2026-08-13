@@ -255,6 +255,8 @@ if (_modoEntrega == null) {
   widget.pedido['total']?.toString() ?? '',
 ) ?? 0;
 String? medioPagoCompleto;
+double? importePagoParcial;
+String? medioPagoParcial;
 
 if (resultado == 'entregado') {
   medioPagoCompleto = await showDialog<String>(
@@ -267,7 +269,7 @@ if (resultado == 'entregado') {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+           onPressed: () => Navigator.pop(context, 'Parcial'),
             child: const Text('DEJÓ SALDO'),
           ),
           TextButton(
@@ -282,6 +284,85 @@ if (resultado == 'entregado') {
       );
     },
   );
+}
+if (!mounted) return;
+if (resultado == 'entregado' && medioPagoCompleto == 'Parcial') {
+  final controller = TextEditingController();
+
+  final importe = await showDialog<double>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('Pago parcial'),
+        content: TextField(
+          controller: controller,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Importe pagado',
+            prefixText: r'$ ',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('CANCELAR'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final valor = double.tryParse(
+                controller.text.trim().replaceAll(',', '.'),
+              );
+
+              if (valor == null || valor <= 0) return;
+
+              Navigator.pop(dialogContext, valor);
+            },
+            child: const Text('CONTINUAR'),
+          ),
+        ],
+      );
+    },
+  );
+
+  await Future<void>.delayed(const Duration(milliseconds: 300));
+
+if (!mounted) return;
+
+controller.dispose();
+
+if (importe != null) {
+    importePagoParcial = importe;
+
+    medioPagoParcial = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Medio de pago'),
+          content: Text(
+            'Importe recibido: \$${importe.toStringAsFixed(0)}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCELAR'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'Efectivo'),
+              child: const Text('EFECTIVO'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'Transferencia'),
+              child: const Text('TRANSFERENCIA'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+  }
 }
 
     if ((resultado == 'no_entregado' || resultado == 'parcial') &&
@@ -329,6 +410,20 @@ if (resultado == 'entregado') {
          if (resultado == 'entregado' &&
     medioPagoCompleto != null &&
     totalPedido > 0) {
+      if (resultado == 'entregado' &&
+    importePagoParcial != null &&
+    medioPagoParcial != null &&
+    importePagoParcial > 0) {
+  await Supabase.instance.client
+      .from('pedido_pagos')
+      .insert({
+        'pedido_id': widget.pedido['id'],
+        'importe': importePagoParcial,
+        'medio_pago': medioPagoParcial,
+        'fecha_pago': DateTime.now().toIso8601String(),
+        'observacion': 'Pago parcial al entregar el pedido',
+      });
+}
   final pagosExistentes = await Supabase.instance.client
       .from('pedido_pagos')
       .select('importe')
