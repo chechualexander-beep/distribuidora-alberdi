@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'order_products_page.dart';
+import '../clients/client_detail_page.dart';
 
 class NewOrderPage extends StatefulWidget {
   const NewOrderPage({super.key});
@@ -16,7 +17,9 @@ class _NewOrderPageState extends State<NewOrderPage> {
 
   List<Map<String, dynamic>> _clientes = [];
   Map<String, dynamic>? _clienteSeleccionado;
-
+bool _cargandoSaldoCliente = false;
+double _deudaCliente = 0;
+int _pedidosPendientesCliente = 0;
   String _busqueda = '';
 
   @override
@@ -55,7 +58,80 @@ class _NewOrderPageState extends State<NewOrderPage> {
       });
     }
   }
+Future<void> _cargarSaldoCliente(Map<String, dynamic> cliente) async {
+  try {
+    setState(() {
+      _cargandoSaldoCliente = true;
+      _deudaCliente = 0;
+      _pedidosPendientesCliente = 0;
+    });
 
+    final clienteId = cliente['id']?.toString();
+
+    if (clienteId == null || clienteId.isEmpty) {
+      throw Exception('Cliente sin ID');
+    }
+
+    final pedidos = await Supabase.instance.client
+        .from('pedidos')
+        .select('id, total, estado, resultado_entrega')
+        .eq('cliente_id', clienteId);
+
+    double deudaTotal = 0;
+    int cantidadPendientes = 0;
+
+    for (final pedido in pedidos) {
+      final estado =
+          pedido['estado']?.toString().toLowerCase() ?? '';
+      final resultadoEntrega =
+          pedido['resultado_entrega']?.toString().toLowerCase() ?? '';
+
+      final esCobrable =
+          estado != 'cancelado' &&
+          resultadoEntrega != 'no_entregado';
+
+      if (!esCobrable) continue;
+
+      final totalPedido =
+          double.tryParse(pedido['total']?.toString() ?? '') ?? 0;
+
+      final pagos = await Supabase.instance.client
+          .from('pedido_pagos')
+          .select('importe')
+          .eq('pedido_id', pedido['id']);
+
+      double pagadoPedido = 0;
+
+      for (final pago in pagos) {
+        pagadoPedido +=
+            double.tryParse(pago['importe']?.toString() ?? '') ?? 0;
+      }
+
+      final saldoPedido = totalPedido - pagadoPedido;
+
+      if (saldoPedido > 0) {
+        deudaTotal += saldoPedido;
+        cantidadPendientes++;
+      }
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _deudaCliente = deudaTotal;
+      _pedidosPendientesCliente = cantidadPendientes;
+      _cargandoSaldoCliente = false;
+    });
+  } catch (_) {
+    if (!mounted) return;
+
+    setState(() {
+      _deudaCliente = 0;
+      _pedidosPendientesCliente = 0;
+      _cargandoSaldoCliente = false;
+    });
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -147,6 +223,77 @@ class _NewOrderPageState extends State<NewOrderPage> {
                 ),
               ),
             ),
+            if (_cargandoSaldoCliente) ...[
+  const SizedBox(height: 16),
+  const Center(
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        SizedBox(width: 10),
+        Text('Consultando saldo del cliente...'),
+      ],
+    ),
+  ),
+],
+if (!_cargandoSaldoCliente && _deudaCliente > 0) ...[
+  const SizedBox(height: 16),
+  Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber_rounded),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Cliente con saldo pendiente',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$_pedidosPendientesCliente '
+                  '${_pedidosPendientesCliente == 1 ? 'pedido pendiente' : 'pedidos pendientes'}',
+                ),
+                Text(
+                  'Deuda total: \$${_deudaCliente.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+TextButton.icon(
+  onPressed: () {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ClientDetailPage(
+        cliente: _clienteSeleccionado!,
+      ),
+    ),
+  );
+},
+  icon: const Icon(Icons.visibility_outlined),
+  label: const Text('REVISAR SALDO'),
+),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+],
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: () {
@@ -250,6 +397,8 @@ class _NewOrderPageState extends State<NewOrderPage> {
                           setState(() {
                             _clienteSeleccionado = cliente;
                           });
+                          _cargarSaldoCliente(cliente);
+
                         },
                       ),
                     );
