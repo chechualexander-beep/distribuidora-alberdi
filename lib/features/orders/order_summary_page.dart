@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
 class OrderSummaryPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -111,6 +112,40 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
 
     return '\$${buffer.toString().split('').reversed.join()}';
   }
+  Future<void> _compartirPedido() async {
+  final buffer = StringBuffer();
+
+  final nombreCliente =
+      widget.cliente['nombre_comercio']?.toString() ?? 'Cliente';
+
+  buffer.writeln('DISTRIBUIDORA ALBERDI');
+  buffer.writeln();
+  buffer.writeln('Cliente: $nombreCliente');
+  buffer.writeln();
+  buffer.writeln('PEDIDO');
+  buffer.writeln();
+
+  for (final producto in _productosSeleccionados) {
+    final id = producto['id'].toString();
+    final cantidad = widget.cantidades[id] ?? 0;
+    final precio = _precioProducto(producto);
+    final subtotal = precio * cantidad;
+    final nombre = producto['nombre']?.toString() ?? 'Producto';
+
+    buffer.writeln(
+      '$cantidad x $nombre - ${_formatearPrecio(subtotal)}',
+    );
+  }
+
+  buffer.writeln();
+  buffer.writeln('TOTAL: ${_formatearPrecio(_totalPedido)}');
+  buffer.writeln();
+  buffer.writeln('Gracias por su compra.');
+
+  await SharePlus.instance.share(
+    ShareParams(text: buffer.toString()),
+  );
+}
 
   Future<void> _confirmarPedido() async {
     if (_guardando) return;
@@ -371,6 +406,14 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
                     label: const Text('VOLVER A PRODUCTOS'),
                   ),
                   const SizedBox(height: 10),
+
+OutlinedButton.icon(
+  onPressed: _guardando ? null : _compartirPedido,
+  icon: const Icon(Icons.share),
+  label: const Text('COMPARTIR PEDIDO'),
+),
+
+const SizedBox(height: 10),
                   FilledButton.icon(
                     onPressed:
                         _guardando ? null : _confirmarPedido,
