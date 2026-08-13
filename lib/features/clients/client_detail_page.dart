@@ -23,6 +23,8 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
 bool _cargandoCompras = true;
 String? _errorCompras;
 String? _pedidoPendienteId;
+List<Map<String, dynamic>> _pedidosPendientes = [];
+List<Map<String, dynamic>> _historialPagos = [];
 List<Map<String, dynamic>> _ultimasCompras = [];
 bool _cargandoSaldo = true;
 String? _errorSaldo;
@@ -35,6 +37,7 @@ void initState() {
   super.initState();
   _cargarUltimasCompras();
   _cargarSaldoPendiente();
+  _cargarHistorialPagos();
 }
 @override
 void dispose() {
@@ -57,7 +60,7 @@ Future<void> _cargarSaldoPendiente() async {
 
     double totalCompras = 0;
     double totalPagado = 0;
-
+final pedidosPendientes = <Map<String, dynamic>>[];
     for (final pedido in pedidos) {
       final estado = pedido['estado']?.toString().toLowerCase() ?? '';
       final resultadoEntrega =
@@ -88,8 +91,15 @@ double pagadoPedido = 0;
 }
 final saldoPedido = totalPedido - pagadoPedido;
 
-if (saldoPedido > 0 && _pedidoPendienteId == null) {
-  _pedidoPendienteId = pedido['id']?.toString();
+if (saldoPedido > 0) {
+  pedidosPendientes.add({
+    'id': pedido['id']?.toString(),
+    'total': totalPedido,
+    'pagado': pagadoPedido,
+    'saldo': saldoPedido,
+  });
+
+  _pedidoPendienteId ??= pedido['id']?.toString();
 }
     }
 
@@ -99,7 +109,7 @@ if (saldoPedido > 0 && _pedidoPendienteId == null) {
       _totalCompras = totalCompras;
       _totalPagado = totalPagado;
       _saldoPendiente = totalCompras - totalPagado;
-
+_pedidosPendientes = pedidosPendientes;
       if (_saldoPendiente < 0) {
         _saldoPendiente = 0;
       }
@@ -113,6 +123,41 @@ if (saldoPedido > 0 && _pedidoPendienteId == null) {
       _errorSaldo = 'No se pudo calcular el saldo pendiente.';
       _cargandoSaldo = false;
     });
+  }
+}
+
+Future<void> _cargarHistorialPagos() async {
+  try {
+    final clienteId = widget.cliente['id']?.toString();
+
+    if (clienteId == null || clienteId.isEmpty) {
+      throw Exception('Cliente sin ID');
+    }
+
+    final respuesta = await Supabase.instance.client
+        .from('pedido_pagos')
+        .select('''
+          id,
+          importe,
+          medio_pago,
+          fecha_pago,
+          observacion,
+          pedidos!inner (
+            id,
+            cliente_id
+          )
+        ''')
+        .eq('pedidos.cliente_id', clienteId)
+        .order('fecha_pago', ascending: false);
+
+    if (!mounted) return;
+
+    setState(() {
+      _historialPagos =
+          List<Map<String, dynamic>>.from(respuesta);
+    });
+  } catch (_) {
+    // Por ahora no mostramos error en pantalla.
   }
 }
 Future<void> _cargarUltimasCompras() async {
@@ -287,16 +332,47 @@ else
             ],
           ),
           const SizedBox(height: 12),
+          if (_pedidosPendientes.isNotEmpty)
+  Text(
+    '${_pedidosPendientes.length} ${_pedidosPendientes.length == 1 ? 'pedido con saldo pendiente' : 'pedidos con saldo pendiente'}',
+    style: const TextStyle(
+      fontWeight: FontWeight.w600,
+    ),
+  ),
           Text('Total vendido: \$${_totalCompras.toStringAsFixed(0)}'),
           Text('Total pagado: \$${_totalPagado.toStringAsFixed(0)}'),
           if (_saldoPendiente > 0)
             Text(
-              'Pendiente: \$${_saldoPendiente.toStringAsFixed(0)}',
+              'Deuda total: \$${_saldoPendiente.toStringAsFixed(0)}',
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
               ),
             ),
             if (_saldoPendiente > 0) ...[
+              if (_pedidosPendientes.isNotEmpty) ...[
+  const SizedBox(height: 12),
+
+  ..._pedidosPendientes.asMap().entries.map((entry) {
+    final numero = entry.key + 1;
+    final pedido = entry.value;
+
+    final total =
+        double.tryParse(pedido['total'].toString()) ?? 0;
+    final pagado =
+        double.tryParse(pedido['pagado'].toString()) ?? 0;
+    final saldo =
+        double.tryParse(pedido['saldo'].toString()) ?? 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        'Pedido $numero — Total \$${total.toStringAsFixed(0)} — '
+        'Pagado \$${pagado.toStringAsFixed(0)} — '
+        'Saldo \$${saldo.toStringAsFixed(0)}',
+      ),
+    );
+  }),
+],
   const SizedBox(height: 16),
   SizedBox(
     width: double.infinity,
@@ -310,6 +386,34 @@ else
        content: Column(
   mainAxisSize: MainAxisSize.min,
   children: [
+    DropdownButtonFormField<String>(
+  decoration: const InputDecoration(
+    labelText: 'Pedido a pagar',
+    border: OutlineInputBorder(),
+  ),
+  initialValue: _pedidoPendienteId,
+  items: _pedidosPendientes.map((pedido) {
+    final id = pedido['id'].toString();
+    final total = double.tryParse(pedido['total'].toString()) ?? 0;
+    final pagado =
+        double.tryParse(pedido['pagado'].toString()) ?? 0;
+    final saldo = total - pagado;
+
+    return DropdownMenuItem<String>(
+      value: id,
+      child: Text(
+        'Pedido \$${total.toStringAsFixed(0)} - Saldo \$${saldo.toStringAsFixed(0)}',
+      ),
+    );
+  }).toList(),
+  onChanged: (value) {
+    setState(() {
+      _pedidoPendienteId = value;
+    });
+  },
+),
+
+const SizedBox(height: 16),
     TextField(
   controller: _importePagoController,
   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -435,7 +539,7 @@ TextField(
   });
 
   await _cargarSaldoPendiente();
-
+await _cargarHistorialPagos();
   if (!context.mounted) return;
 
   ScaffoldMessenger.of(context).showSnackBar(
@@ -470,6 +574,58 @@ TextField(
     ),
   ),
 
+if (_historialPagos.isNotEmpty) ...[
+  const SizedBox(height: 20),
+
+  const Align(
+    alignment: Alignment.centerLeft,
+    child: Text(
+      'Historial de pagos',
+      style: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  ),
+
+  const SizedBox(height: 12),
+
+  ..._historialPagos.map((pago) {
+    final fecha = DateTime.tryParse(
+      pago['fecha_pago']?.toString() ?? '',
+    );
+
+    final fechaTexto = fecha == null
+        ? 'Fecha sin información'
+        : '${fecha.day.toString().padLeft(2, '0')}/'
+          '${fecha.month.toString().padLeft(2, '0')}/'
+          '${fecha.year}';
+
+    final importe =
+        double.tryParse(pago['importe']?.toString() ?? '') ?? 0;
+
+    final medio =
+        pago['medio_pago']?.toString() ?? 'Sin información';
+
+    final observacion =
+        pago['observacion']?.toString().trim() ?? '';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        leading: const Icon(Icons.payments_outlined),
+        title: Text(
+          '$fechaTexto — \$${importe.toStringAsFixed(0)}',
+        ),
+        subtitle: Text(
+          observacion.isEmpty
+              ? 'Medio de pago: $medio'
+              : 'Medio de pago: $medio\n$observacion',
+        ),
+      ),
+    );
+  }),
+],
 const SizedBox(height: 8),
 
 const Align(
