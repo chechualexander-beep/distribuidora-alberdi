@@ -172,21 +172,32 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   }
 
   void _verPedido() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => OrderSummaryPage(
-          fechaEntrega: widget.fechaEntrega!,
-          cliente: widget.cliente,
-          productos: _productos,
-          cantidades: Map<String, int>.from(_cantidades),
-          tipoPrecio: _tipoPrecio,
-          preciosFijados: Map<String, double>.from(_preciosFijados),
-          tiposPrecioFijados:
-              Map<String, String>.from(_tiposPrecioFijados),
-        ),
+  final fechaEntrega = widget.fechaEntrega;
+
+  if (fechaEntrega == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Seleccioná una fecha de entrega antes de continuar.'),
       ),
     );
+    return;
   }
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => OrderSummaryPage(
+        fechaEntrega: fechaEntrega,
+        cliente: widget.cliente,
+        productos: _productos,
+        cantidades: Map<String, int>.from(_cantidades),
+        tipoPrecio: _tipoPrecio,
+        preciosFijados: Map<String, double>.from(_preciosFijados),
+        tiposPrecioFijados:
+            Map<String, String>.from(_tiposPrecioFijados),
+      ),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {

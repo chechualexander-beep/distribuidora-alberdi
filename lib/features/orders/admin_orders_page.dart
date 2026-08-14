@@ -18,6 +18,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   List<Map<String, dynamic>> _resumenProductos = [];
   final Set<String> _pedidosSeleccionados = {};
   List<Map<String, dynamic>> _detallesPedidos = [];
+  DateTime _fechaSeleccionada = DateTime.now();
 
   @override
   void initState() {
@@ -32,6 +33,10 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     });
 
     try {
+      final fechaFiltro =
+    '${_fechaSeleccionada.year.toString().padLeft(4, '0')}-'
+    '${_fechaSeleccionada.month.toString().padLeft(2, '0')}-'
+    '${_fechaSeleccionada.day.toString().padLeft(2, '0')}';
       final respuesta = await Supabase.instance.client
           .from('pedidos')
           .select(
@@ -52,7 +57,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
             )
             ''',
           )
-          .order('created_at', ascending: false);
+.eq('fecha_entrega', fechaFiltro)
+.order('created_at', ascending: false);
 
 final pedidosCargados =
     List<Map<String, dynamic>>.from(respuesta);
@@ -189,6 +195,22 @@ double get _ventaTotal {
       return total + valor;
     },
   );
+}
+Future<void> _elegirFecha() async {
+  final fecha = await showDatePicker(
+    context: context,
+    initialDate: _fechaSeleccionada,
+    firstDate: DateTime(2025),
+    lastDate: DateTime(2030),
+  );
+
+  if (!mounted || fecha == null) return;
+
+setState(() {
+  _fechaSeleccionada = fecha;
+});
+
+await _cargarPedidos();
 }
 void _recalcularResumenSeleccionados() {
   final Map<String, Map<String, dynamic>> productosAgrupados = {};
@@ -328,7 +350,22 @@ void _limpiarSeleccion() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
+  children: [
+    ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.calendar_month_outlined),
+      title: const Text('Fecha de entrega'),
+      subtitle: Text(
+        '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
+        '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
+        '${_fechaSeleccionada.year}',
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: _elegirFecha,
+    ),
+    const Divider(),
+    Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Column(
@@ -367,6 +404,8 @@ void _limpiarSeleccion() {
             ),
           ],
         ),
+        ],
+),
       ),
     );
   }

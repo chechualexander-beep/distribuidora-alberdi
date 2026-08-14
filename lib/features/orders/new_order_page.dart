@@ -21,7 +21,8 @@ bool _cargandoSaldoCliente = false;
 double _deudaCliente = 0;
 int _pedidosPendientesCliente = 0;
   String _busqueda = '';
-  DateTime? _fechaEntrega;
+  static DateTime? _ultimaFechaEntrega;
+  DateTime? _fechaEntrega = _ultimaFechaEntrega;
 
   @override
   void initState() {
@@ -147,6 +148,7 @@ Future<void> _seleccionarFechaEntrega() async {
 
   setState(() {
     _fechaEntrega = fecha;
+    _ultimaFechaEntrega = fecha;
   });
 }
   @override
@@ -329,15 +331,24 @@ Card(
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => OrderProductsPage(
-                      cliente: _clienteSeleccionado!,
-                      fechaEntrega: _fechaEntrega,
-                    ),
-                  ),
-                );
-              },
+  if (_fechaEntrega == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Seleccioná una fecha de entrega antes de continuar.'),
+      ),
+    );
+    return;
+  }
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => OrderProductsPage(
+        cliente: _clienteSeleccionado!,
+        fechaEntrega: _fechaEntrega,
+      ),
+    ),
+  );
+},
               icon: const Icon(Icons.shopping_cart_outlined),
               label: const Text('CONTINUAR CON PRODUCTOS'),
             ),
