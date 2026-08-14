@@ -16,6 +16,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
 
   List<Map<String, dynamic>> _pedidos = [];
   List<Map<String, dynamic>> _resumenProductos = [];
+  final Set<String> _pedidosSeleccionados = {};
+  List<Map<String, dynamic>> _detallesPedidos = [];
 
   @override
   void initState() {
@@ -67,6 +69,7 @@ if (idsPedidos.isNotEmpty) {
       .from('pedido_detalles')
       .select(
         '''
+        pedido_id,
         producto_id,
         cantidad,
         productos (
@@ -76,6 +79,8 @@ if (idsPedidos.isNotEmpty) {
         ''',
       )
       .inFilter('pedido_id', idsPedidos);
+      _detallesPedidos =
+    List<Map<String, dynamic>>.from(detallesRespuesta);
 
   for (final detalle in detallesRespuesta) {
     final productoId = detalle['producto_id']?.toString();
@@ -184,6 +189,53 @@ double get _ventaTotal {
       return total + valor;
     },
   );
+}
+void _recalcularResumenSeleccionados() {
+  final Map<String, Map<String, dynamic>> productosAgrupados = {};
+
+  final detallesFiltrados = _detallesPedidos.where((detalle) {
+    final pedidoId = detalle['pedido_id']?.toString();
+    return pedidoId != null &&
+        _pedidosSeleccionados.contains(pedidoId);
+  });
+
+  for (final detalle in detallesFiltrados) {
+    final productoId = detalle['producto_id']?.toString();
+
+    if (productoId == null) continue;
+
+    final producto =
+        detalle['productos'] as Map<String, dynamic>?;
+
+    final cantidad =
+        double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+
+    if (!productosAgrupados.containsKey(productoId)) {
+      productosAgrupados[productoId] = {
+        'producto_id': productoId,
+        'nombre':
+            producto?['nombre']?.toString() ?? 'Producto sin nombre',
+        'codigo': producto?['codigo']?.toString() ?? '',
+        'cantidad': 0.0,
+      };
+    }
+
+    productosAgrupados[productoId]!['cantidad'] =
+        (productosAgrupados[productoId]!['cantidad'] as double) +
+            cantidad;
+  }
+
+  final resumen = productosAgrupados.values.toList();
+
+  resumen.sort(
+    (a, b) => a['nombre']
+        .toString()
+        .compareTo(b['nombre'].toString()),
+  );
+
+  setState(() {
+    _resumenProductos = resumen;
+  });
 }
 
   @override
@@ -376,6 +428,8 @@ double get _ventaTotal {
           final motivo =
               pedido['motivo_no_entrega']?.toString() ?? '';
 
+final pedidoId = pedido['id'].toString();
+final seleccionado = _pedidosSeleccionados.contains(pedidoId);
           return Card(
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -384,6 +438,20 @@ double get _ventaTotal {
                 children: [
                   Row(
                     children: [
+                      Checkbox(
+  value: seleccionado,
+  onChanged: (valor) {
+    setState(() {
+      if (valor == true) {
+        _pedidosSeleccionados.add(pedidoId);
+      } else {
+        _pedidosSeleccionados.remove(pedidoId);
+      }
+    });
+
+    _recalcularResumenSeleccionados();
+  },
+),
                       Expanded(
                         child: Text(
                           clienteNombre,
