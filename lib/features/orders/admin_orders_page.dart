@@ -107,6 +107,23 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
 
     return '$dia/$mes/$anio $hora:$minuto';
   }
+  int get _cantidadPedidos {
+  return _pedidos.length;
+}
+
+double get _ventaTotal {
+  return _pedidos.fold<double>(
+    0,
+    (total, pedido) {
+      final valor = double.tryParse(
+            pedido['total']?.toString() ?? '',
+          ) ??
+          0;
+
+      return total + valor;
+    },
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -170,10 +187,57 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
       onRefresh: _cargarPedidos,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: _pedidos.length,
+        itemCount: _pedidos.length + 1,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
-          final pedido = _pedidos[index];
+  if (index == 0) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pedidos',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$_cantidadPedidos',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Text(
+                  'Venta total',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _formatearPrecio(_ventaTotal),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  final pedido = _pedidos[index - 1];
 
           final cliente =
               pedido['clientes'] as Map<String, dynamic>?;
