@@ -323,12 +323,14 @@ double get _ventaTotal {
                           'Producto sin nombre',
                     ),
                   ),
-                  Text(
-                    producto['cantidad']?.toString() ?? '0',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                 Text(
+  ((producto['cantidad'] as num?) ?? 0).toDouble() % 1 == 0
+      ? ((producto['cantidad'] as num?) ?? 0).toInt().toString()
+      : ((producto['cantidad'] as num?) ?? 0).toString(),
+  style: const TextStyle(
+    fontWeight: FontWeight.bold,
+  ),
+),
                 ],
               ),
             ),
