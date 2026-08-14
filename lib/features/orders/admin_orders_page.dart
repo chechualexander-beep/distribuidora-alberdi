@@ -15,6 +15,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   String? _error;
 
   List<Map<String, dynamic>> _pedidos = [];
+  List<Map<String, dynamic>> _resumenProductos = [];
 
   @override
   void initState() {
@@ -51,12 +52,72 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
           )
           .order('created_at', ascending: false);
 
+final pedidosCargados =
+    List<Map<String, dynamic>>.from(respuesta);
+
+final idsPedidos = pedidosCargados
+    .map((pedido) => pedido['id'])
+    .where((id) => id != null)
+    .toList();
+
+final Map<String, Map<String, dynamic>> productosAgrupados = {};
+
+if (idsPedidos.isNotEmpty) {
+  final detallesRespuesta = await Supabase.instance.client
+      .from('pedido_detalles')
+      .select(
+        '''
+        producto_id,
+        cantidad,
+        productos (
+          nombre,
+          codigo
+        )
+        ''',
+      )
+      .inFilter('pedido_id', idsPedidos);
+
+  for (final detalle in detallesRespuesta) {
+    final productoId = detalle['producto_id']?.toString();
+
+    if (productoId == null) continue;
+
+    final producto =
+        detalle['productos'] as Map<String, dynamic>?;
+
+    final cantidad =
+        double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+
+    if (!productosAgrupados.containsKey(productoId)) {
+      productosAgrupados[productoId] = {
+        'producto_id': productoId,
+        'nombre':
+            producto?['nombre']?.toString() ?? 'Producto sin nombre',
+        'codigo': producto?['codigo']?.toString() ?? '',
+        'cantidad': 0.0,
+      };
+    }
+
+    productosAgrupados[productoId]!['cantidad'] =
+        (productosAgrupados[productoId]!['cantidad'] as double) +
+            cantidad;
+  }
+}
+
+final resumenProductos = productosAgrupados.values.toList();
+
+resumenProductos.sort(
+  (a, b) => a['nombre']
+      .toString()
+      .compareTo(b['nombre'].toString()),
+);
       if (!mounted) return;
 
       setState(() {
-        _pedidos = List<Map<String, dynamic>>.from(respuesta);
-        _cargando = false;
-      });
+  _pedidos = pedidosCargados;
+  _resumenProductos = resumenProductos;
+  _cargando = false;
+});
     } catch (_) {
       if (!mounted) return;
 
@@ -187,7 +248,7 @@ double get _ventaTotal {
       onRefresh: _cargarPedidos,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: _pedidos.length + 1,
+        itemCount: _pedidos.length + 2,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
   if (index == 0) {
@@ -236,8 +297,49 @@ double get _ventaTotal {
       ),
     );
   }
+  if (index == 1) {
+  return Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'RESUMEN DE PRODUCTOS',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ..._resumenProductos.map(
+            (producto) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      producto['nombre']?.toString() ??
+                          'Producto sin nombre',
+                    ),
+                  ),
+                  Text(
+                    producto['cantidad']?.toString() ?? '0',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
-  final pedido = _pedidos[index - 1];
+  final pedido = _pedidos[index - 2];
 
           final cliente =
               pedido['clientes'] as Map<String, dynamic>?;
