@@ -21,6 +21,7 @@ bool _cargandoSaldoCliente = false;
 double _deudaCliente = 0;
 int _pedidosPendientesCliente = 0;
   String _busqueda = '';
+  DateTime? _fechaEntrega;
 
   @override
   void initState() {
@@ -131,6 +132,22 @@ Future<void> _cargarSaldoCliente(Map<String, dynamic> cliente) async {
       _cargandoSaldoCliente = false;
     });
   }
+}
+Future<void> _seleccionarFechaEntrega() async {
+  final hoy = DateTime.now();
+
+  final fecha = await showDatePicker(
+    context: context,
+    initialDate: _fechaEntrega ?? hoy,
+    firstDate: hoy,
+    lastDate: hoy.add(const Duration(days: 365)),
+  );
+
+  if (!mounted || fecha == null) return;
+
+  setState(() {
+    _fechaEntrega = fecha;
+  });
 }
   @override
   Widget build(BuildContext context) {
@@ -294,6 +311,21 @@ TextButton.icon(
     ),
   ),
 ],
+Card(
+  child: ListTile(
+    leading: const Icon(Icons.calendar_month_outlined),
+    title: const Text('Fecha de entrega'),
+    subtitle: Text(
+      _fechaEntrega == null
+          ? 'Seleccionar fecha'
+          : '${_fechaEntrega!.day.toString().padLeft(2, '0')}/'
+              '${_fechaEntrega!.month.toString().padLeft(2, '0')}/'
+              '${_fechaEntrega!.year}',
+    ),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: _seleccionarFechaEntrega,
+  ),
+),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: () {
@@ -301,6 +333,7 @@ TextButton.icon(
                   MaterialPageRoute(
                     builder: (_) => OrderProductsPage(
                       cliente: _clienteSeleccionado!,
+                      fechaEntrega: _fechaEntrega,
                     ),
                   ),
                 );
