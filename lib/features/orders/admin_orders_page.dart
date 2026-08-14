@@ -237,6 +237,27 @@ void _recalcularResumenSeleccionados() {
     _resumenProductos = resumen;
   });
 }
+void _seleccionarTodos() {
+  setState(() {
+    _pedidosSeleccionados
+      ..clear()
+      ..addAll(
+        _pedidos
+            .map((pedido) => pedido['id']?.toString())
+            .whereType<String>(),
+      );
+  });
+
+  _recalcularResumenSeleccionados();
+}
+
+void _limpiarSeleccion() {
+  setState(() {
+    _pedidosSeleccionados.clear();
+  });
+
+  _recalcularResumenSeleccionados();
+}
 
   @override
   Widget build(BuildContext context) {
@@ -363,6 +384,31 @@ void _recalcularResumenSeleccionados() {
             ),
           ),
           const SizedBox(height: 12),
+          Text(
+  '${_pedidosSeleccionados.length} de ${_pedidos.length} pedidos seleccionados',
+),
+
+const SizedBox(height: 8),
+
+Row(
+  children: [
+    Expanded(
+      child: OutlinedButton(
+        onPressed: _seleccionarTodos,
+        child: const Text('SELECCIONAR TODOS'),
+      ),
+    ),
+    const SizedBox(width: 8),
+    Expanded(
+      child: OutlinedButton(
+        onPressed: _limpiarSeleccion,
+        child: const Text('LIMPIAR'),
+      ),
+    ),
+  ],
+),
+
+const SizedBox(height: 12),
           ..._resumenProductos.map(
             (producto) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
