@@ -287,6 +287,99 @@ Future<void> _cargarUltimasCompras() async {
             titulo: 'Observaciones',
             valor: _texto(widget.cliente['observaciones']),
           ),
+          Card(
+  margin: const EdgeInsets.only(bottom: 10),
+  child: ListTile(
+    leading: const Icon(Icons.price_change_outlined),
+    title: const Text(
+      'Lista de precios habitual',
+      style: TextStyle(
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+    subtitle: Text(
+      switch (widget.cliente['tipo_precio_habitual']?.toString()) {
+        'promo' => 'Promo',
+        'interior' => 'Interior',
+        'normal' => 'Normal',
+        _ => 'Sin preferencia',
+      },
+    ),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: () async {
+  final seleccion = await showModalBottomSheet<String>(
+    context: context,
+    builder: (context) {
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                'Lista de precios habitual',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ListTile(
+              title: const Text('Normal'),
+              onTap: () => Navigator.pop(context, 'normal'),
+            ),
+            ListTile(
+              title: const Text('Promo'),
+              onTap: () => Navigator.pop(context, 'promo'),
+            ),
+            ListTile(
+              title: const Text('Interior'),
+              onTap: () => Navigator.pop(context, 'interior'),
+            ),
+            ListTile(
+              title: const Text('Sin preferencia'),
+              onTap: () => Navigator.pop(context, ''),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+
+  if (seleccion == null) return;
+  try {
+  await Supabase.instance.client
+      .from('clientes')
+      .update({
+        'tipo_precio_habitual':
+            seleccion.isEmpty ? null : seleccion,
+      })
+      .eq('id', widget.cliente['id']);
+
+  if (!mounted) return;
+
+  setState(() {
+    widget.cliente['tipo_precio_habitual'] =
+        seleccion.isEmpty ? null : seleccion;
+  });
+
+  ScaffoldMessenger.of(this.context).showSnackBar(
+    const SnackBar(
+      content: Text('Lista habitual actualizada'),
+    ),
+  );
+} catch (_) {
+  if (!mounted) return;
+
+  ScaffoldMessenger.of(this.context).showSnackBar(
+    const SnackBar(
+      content: Text(
+        'No se pudo actualizar la lista habitual',
+      ),
+    ),
+  );
+}
+},
+  ),
+),
 const SizedBox(height: 24),
 
 if (_cargandoSaldo)

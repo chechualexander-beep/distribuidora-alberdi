@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'order_products_page.dart';
 import '../clients/client_detail_page.dart';
+import 'order_detail_page.dart';
 
 class NewOrderPage extends StatefulWidget {
   const NewOrderPage({super.key});
@@ -17,6 +18,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
 
   List<Map<String, dynamic>> _clientes = [];
   Map<String, dynamic>? _clienteSeleccionado;
+  List<Map<String, dynamic>> _ultimosPedidos = [];
 bool _cargandoSaldoCliente = false;
 double _deudaCliente = 0;
 int _pedidosPendientesCliente = 0;
@@ -40,7 +42,7 @@ int _pedidosPendientesCliente = 0;
       final respuesta = await Supabase.instance.client
           .from('clientes')
           .select(
-            'id, nombre_comercio, propietario, direccion, localidad',
+            'id, nombre_comercio, propietario, direccion, localidad, tipo_precio_habitual',
           )
           .eq('activo', true)
           .order('nombre_comercio');
@@ -131,6 +133,86 @@ Future<void> _cargarSaldoCliente(Map<String, dynamic> cliente) async {
       _deudaCliente = 0;
       _pedidosPendientesCliente = 0;
       _cargandoSaldoCliente = false;
+    });
+  }
+}
+
+Future<void> _cargarUltimosPedidos(
+  Map<String, dynamic> cliente,
+) async {
+  try {
+    final clienteId = cliente['id']?.toString();
+
+    if (clienteId == null || clienteId.isEmpty) {
+      return;
+    }
+
+    final respuesta = await Supabase.instance.client
+        .from('pedidos')
+        .select(
+          'id, total, created_at, fecha_entrega',
+        )
+        .eq('cliente_id', clienteId)
+        .order('created_at', ascending: false)
+        .limit(2);
+
+    final pedidosCargados =
+        List<Map<String, dynamic>>.from(respuesta);
+
+    for (final pedido in pedidosCargados) {
+      final pedidoId = pedido['id'];
+
+      final detalles = await Supabase.instance.client
+          .from('pedido_detalles')
+          .select('tipo_precio')
+          .eq('pedido_id', pedidoId);
+
+      final tipos = <String>{};
+
+      for (final detalle in detalles) {
+        final tipo = detalle['tipo_precio']?.toString();
+
+        if (tipo == 'normal' ||
+            tipo == 'promo' ||
+            tipo == 'interior') {
+          tipos.add(tipo!);
+        }
+      }
+
+      if (tipos.isEmpty) {
+        pedido['tipo_precio_historial'] = 'normal';
+      } else if (tipos.length == 1) {
+        pedido['tipo_precio_historial'] = tipos.first;
+      } else {
+        final nombres = <String>[];
+
+        if (tipos.contains('normal')) {
+          nombres.add('Normal');
+        }
+
+        if (tipos.contains('promo')) {
+          nombres.add('Promo');
+        }
+
+        if (tipos.contains('interior')) {
+          nombres.add('Interior');
+        }
+
+        pedido['tipo_precio_historial'] =
+            'Mixto (${nombres.join(' + ')})';
+      }
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _ultimosPedidos = pedidosCargados;
+    });
+  } catch (_) {
+    if (!mounted) return;
+
+    setState(() {
+      _ultimosPedidos = [];
     });
   }
 }
@@ -313,6 +395,90 @@ TextButton.icon(
     ),
   ),
 ],
+if (_ultimosPedidos.isNotEmpty) ...[
+  const SizedBox(height: 16),
+  Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Últimos pedidos',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          ..._ultimosPedidos.map((pedido) {
+            final fecha =
+                DateTime.tryParse(pedido['created_at']?.toString() ?? '');
+
+            final fechaTexto = fecha == null
+                ? 'Sin fecha'
+                : '${fecha.day.toString().padLeft(2, '0')}/'
+                  '${fecha.month.toString().padLeft(2, '0')}/'
+                  '${fecha.year}';
+
+            final total =
+                double.tryParse(pedido['total']?.toString() ?? '') ?? 0;
+
+            final tipoPrecio =
+    pedido['tipo_precio_historial']?.toString() ?? 'normal';
+
+            final nombreTipo = switch (tipoPrecio) {
+  'promo' => 'Promo',
+  'interior' => 'Interior',
+  'normal' => 'Normal',
+  _ => tipoPrecio,
+};
+
+            return InkWell(
+  borderRadius: BorderRadius.circular(8),
+  onTap: () {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => OrderDetailPage(
+          pedido: pedido,
+        ),
+      ),
+    );
+  },
+  child: Padding(
+    padding: const EdgeInsets.symmetric(
+      vertical: 8,
+      horizontal: 4,
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            '$fechaTexto · $nombreTipo',
+          ),
+        ),
+        Text(
+          '\$${total.toStringAsFixed(0)}',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(width: 6),
+        const Icon(
+          Icons.chevron_right,
+          size: 18,
+        ),
+      ],
+    ),
+  ),
+);
+          }),
+        ],
+      ),
+    ),
+  ),
+],
 Card(
   child: ListTile(
     leading: const Icon(Icons.calendar_month_outlined),
@@ -442,6 +608,7 @@ Card(
                             _clienteSeleccionado = cliente;
                           });
                           _cargarSaldoCliente(cliente);
+                          _cargarUltimosPedidos(cliente);
 
                         },
                       ),

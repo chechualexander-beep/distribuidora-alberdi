@@ -31,10 +31,20 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   final Map<String, String> _tiposPrecioFijados = {};
 
   @override
-  void initState() {
-    super.initState();
-    _cargarProductos();
+void initState() {
+  super.initState();
+
+  final tipoHabitual =
+      widget.cliente['tipo_precio_habitual']?.toString();
+
+  if (tipoHabitual == 'normal' ||
+      tipoHabitual == 'promo' ||
+      tipoHabitual == 'interior') {
+    _tipoPrecio = tipoHabitual!;
   }
+
+  _cargarProductos();
+}
 
   Future<void> _cargarProductos() async {
     setState(() {
