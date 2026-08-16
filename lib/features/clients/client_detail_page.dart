@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'edit_client_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 class ClientDetailPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
 
@@ -222,6 +224,83 @@ Future<void> _cargarUltimasCompras() async {
 
     return texto.isEmpty ? 'Sin información' : texto;
   }
+  Future<void> _abrirEnMapa() async {
+  final latitud = widget.cliente['latitud'];
+  final longitud = widget.cliente['longitud'];
+
+  if (latitud == null || longitud == null) {
+    return;
+  }
+
+  final uri = Uri.parse(
+    'https://www.google.com/maps/search/?api=1&query=$latitud,$longitud',
+  );
+
+  final abierto = await launchUrl(
+    uri,
+    mode: LaunchMode.externalApplication,
+  );
+
+  if (!abierto && mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No se pudo abrir el mapa.'),
+      ),
+    );
+  }
+}
+Future<void> _compartirUbicacion() async {
+  final latitud = widget.cliente['latitud'];
+  final longitud = widget.cliente['longitud'];
+
+  if (latitud == null || longitud == null) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Este cliente no tiene una ubicación guardada.'),
+      ),
+    );
+    return;
+  }
+
+  final nombre =
+      widget.cliente['nombre_comercio']?.toString() ?? 'Cliente';
+
+  final texto = '''
+Ubicación de $nombre
+
+https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
+''';
+
+  await SharePlus.instance.share(
+    ShareParams(text: texto),
+  );
+}
+String _formatearFechaUbicacion() {
+  final valor = widget.cliente['ubicacion_actualizada_at'];
+
+  if (valor == null) {
+    return 'Sin fecha de actualización';
+  }
+
+  final fecha = DateTime.tryParse(valor.toString());
+
+  if (fecha == null) {
+    return 'Sin fecha de actualización';
+  }
+
+  final fechaLocal = fecha.toLocal();
+
+  final dia = fechaLocal.day.toString().padLeft(2, '0');
+  final mes = fechaLocal.month.toString().padLeft(2, '0');
+  final anio = fechaLocal.year.toString();
+
+  final hora = fechaLocal.hour.toString().padLeft(2, '0');
+  final minuto = fechaLocal.minute.toString().padLeft(2, '0');
+
+  return '$dia/$mes/$anio $hora:$minuto';
+}
 
   @override
   Widget build(BuildContext context) {
@@ -381,6 +460,63 @@ Future<void> _cargarUltimasCompras() async {
   ),
 ),
 const SizedBox(height: 24),
+if (widget.cliente['latitud'] != null &&
+    widget.cliente['longitud'] != null) ...[
+  Card(
+    margin: const EdgeInsets.only(bottom: 10),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.location_on_outlined),
+              SizedBox(width: 10),
+              Text(
+                'Ubicación del cliente',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text('Ubicación guardada'),
+          const SizedBox(height: 4),
+Text(
+  'Actualizada: ${_formatearFechaUbicacion()}',
+  style: const TextStyle(
+    fontSize: 13,
+    color: Colors.grey,
+  ),
+),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _abrirEnMapa,
+              icon: const Icon(Icons.map_outlined),
+              label: const Text('ABRIR EN MAPA'),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+SizedBox(
+  width: double.infinity,
+  child: OutlinedButton.icon(
+    onPressed: _compartirUbicacion,
+    icon: const Icon(Icons.share_outlined),
+    label: const Text('COMPARTIR UBICACIÓN'),
+  ),
+),
+        ],
+      ),
+    ),
+  ),
+  const SizedBox(height: 14),
+],
 
 if (_cargandoSaldo)
   const Center(
