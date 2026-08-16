@@ -25,33 +25,56 @@ class _ClientsPageState extends State<ClientsPage> {
   }
 
   Future<void> _cargarClientes() async {
-    setState(() {
-      _cargando = true;
-      _error = null;
-    });
+  setState(() {
+    _cargando = true;
+    _error = null;
+  });
 
-    try {
-      final respuesta = await Supabase.instance.client
-          .from('clientes')
-          .select()
-          .eq('activo', true)
-          .order('nombre_comercio');
+  try {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
 
-      if (!mounted) return;
-
-      setState(() {
-        _clientes = List<Map<String, dynamic>>.from(respuesta);
-        _cargando = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _error = 'No se pudieron cargar los clientes.';
-        _cargando = false;
-      });
+    if (user == null) {
+      throw Exception('No hay usuario autenticado');
     }
+
+    // Obtener el rol del usuario actual
+    final usuario = await supabase
+        .from('usuarios')
+        .select('rol')
+        .eq('id', user.id)
+        .single();
+
+    final String rol = usuario['rol']?.toString() ?? '';
+
+    dynamic consulta = supabase
+        .from('clientes')
+        .select()
+        .eq('activo', true);
+
+    // Los preventistas solamente ven sus propios clientes.
+    // El administrador puede ver todos.
+    if (rol != 'administrador') {
+      consulta = consulta.eq('preventista_id', user.id);
+    }
+
+    final respuesta = await consulta.order('nombre_comercio');
+
+    if (!mounted) return;
+
+    setState(() {
+      _clientes = List<Map<String, dynamic>>.from(respuesta);
+      _cargando = false;
+    });
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() {
+      _error = 'No se pudieron cargar los clientes.';
+      _cargando = false;
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
