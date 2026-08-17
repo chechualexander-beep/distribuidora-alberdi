@@ -10,12 +10,18 @@ class AdminPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final esEscritorio = MediaQuery.of(context).size.width >= 900;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Administración'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Center(
+  child: ConstrainedBox(
+    constraints: BoxConstraints(
+      maxWidth: esEscritorio ? 1100 : double.infinity,
+    ),
+    child: ListView(
+      padding: EdgeInsets.all(esEscritorio ? 24 : 16),
         children: [
           Card(
             child: ListTile(
@@ -153,6 +159,8 @@ Card(
   ),
 ),
         ],
+      ),
+      ),
       ),
     );
   }
