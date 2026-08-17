@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:printing/printing.dart';
+
+import 'invoice_pdf_service.dart';
 
 class InvoiceDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
+  final bool soloLectura;
 
   const InvoiceDetailPage({
     super.key,
     required this.pedido,
+    this.soloLectura = false,
   });
 
   @override
@@ -106,6 +111,18 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       ),
     );
   }
+}
+String _formatearFecha(dynamic fecha) {
+  if (fecha == null) return '-';
+
+  final date = DateTime.tryParse(fecha.toString());
+  if (date == null) return '-';
+
+  final dia = date.day.toString().padLeft(2, '0');
+  final mes = date.month.toString().padLeft(2, '0');
+  final anio = date.year.toString();
+
+  return '$dia/$mes/$anio';
 }
 
   String _formatearPrecio(dynamic valor) {
@@ -294,6 +311,62 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         ),
         const SizedBox(height: 20),
 
+if (widget.soloLectura) ...[
+  const SizedBox(height: 16),
+
+  Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Factura realizada',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          Text(
+            'Comprobante: ${widget.pedido['numero_comprobante'] ?? '-'}',
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            'Fecha: ${_formatearFecha(widget.pedido['fecha_facturacion'])}',
+          ),
+        ],
+      ),
+    ),
+  ),
+
+  const SizedBox(height: 12),
+
+  SizedBox(
+    width: double.infinity,
+    child: FilledButton.icon(
+      onPressed: () async {
+  final pdfBytes = await InvoicePdfService.generarBoleta(
+    pedido: widget.pedido,
+    detalles: _detalles,
+  );
+
+  if (!mounted) return;
+
+  await Printing.layoutPdf(
+    onLayout: (_) async => pdfBytes,
+    name: 'Boleta ${widget.pedido['numero_comprobante'] ?? ''}',
+  );
+},
+      icon: const Icon(Icons.print_outlined),
+      label: const Text('REIMPRIMIR'),
+    ),
+  ),
+],
+if (!widget.soloLectura) ...[
 TextField(
   controller: _comprobanteController,
   decoration: const InputDecoration(
@@ -314,6 +387,7 @@ SizedBox(
     label: const Text('FACTURAR'),
   ),
 ),
+],
       ],
     );
   }
