@@ -47,6 +47,9 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
             resultado_entrega,
             motivo_no_entrega,
             total,
+            facturado,
+fecha_facturacion,
+numero_comprobante,
             clientes (
               nombre_comercio,
               direccion
@@ -515,6 +518,10 @@ const SizedBox(height: 12),
 
 final pedidoId = pedido['id'].toString();
 final seleccionado = _pedidosSeleccionados.contains(pedidoId);
+final facturado = pedido['facturado'] == true;
+final fechaFacturacion = pedido['fecha_facturacion'];
+final numeroComprobante =
+    pedido['numero_comprobante']?.toString() ?? '';
           return Card(
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -578,6 +585,26 @@ final seleccionado = _pedidosSeleccionados.contains(pedidoId);
                   Text(
                     'Entrega: ${resultado.toUpperCase()}',
                   ),
+                  const SizedBox(height: 4),
+Text(
+  facturado ? 'Facturación: FACTURADO' : 'Facturación: NO FACTURADO',
+  style: TextStyle(
+    fontWeight: FontWeight.bold,
+    color: facturado ? Colors.green : Colors.orange,
+  ),
+),
+if (facturado && fechaFacturacion != null) ...[
+  const SizedBox(height: 4),
+  Text(
+    'Fecha facturación: ${_formatearFecha(fechaFacturacion)}',
+  ),
+],
+if (facturado && numeroComprobante.isNotEmpty) ...[
+  const SizedBox(height: 4),
+  Text(
+    'Comprobante: $numeroComprobante',
+  ),
+],
                   if (resultado == 'no_entregado' &&
                       motivo.isNotEmpty) ...[
                     const SizedBox(height: 4),
