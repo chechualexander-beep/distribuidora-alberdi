@@ -13,6 +13,7 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
   String? _error;
 
   List<Map<String, dynamic>> _productos = [];
+  String _busqueda = '';
 
   @override
   void initState() {
@@ -30,7 +31,7 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
       final respuesta = await Supabase.instance.client
           .from('productos')
           .select()
-          .eq('activo', true)
+          
           .order('nombre');
 
       if (!mounted) return;
@@ -49,13 +50,7 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
     }
   }
   Future<void> _editarProducto(Map<String, dynamic> producto) async {
-  final nombreController = TextEditingController(
-    text: producto['nombre']?.toString() ?? '',
-  );
-
-  final codigoController = TextEditingController(
-    text: producto['codigo_original']?.toString() ?? '',
-  );
+  
 
   final costoController = TextEditingController(
     text: producto['costo']?.toString() ?? '0',
@@ -128,47 +123,204 @@ precioInteriorController.text =
   final comisionInteriorController = TextEditingController(
     text: producto['comision_interior']?.toString() ?? '0',
   );
+  bool activo = producto['activo'] == true;
+bool visiblePreventistas = producto['visible_preventistas'] == true;
 
   await showDialog<void>(
     context: context,
+    barrierDismissible: false,
     builder: (context) {
+  return StatefulBuilder(
+    builder: (context, setDialogState) {
       return AlertDialog(
         title: Text(
           producto['nombre']?.toString() ?? 'Editar producto',
         ),
         content: SizedBox(
-  width: 420,
-  child: TextField(
-    controller: costoController,
-    keyboardType: const TextInputType.numberWithOptions(
-      decimal: true,
+  child: SingleChildScrollView(
+  child: Column(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    TextField(
+      controller: costoController,
+      keyboardType: const TextInputType.numberWithOptions(
+        decimal: true,
+      ),
+      decoration: const InputDecoration(
+        labelText: 'Costo',
+        prefixText: '\$ ',
+        border: OutlineInputBorder(),
+      ),
     ),
-    decoration: const InputDecoration(
-      labelText: 'Costo',
-      prefixText: '\$ ',
-      border: OutlineInputBorder(),
+    const SizedBox(height: 12),
+    TextField(
+      controller: precioNormalController,
+      readOnly: true,
+      decoration: const InputDecoration(
+        labelText: 'Precio normal',
+        prefixText: '\$ ',
+        border: OutlineInputBorder(),
+      ),
     ),
+    const SizedBox(height: 12),
+    TextField(
+      controller: precioPromoController,
+      readOnly: true,
+      decoration: const InputDecoration(
+        labelText: 'Precio promo',
+        prefixText: '\$ ',
+        border: OutlineInputBorder(),
+      ),
+    ),
+    const SizedBox(height: 12),
+    TextField(
+      controller: precioInteriorController,
+      readOnly: true,
+      decoration: const InputDecoration(
+        labelText: 'Precio interior',
+        prefixText: '\$ ',
+        border: OutlineInputBorder(),
+      ),
+    ),
+    const SizedBox(height: 16),
+
+TextField(
+  controller: comisionNormalController,
+  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+  decoration: const InputDecoration(
+    labelText: 'Comisión normal (%)',
+    suffixText: ' %',
+    border: OutlineInputBorder(),
   ),
 ),
+
+const SizedBox(height: 12),
+
+TextField(
+  controller: comisionPromoController,
+  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+  decoration: const InputDecoration(
+    labelText: 'Comisión promo (%)',
+    suffixText: ' %',
+    border: OutlineInputBorder(),
+  ),
+),
+
+const SizedBox(height: 12),
+
+TextField(
+  controller: comisionInteriorController,
+  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+  decoration: const InputDecoration(
+    labelText: 'Comisión interior (%)',
+    suffixText: ' %',
+    border: OutlineInputBorder(),
+  ),
+),
+const SizedBox(height: 16),
+
+SwitchListTile(
+  contentPadding: EdgeInsets.zero,
+  title: const Text('Producto activo'),
+  value: activo,
+  onChanged: (valor) {
+    setDialogState(() {
+      activo = valor;
+
+      if (!activo) {
+        visiblePreventistas = false;
+      }
+    });
+  },
+),
+
+SwitchListTile(
+  contentPadding: EdgeInsets.zero,
+  title: const Text('Mostrar a preventistas'),
+  value: visiblePreventistas,
+  onChanged: activo
+      ? (valor) {
+          setDialogState(() {
+            visiblePreventistas = valor;
+          });
+        }
+      : null,
+),
+  ],
+),
+),
+        ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      );
+  TextButton(
+    onPressed: () => Navigator.of(context).pop(),
+    child: const Text('Cancelar'),
+  ),
+  FilledButton(
+    onPressed: () async {
+  final costo = double.tryParse(
+        costoController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  final precioNormal = double.tryParse(
+        precioNormalController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  final precioPromo = double.tryParse(
+        precioPromoController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  final precioInterior = double.tryParse(
+        precioInteriorController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+final comisionNormal = double.tryParse(
+      comisionNormalController.text.replaceAll(',', '.'),
+    ) ??
+    0;
+
+final comisionPromo = double.tryParse(
+      comisionPromoController.text.replaceAll(',', '.'),
+    ) ??
+    0;
+
+final comisionInterior = double.tryParse(
+      comisionInteriorController.text.replaceAll(',', '.'),
+    ) ??
+    0;
+
+  await Supabase.instance.client
+      .from('productos')
+      .update({
+        'costo': costo,
+        'precio_normal': precioNormal,
+        'precio_promo': precioPromo,
+        'precio_interior': precioInterior,
+        'comision_normal': comisionNormal,
+'comision_promo': comisionPromo,
+'comision_interior': comisionInterior,
+'activo': activo,
+'visible_preventistas': activo ? visiblePreventistas : false,
+      })
+      .eq('id', producto['id']);
+
+  if (!context.mounted) return;
+
+  Navigator.of(context).pop();
+
+  await _cargarProductos();
+},
+    child: const Text('Guardar'),
+  ),
+],
+            );
+    },
+  );
     },
   );
 
-  nombreController.dispose();
-  codigoController.dispose();
-  costoController.dispose();
-  precioNormalController.dispose();
-  precioPromoController.dispose();
-  precioInteriorController.dispose();
-  comisionNormalController.dispose();
-  comisionPromoController.dispose();
-  comisionInteriorController.dispose();
 }
 
   @override
@@ -185,11 +337,43 @@ precioInteriorController.text =
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(24),
-      itemCount: _productos.length,
+    final productosFiltrados = _productos.where((producto) {
+  final texto = _busqueda.toLowerCase().trim();
+
+  if (texto.isEmpty) {
+    return true;
+  }
+
+  final nombre = producto['nombre']?.toString().toLowerCase() ?? '';
+  final codigo = producto['codigo_original']?.toString().toLowerCase() ?? '';
+
+  return nombre.contains(texto) || codigo.contains(texto);
+}).toList();
+
+return Column(
+  children: [
+    Padding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+      child: TextField(
+        decoration: const InputDecoration(
+          labelText: 'Buscar producto',
+          hintText: 'Nombre o código',
+          prefixIcon: Icon(Icons.search),
+          border: OutlineInputBorder(),
+        ),
+        onChanged: (valor) {
+          setState(() {
+            _busqueda = valor;
+          });
+        },
+      ),
+    ),
+    Expanded(
+      child: ListView.builder(
+        padding: const EdgeInsets.all(24),
+      itemCount: productosFiltrados.length,
       itemBuilder: (context, index) {
-        final producto = _productos[index];
+        final producto = productosFiltrados[index];
 
         return ListTile(
   title: Text(
@@ -204,6 +388,16 @@ precioInteriorController.text =
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Código: ${producto['codigo_original'] ?? '-'}'),
+        Text(
+  producto['activo'] != true
+      ? 'Estado: Inactivo'
+      : producto['visible_preventistas'] == true
+          ? 'Estado: Activo · Visible preventistas'
+          : 'Estado: Activo · Oculto preventistas',
+  style: const TextStyle(
+    fontWeight: FontWeight.w600,
+  ),
+),
         const SizedBox(height: 4),
         Text('Costo: \$${producto['costo'] ?? 0}'),
         Text('Precio normal: \$${producto['precio_normal'] ?? 0}'),
@@ -222,9 +416,12 @@ precioInteriorController.text =
   onPressed: () {
   _editarProducto(producto);
 },
-),
-);
+          ),
+        );
       },
-    );
+    ),
+  ),
+],
+);
   }
 }
