@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/orders/new_order_page.dart';
 import 'features/clients/clients_page.dart';
@@ -26,9 +27,17 @@ class DistribuidoraAlberdiApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Distribuidora Alberdi',
       theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.indigo,
-      ),
+  useMaterial3: true,
+  colorSchemeSeed: Colors.indigo,
+),
+darkTheme: ThemeData(
+  useMaterial3: true,
+  brightness: Brightness.dark,
+  colorSchemeSeed: Colors.indigo,
+),
+themeMode: Platform.isWindows ? ThemeMode.dark : ThemeMode.light,
+
+
       home: Supabase.instance.client.auth.currentSession == null
           ? const LoginPage()
           : const HomePage(),

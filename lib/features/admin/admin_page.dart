@@ -46,6 +46,7 @@ class _AdminPageState extends State<AdminPage> {
     const SizedBox(height: 28),
 
     ListTile(
+      selected: _seccionSeleccionada == 1,
       leading: const Icon(Icons.inventory_2_outlined),
       title: const Text('Pedidos'),
       onTap: () {
@@ -56,6 +57,7 @@ class _AdminPageState extends State<AdminPage> {
     ),
 
     ListTile(
+      selected: _seccionSeleccionada == 2,
       leading: const Icon(Icons.receipt_long_outlined),
       title: const Text('Facturación'),
       onTap: () {
@@ -66,6 +68,7 @@ class _AdminPageState extends State<AdminPage> {
     ),
 
     ListTile(
+      selected: _seccionSeleccionada == 3,
       leading: const Icon(Icons.history_outlined),
       title: const Text('Facturas realizadas'),
       onTap: () {
@@ -76,6 +79,7 @@ class _AdminPageState extends State<AdminPage> {
     ),
 
     ListTile(
+      selected: _seccionSeleccionada == 4,
       leading: const Icon(Icons.payments_outlined),
       title: const Text('Comisiones'),
       onTap: () {
@@ -86,6 +90,7 @@ class _AdminPageState extends State<AdminPage> {
     ),
 
     ListTile(
+      selected: _seccionSeleccionada == 5,
       leading: const Icon(Icons.history_outlined),
       title: const Text('Historial de liquidaciones'),
       onTap: () {
