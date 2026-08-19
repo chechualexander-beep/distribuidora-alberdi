@@ -32,6 +32,7 @@ class _ProductsPageState extends State<ProductsPage> {
           .from('productos')
           .select()
           .eq('activo', true)
+          .eq('visible_preventistas', true)
           .order('nombre');
 
       if (!mounted) return;
