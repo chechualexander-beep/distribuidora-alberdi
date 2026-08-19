@@ -49,6 +49,146 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
       });
     }
   }
+  Future<void> _nuevoProducto() async {
+  final nombreController = TextEditingController();
+  final codigoController = TextEditingController();
+  final costoController = TextEditingController();
+
+  final precioNormalController = TextEditingController(text: '0');
+final precioPromoController = TextEditingController(text: '0');
+final precioInteriorController = TextEditingController(text: '0');
+
+double redondearHaciaArriba100(double valor) {
+  return (valor / 100).ceil() * 100;
+}
+
+void recalcularPrecios() {
+  final costo = double.tryParse(
+        costoController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  final codigo = int.tryParse(
+        codigoController.text.trim(),
+      ) ??
+      0;
+
+  final precioNormal = redondearHaciaArriba100(
+    costo * (codigo >= 800 ? 1.30 : 1.50),
+  );
+
+  final precioPromo = redondearHaciaArriba100(
+    costo * 1.21,
+  );
+
+  final precioInterior = redondearHaciaArriba100(
+    precioNormal * 1.07,
+  );
+
+  precioNormalController.text = precioNormal.toStringAsFixed(0);
+  precioPromoController.text = precioPromo.toStringAsFixed(0);
+  precioInteriorController.text = precioInterior.toStringAsFixed(0);
+}
+
+costoController.addListener(recalcularPrecios);
+codigoController.addListener(recalcularPrecios);
+
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Nuevo producto'),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+  child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nombreController,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: codigoController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Código',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: costoController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Costo',
+                  prefixText: '\$ ',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+TextField(
+  controller: precioNormalController,
+  readOnly: true,
+  decoration: const InputDecoration(
+    labelText: 'Precio normal',
+    prefixText: '\$ ',
+    border: OutlineInputBorder(),
+  ),
+),
+
+const SizedBox(height: 12),
+
+TextField(
+  controller: precioPromoController,
+  readOnly: true,
+  decoration: const InputDecoration(
+    labelText: 'Precio promo',
+    prefixText: '\$ ',
+    border: OutlineInputBorder(),
+  ),
+),
+
+const SizedBox(height: 12),
+
+TextField(
+  controller: precioInteriorController,
+  readOnly: true,
+  decoration: const InputDecoration(
+    labelText: 'Precio interior',
+    prefixText: '\$ ',
+    border: OutlineInputBorder(),
+  ),
+),
+            ],
+          ),
+        ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              // Todavía no guardamos nada.
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
   Future<void> _editarProducto(Map<String, dynamic> producto) async {
   
 
@@ -353,21 +493,35 @@ final comisionInterior = double.tryParse(
 return Column(
   children: [
     Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-      child: TextField(
-        decoration: const InputDecoration(
-          labelText: 'Buscar producto',
-          hintText: 'Nombre o código',
-          prefixIcon: Icon(Icons.search),
-          border: OutlineInputBorder(),
+  padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+  child: Row(
+    children: [
+      Expanded(
+        child: TextField(
+          decoration: const InputDecoration(
+            labelText: 'Buscar producto',
+            hintText: 'Nombre o código',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (valor) {
+            setState(() {
+              _busqueda = valor;
+            });
+          },
         ),
-        onChanged: (valor) {
-          setState(() {
-            _busqueda = valor;
-          });
-        },
       ),
-    ),
+      const SizedBox(width: 12),
+      FilledButton.icon(
+        onPressed: () {
+  _nuevoProducto();
+},
+        icon: const Icon(Icons.add),
+        label: const Text('Nuevo producto'),
+      ),
+    ],
+  ),
+),
     Expanded(
       child: ListView.builder(
         padding: const EdgeInsets.all(24),
