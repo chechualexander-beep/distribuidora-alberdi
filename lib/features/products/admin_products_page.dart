@@ -15,6 +15,7 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
   List<Map<String, dynamic>> _productos = [];
   String _busqueda = '';
 
+bool _eliminandoProducto = false;
   @override
   void initState() {
     super.initState();
@@ -63,6 +64,7 @@ final comisionNormalController = TextEditingController(text: '10');
 final comisionPromoController = TextEditingController(text: '5');
 final comisionInteriorController = TextEditingController(text: '10');
 
+bool guardando = false;
 double redondearHaciaArriba100(double valor) {
   return (valor / 100).ceil() * 100;
 }
@@ -246,6 +248,9 @@ TextField(
   if (nombre.isEmpty) {
     return;
   }
+  if (guardando) return;
+
+guardando = true;
 
   final costo = double.tryParse(
         costoController.text.replaceAll(',', '.'),
@@ -311,9 +316,11 @@ TextField(
       content: Text('No se pudo guardar el producto: $e'),
     ),
   );
+} finally {
+  guardando = false;
 }
 },
-            child: const Text('Guardar'),
+child: const Text('Guardar'),
           ),
         ],
       );
@@ -395,6 +402,7 @@ precioInteriorController.text =
   );
   bool activo = producto['activo'] == true;
 bool visiblePreventistas = producto['visible_preventistas'] == true;
+bool guardando = false;
 
   await showDialog<void>(
     context: context,
@@ -527,6 +535,8 @@ SwitchListTile(
   ),
   FilledButton(
     onPressed: () async {
+      if (guardando) return;
+guardando = true;
   final costo = double.tryParse(
         costoController.text.replaceAll(',', '.'),
       ) ??
@@ -561,6 +571,7 @@ final comisionInterior = double.tryParse(
     ) ??
     0;
 
+  try {
   await Supabase.instance.client
       .from('productos')
       .update({
@@ -569,10 +580,10 @@ final comisionInterior = double.tryParse(
         'precio_promo': precioPromo,
         'precio_interior': precioInterior,
         'comision_normal': comisionNormal,
-'comision_promo': comisionPromo,
-'comision_interior': comisionInterior,
-'activo': activo,
-'visible_preventistas': activo ? visiblePreventistas : false,
+        'comision_promo': comisionPromo,
+        'comision_interior': comisionInterior,
+        'activo': activo,
+        'visible_preventistas': activo ? visiblePreventistas : false,
       })
       .eq('id', producto['id']);
 
@@ -581,6 +592,19 @@ final comisionInterior = double.tryParse(
   Navigator.of(context).pop();
 
   await _cargarProductos();
+} catch (e) {
+  if (!context.mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        'No se pudo guardar el producto: $e',
+      ),
+    ),
+  );
+} finally {
+  guardando = false;
+}
 },
     child: const Text('Guardar'),
   ),
@@ -621,6 +645,9 @@ Future<void> _eliminarProducto(
   );
 
   if (confirmar != true) return;
+  if (_eliminandoProducto) return;
+
+_eliminandoProducto = true;
 
   try {
     await Supabase.instance.client
@@ -639,7 +666,9 @@ Future<void> _eliminarProducto(
         ),
       ),
     );
-  }
+  } finally {
+  _eliminandoProducto = false;
+}
 }
 
   @override
