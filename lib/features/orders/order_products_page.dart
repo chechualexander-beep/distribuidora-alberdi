@@ -342,6 +342,32 @@ void initState() {
                   ),
                   const SizedBox(height: 8),
                   SegmentedButton<String>(
+                    style: ButtonStyle(
+  backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+    (states) {
+      if (!states.contains(WidgetState.selected)) {
+        return null;
+      }
+
+      switch (_tipoPrecio) {
+        case 'promo':
+          return Colors.orange;
+        case 'interior':
+          return Colors.green;
+        default:
+          return Colors.blue;
+      }
+    },
+  ),
+  foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+    (states) {
+      if (states.contains(WidgetState.selected)) {
+        return Colors.white;
+      }
+      return null;
+    },
+  ),
+),
                     segments: const [
                       ButtonSegment<String>(
                         value: 'normal',
@@ -368,6 +394,32 @@ void initState() {
             ),
           ),
         ),
+        Container(
+  width: double.infinity,
+  margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+  padding: const EdgeInsets.symmetric(vertical: 10),
+  decoration: BoxDecoration(
+    color: _tipoPrecio == 'promo'
+        ? Colors.orange
+        : _tipoPrecio == 'interior'
+            ? Colors.green
+            : Colors.blue,
+    borderRadius: BorderRadius.circular(8),
+  ),
+  child: Text(
+    _tipoPrecio == 'promo'
+        ? 'LISTA PROMO'
+        : _tipoPrecio == 'interior'
+            ? 'LISTA INTERIOR'
+            : 'LISTA NORMAL',
+    textAlign: TextAlign.center,
+    style: const TextStyle(
+      color: Colors.white,
+      fontWeight: FontWeight.bold,
+      fontSize: 16,
+    ),
+  ),
+),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: TextField(
