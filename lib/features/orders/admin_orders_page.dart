@@ -19,6 +19,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   final Set<String> _pedidosSeleccionados = {};
   List<Map<String, dynamic>> _detallesPedidos = [];
   DateTime _fechaSeleccionada = DateTime.now();
+  bool _filtrarPorFecha = false;
 
   @override
   void initState() {
@@ -33,36 +34,43 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     });
 
     try {
-      final fechaFiltro =
-    '${_fechaSeleccionada.year.toString().padLeft(4, '0')}-'
-    '${_fechaSeleccionada.month.toString().padLeft(2, '0')}-'
-    '${_fechaSeleccionada.day.toString().padLeft(2, '0')}';
-      final respuesta = await Supabase.instance.client
-          .from('pedidos')
-          .select(
-            '''
-            id,
-            created_at,
-            estado,
-            resultado_entrega,
-            motivo_no_entrega,
-            total,
-            facturado,
-fecha_facturacion,
-numero_comprobante,
-            clientes (
-              nombre_comercio,
-              direccion
-            ),
-            usuarios (
-              nombre,
-              apellido
-            )
-            ''',
-          )
-.eq('fecha_entrega', fechaFiltro)
-.order('created_at', ascending: false);
+    
+      var consulta = Supabase.instance.client
+    .from('pedidos')
+    .select(
+      '''
+      id,
+      created_at,
+      estado,
+      resultado_entrega,
+      motivo_no_entrega,
+      total,
+      facturado,
+      fecha_facturacion,
+      numero_comprobante,
+      clientes (
+        nombre_comercio,
+        direccion
+      ),
+      usuarios (
+        nombre,
+        apellido
+      )
+      ''',
+    )
+    .eq('resultado_entrega', 'pendiente');
 
+if (_filtrarPorFecha) {
+  final fechaFiltro =
+      '${_fechaSeleccionada.year.toString().padLeft(4, '0')}-'
+      '${_fechaSeleccionada.month.toString().padLeft(2, '0')}-'
+      '${_fechaSeleccionada.day.toString().padLeft(2, '0')}';
+
+  consulta = consulta.eq('fecha_entrega', fechaFiltro);
+}
+
+final respuesta =
+    await consulta.order('fecha_entrega', ascending: true);
 final pedidosCargados =
     List<Map<String, dynamic>>.from(respuesta);
 
@@ -199,6 +207,19 @@ double get _ventaTotal {
     },
   );
 }
+String _nombreDia(DateTime fecha) {
+  const dias = [
+    'LUNES',
+    'MARTES',
+    'MIÉRCOLES',
+    'JUEVES',
+    'VIERNES',
+    'SÁBADO',
+    'DOMINGO',
+  ];
+
+  return dias[fecha.weekday - 1];
+}
 Future<void> _elegirFecha() async {
   final fecha = await showDatePicker(
     context: context,
@@ -209,11 +230,19 @@ Future<void> _elegirFecha() async {
 
   if (!mounted || fecha == null) return;
 
-setState(() {
-  _fechaSeleccionada = fecha;
-});
+  setState(() {
+    _fechaSeleccionada = fecha;
+    _filtrarPorFecha = true;
+  });
 
-await _cargarPedidos();
+  await _cargarPedidos();
+}
+Future<void> _verTodosLosPendientes() async {
+  setState(() {
+    _filtrarPorFecha = false;
+  });
+
+  await _cargarPedidos();
 }
 void _recalcularResumenSeleccionados() {
   final Map<String, Map<String, dynamic>> productosAgrupados = {};
@@ -339,17 +368,33 @@ void _limpiarSeleccion() {
       Card(
         margin: const EdgeInsets.all(16),
         child: ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.calendar_month_outlined),
-          title: const Text('Fecha de entrega'),
-          subtitle: Text(
-            '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
-            '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
-            '${_fechaSeleccionada.year}',
-          ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: _elegirFecha,
-        ),
+  contentPadding: EdgeInsets.zero,
+  leading: const Icon(Icons.pending_actions_outlined),
+  title: Text(
+  _filtrarPorFecha
+      ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
+          '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
+          '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
+          '${_fechaSeleccionada.year.toString().substring(2)}'
+      : 'Todos los pendientes',
+),
+subtitle: Text(
+  _filtrarPorFecha
+      ? 'Pendientes de entrega para esta fecha'
+      : 'Pedidos cuya entrega todavía no fue gestionada',
+),
+  trailing: const Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(Icons.calendar_month_outlined, size: 20),
+      SizedBox(width: 8),
+      Text('Filtrar por fecha'),
+      SizedBox(width: 4),
+      Icon(Icons.chevron_right),
+    ],
+  ),
+  onTap: _elegirFecha,
+),
       ),
       const Expanded(
         child: Center(
@@ -377,17 +422,44 @@ void _limpiarSeleccion() {
         child: Column(
   children: [
     ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.calendar_month_outlined),
-      title: const Text('Fecha de entrega'),
-      subtitle: Text(
-        '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
-        '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
-        '${_fechaSeleccionada.year}',
-      ),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: _elegirFecha,
+  contentPadding: EdgeInsets.zero,
+  leading: const Icon(Icons.pending_actions_outlined),
+  title: Text(
+  _filtrarPorFecha
+      ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
+          '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
+          '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
+          '${_fechaSeleccionada.year.toString().substring(2)}'
+      : 'Todos los pendientes',
+),
+subtitle: Text(
+  _filtrarPorFecha
+      ? 'Pendientes de entrega para esta fecha'
+      : 'Pedidos cuya entrega todavía no fue gestionada',
+),
+  trailing: Row(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    Icon(
+      _filtrarPorFecha
+          ? Icons.list_alt_outlined
+          : Icons.calendar_month_outlined,
+      size: 20,
     ),
+    const SizedBox(width: 8),
+    Text(
+      _filtrarPorFecha
+          ? 'Ver todos los pendientes'
+          : 'Filtrar por fecha',
+    ),
+    const SizedBox(width: 4),
+    const Icon(Icons.chevron_right),
+  ],
+),
+onTap: _filtrarPorFecha
+    ? _verTodosLosPendientes
+    : _elegirFecha,
+),
     const Divider(),
     Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

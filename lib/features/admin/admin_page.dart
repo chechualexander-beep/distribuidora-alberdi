@@ -6,6 +6,7 @@ import '../commissions/commission_history_page.dart';
 import '../invoicing/invoicing_page.dart';
 import '../invoicing/invoiced_orders_page.dart';
 import '../products/admin_products_page.dart';
+import 'commercial_summary_page.dart';
 class AdminPage extends StatefulWidget {
   const AdminPage({super.key});
 
@@ -110,6 +111,16 @@ class _AdminPageState extends State<AdminPage> {
     });
   },
 ),
+ListTile(
+  selected: _seccionSeleccionada == 7,
+  leading: const Icon(Icons.analytics_outlined),
+  title: const Text('Resumen comercial'),
+  onTap: () {
+    setState(() {
+      _seccionSeleccionada = 7;
+    });
+  },
+),
   ],
 ),
 
@@ -127,10 +138,12 @@ class _AdminPageState extends State<AdminPage> {
                   : _seccionSeleccionada == 5
                       ? const CommissionHistoryPage()
                       : _seccionSeleccionada == 6
-                          ? const AdminProductsPage()
-                      : Center(
-                          child: Text(
-                            _tituloSeccion(),
+    ? const AdminProductsPage()
+    : _seccionSeleccionada == 7
+        ? const CommercialSummaryPage()
+        : Center(
+            child: Text(
+              _tituloSeccion(),
                             style: const TextStyle(
                               fontSize: 26,
                               fontWeight: FontWeight.bold,
