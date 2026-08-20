@@ -334,13 +334,34 @@ void _limpiarSeleccion() {
     }
 
     if (_pedidos.isEmpty) {
-      return const Center(
-        child: Text(
-          'No hay pedidos registrados.',
-          style: TextStyle(fontSize: 18),
+  return Column(
+    children: [
+      Card(
+        margin: const EdgeInsets.all(16),
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.calendar_month_outlined),
+          title: const Text('Fecha de entrega'),
+          subtitle: Text(
+            '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
+            '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
+            '${_fechaSeleccionada.year}',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _elegirFecha,
         ),
-      );
-    }
+      ),
+      const Expanded(
+        child: Center(
+          child: Text(
+            'No hay pedidos registrados para esta fecha.',
+            style: TextStyle(fontSize: 18),
+          ),
+        ),
+      ),
+    ],
+  );
+}
 
     return RefreshIndicator(
       onRefresh: _cargarPedidos,
