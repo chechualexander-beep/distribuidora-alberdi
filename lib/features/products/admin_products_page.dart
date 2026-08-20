@@ -51,12 +51,17 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
   }
   Future<void> _nuevoProducto() async {
   final nombreController = TextEditingController();
-  final codigoController = TextEditingController();
+  
   final costoController = TextEditingController();
 
   final precioNormalController = TextEditingController(text: '0');
 final precioPromoController = TextEditingController(text: '0');
 final precioInteriorController = TextEditingController(text: '0');
+
+String tipoMargen = 'normal';
+final comisionNormalController = TextEditingController(text: '10');
+final comisionPromoController = TextEditingController(text: '5');
+final comisionInteriorController = TextEditingController(text: '10');
 
 double redondearHaciaArriba100(double valor) {
   return (valor / 100).ceil() * 100;
@@ -68,14 +73,9 @@ void recalcularPrecios() {
       ) ??
       0;
 
-  final codigo = int.tryParse(
-        codigoController.text.trim(),
-      ) ??
-      0;
-
   final precioNormal = redondearHaciaArriba100(
-    costo * (codigo >= 800 ? 1.30 : 1.50),
-  );
+  costo * (tipoMargen == 'competitivo' ? 1.30 : 1.50),
+);
 
   final precioPromo = redondearHaciaArriba100(
     costo * 1.21,
@@ -88,10 +88,19 @@ void recalcularPrecios() {
   precioNormalController.text = precioNormal.toStringAsFixed(0);
   precioPromoController.text = precioPromo.toStringAsFixed(0);
   precioInteriorController.text = precioInterior.toStringAsFixed(0);
+  if (tipoMargen == 'competitivo') {
+  comisionNormalController.text = '6';
+  comisionPromoController.text = '5';
+  comisionInteriorController.text = '6';
+} else {
+  comisionNormalController.text = '10';
+  comisionPromoController.text = '5';
+  comisionInteriorController.text = '10';
+}
 }
 
 costoController.addListener(recalcularPrecios);
-codigoController.addListener(recalcularPrecios);
+
 
   await showDialog<void>(
     context: context,
@@ -113,15 +122,7 @@ codigoController.addListener(recalcularPrecios);
                 ),
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: codigoController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Código',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
+              
               TextField(
                 controller: costoController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -134,6 +135,32 @@ codigoController.addListener(recalcularPrecios);
                 ),
               ),
               const SizedBox(height: 12),
+
+DropdownButtonFormField<String>(
+  initialValue: tipoMargen,
+  decoration: const InputDecoration(
+    labelText: 'Tipo de margen',
+    border: OutlineInputBorder(),
+  ),
+  items: const [
+    DropdownMenuItem(
+      value: 'normal',
+      child: Text('Normal'),
+    ),
+    DropdownMenuItem(
+      value: 'competitivo',
+      child: Text('Competitivo'),
+    ),
+  ],
+  onChanged: (valor) {
+    if (valor == null) return;
+
+    tipoMargen = valor;
+    recalcularPrecios();
+  },
+),
+
+const SizedBox(height: 12),
 
 TextField(
   controller: precioNormalController,
@@ -168,6 +195,41 @@ TextField(
     border: OutlineInputBorder(),
   ),
 ),
+const SizedBox(height: 16),
+
+TextField(
+  controller: comisionNormalController,
+  readOnly: true,
+  decoration: const InputDecoration(
+    labelText: 'Comisión normal (%)',
+    suffixText: ' %',
+    border: OutlineInputBorder(),
+  ),
+),
+
+const SizedBox(height: 12),
+
+TextField(
+  controller: comisionPromoController,
+  readOnly: true,
+  decoration: const InputDecoration(
+    labelText: 'Comisión promo (%)',
+    suffixText: ' %',
+    border: OutlineInputBorder(),
+  ),
+),
+
+const SizedBox(height: 12),
+
+TextField(
+  controller: comisionInteriorController,
+  readOnly: true,
+  decoration: const InputDecoration(
+    labelText: 'Comisión interior (%)',
+    suffixText: ' %',
+    border: OutlineInputBorder(),
+  ),
+),
             ],
           ),
         ),
@@ -178,9 +240,79 @@ TextField(
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            onPressed: () {
-              // Todavía no guardamos nada.
-            },
+            onPressed: () async {
+  final nombre = nombreController.text.trim();
+
+  if (nombre.isEmpty) {
+    return;
+  }
+
+  final costo = double.tryParse(
+        costoController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  final precioNormal = double.tryParse(
+        precioNormalController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  final precioPromo = double.tryParse(
+        precioPromoController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  final precioInterior = double.tryParse(
+        precioInteriorController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  final comisionNormal = double.tryParse(
+        comisionNormalController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  final comisionPromo = double.tryParse(
+        comisionPromoController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  final comisionInterior = double.tryParse(
+        comisionInteriorController.text.replaceAll(',', '.'),
+      ) ??
+      0;
+
+  try {
+  await Supabase.instance.client.from('productos').insert({
+    'nombre': nombre,
+    'costo': costo,
+    'precio_normal': precioNormal,
+    'precio_promo': precioPromo,
+    'precio_interior': precioInterior,
+    'comision_normal': comisionNormal,
+    'comision_promo': comisionPromo,
+    'comision_interior': comisionInterior,
+    'tipo_margen': tipoMargen,
+    'activo': true,
+    'visible_preventistas': true,
+    'codigo_original': null,
+  });
+
+  if (!context.mounted) return;
+
+  Navigator.of(context).pop();
+
+  await _cargarProductos();
+} catch (e) {
+  if (!context.mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('No se pudo guardar el producto: $e'),
+    ),
+  );
+}
+},
             child: const Text('Guardar'),
           ),
         ],
@@ -219,12 +351,10 @@ costoController.addListener(() {
       ) ??
       0;
 
-  final codigo = int.tryParse(
-        producto['codigo_original']?.toString() ?? '',
-      ) ??
-      0;
+  final esCompetitivo =
+    producto['tipo_margen'] == 'competitivo';
 
-  if (codigo >= 800) {
+if (esCompetitivo) {
   precioNormalCalculado = redondearHaciaArriba100(
     costo * 1.30,
   );
@@ -462,6 +592,55 @@ final comisionInterior = double.tryParse(
   );
 
 }
+Future<void> _eliminarProducto(
+  Map<String, dynamic> producto,
+) async {
+  final nombre = producto['nombre']?.toString() ?? 'este producto';
+
+  final confirmar = await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Eliminar producto'),
+        content: Text(
+          '¿Seguro que querés eliminar "$nombre"?\n\n'
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (confirmar != true) return;
+
+  try {
+    await Supabase.instance.client
+        .from('productos')
+        .delete()
+        .eq('id', producto['id']);
+
+    await _cargarProductos();
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'No se pudo eliminar el producto: $e',
+        ),
+      ),
+    );
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -564,13 +743,25 @@ return Column(
       ],
     ),
   ),
-  trailing: IconButton(
-  icon: const Icon(Icons.edit_outlined),
-  tooltip: 'Editar producto',
-  onPressed: () {
-  _editarProducto(producto);
-},
-          ),
+  trailing: Row(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    IconButton(
+      icon: const Icon(Icons.edit_outlined),
+      tooltip: 'Editar producto',
+      onPressed: () {
+        _editarProducto(producto);
+      },
+    ),
+    IconButton(
+      icon: const Icon(Icons.delete_outline),
+      tooltip: 'Eliminar producto',
+      onPressed: () {
+        _eliminarProducto(producto);
+      },
+    ),
+  ],
+),
         );
       },
     ),
