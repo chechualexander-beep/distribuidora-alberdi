@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CommercialSummaryPage extends StatefulWidget {
   const CommercialSummaryPage({super.key});
@@ -9,7 +10,20 @@ class CommercialSummaryPage extends StatefulWidget {
 }
 
 class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
+    
   int _periodoSeleccionado = 0;
+  final _supabase = Supabase.instance.client;
+  Future<void> _probarConexion() async {
+  await _supabase
+      .from('pedido_detalles')
+      .select('cantidad_entregada, precio_unitario')
+      .limit(1);
+}
+@override
+void initState() {
+  super.initState();
+  _probarConexion();
+}
 
   @override
   Widget build(BuildContext context) {

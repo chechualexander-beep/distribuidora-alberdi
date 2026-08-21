@@ -23,14 +23,200 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   String? _error;
 
   List<Map<String, dynamic>> _detalles = [];
+  List<Map<String, dynamic>> _productosDisponibles = [];
+  final Set<String> _detallesQuitados = {};
   final TextEditingController _comprobanteController =
     TextEditingController();
+    final Map<String, TextEditingController> _cantidadFacturadaControllers = {};
 
   @override
   void initState() {
     super.initState();
     _cargarDetalles();
+    _cargarProductosDisponibles();
   }
+  double _precioProductoParaPedido(Map<String, dynamic> producto) {
+  final tipoPrecio =
+      widget.pedido['tipo_precio']?.toString().toLowerCase() ?? 'normal';
+
+  dynamic valor;
+
+  switch (tipoPrecio) {
+    case 'promo':
+      valor = producto['precio_promo'];
+      break;
+    case 'interior':
+      valor = producto['precio_interior'];
+      break;
+    default:
+      valor = producto['precio_normal'];
+  }
+
+  return double.tryParse(valor?.toString() ?? '') ?? 0;
+}
+Future<void> _cargarProductosDisponibles() async {
+  try {
+    final respuesta = await Supabase.instance.client
+        .from('productos')
+        .select(
+          'id, codigo, nombre, precio_normal, precio_promo, precio_interior',
+        )
+        .eq('activo', true)
+        .order('nombre');
+
+    if (!mounted) return;
+
+    setState(() {
+      _productosDisponibles =
+          List<Map<String, dynamic>>.from(respuesta);
+    });
+  } catch (_) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No se pudieron cargar los productos.'),
+      ),
+    );
+  }
+}
+Future<void> _mostrarSelectorProductos() async {
+  String busqueda = '';
+
+  final productoSeleccionado =
+    await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setStateDialog) {
+          final productosFiltrados = _productosDisponibles.where((producto) {
+            final nombre =
+                producto['nombre']?.toString().toLowerCase() ?? '';
+            final codigo =
+                producto['codigo']?.toString().toLowerCase() ?? '';
+
+            final texto = busqueda.toLowerCase().trim();
+
+            return nombre.contains(texto) || codigo.contains(texto);
+          }).toList();
+
+          return AlertDialog(
+            title: const Text('Agregar producto'),
+            content: SizedBox(
+              width: 500,
+              height: 550,
+              child: Column(
+                children: [
+                  TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Buscar producto...',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (valor) {
+                      setStateDialog(() {
+                        busqueda = valor;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: productosFiltrados.isEmpty
+                        ? const Center(
+                            child: Text('No se encontraron productos'),
+                          )
+                        : ListView.separated(
+                            itemCount: productosFiltrados.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final producto =
+                                  productosFiltrados[index];
+
+                              final nombre =
+                                  producto['nombre']?.toString() ??
+                                      'Producto sin nombre';
+
+                              final codigo =
+                                  producto['codigo']?.toString() ?? '';
+
+                              final precio =
+                                  _precioProductoParaPedido(producto);
+
+                              return ListTile(
+                                onTap: () => Navigator.pop(context, producto),
+  title: Text(nombre),
+  subtitle: Text(
+    codigo.isEmpty
+        ? _formatearPrecio(precio)
+        : 'Código: $codigo - ${_formatearPrecio(precio)}',
+  ),
+  
+);
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cerrar'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+  if (productoSeleccionado == null) return;
+  final productoId = productoSeleccionado['id'].toString();
+final precio = _precioProductoParaPedido(productoSeleccionado);
+final indiceExistente = _detalles.indexWhere(
+  (detalle) => detalle['producto_id']?.toString() == productoId,
+);
+
+if (indiceExistente != -1) {
+  final detalleExistente = _detalles[indiceExistente];
+  final detalleIdExistente = detalleExistente['id'].toString();
+
+  final controller =
+      _cantidadFacturadaControllers[detalleIdExistente];
+
+  final cantidadActual =
+      double.tryParse(controller?.text ?? '') ?? 0;
+
+  setState(() {
+    controller?.text = (cantidadActual + 1).toStringAsFixed(0);
+  });
+
+  return;
+}
+final detalleId = 'nuevo_$productoId';
+setState(() {
+  _detalles.add({
+    'id': detalleId,
+    'pedido_id': widget.pedido['id'],
+    'producto_id': productoId,
+    'cantidad': 1,
+    'cantidad_facturada': 1,
+    'precio_unitario': precio,
+    'subtotal': precio,
+    'tipo_precio': widget.pedido['tipo_precio'],
+    'productos': {
+      'nombre': productoSeleccionado['nombre'],
+      'codigo_original': productoSeleccionado['codigo'],
+    },
+  });
+
+  _cantidadFacturadaControllers[detalleId] = TextEditingController(
+    text: '1',
+  );
+});
+}
+  
 
   Future<void> _cargarDetalles() async {
     setState(() {
@@ -46,6 +232,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             pedido_id,
             producto_id,
             cantidad,
+            cantidad_facturada,
             precio_unitario,
             subtotal,
             tipo_precio,
@@ -59,9 +246,27 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       if (!mounted) return;
 
       setState(() {
-        _detalles = List<Map<String, dynamic>>.from(respuesta);
-        _cargando = false;
-      });
+  _detalles = List<Map<String, dynamic>>.from(respuesta);
+
+  for (final detalle in _detalles) {
+    final id = detalle['id'].toString();
+    final cantidad = double.tryParse(
+          detalle['cantidad'].toString(),
+        ) ??
+        0;
+
+    final cantidadFacturada = double.tryParse(
+          detalle['cantidad_facturada']?.toString() ?? '',
+        ) ??
+        cantidad;
+
+    _cantidadFacturadaControllers[id] = TextEditingController(
+      text: cantidadFacturada.toStringAsFixed(0),
+    );
+  }
+
+  _cargando = false;
+});
     } catch (e) {
       if (!mounted) return;
 
@@ -84,6 +289,66 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   }
 
   try {
+    for (final detalle in _detalles) {
+  final detalleId = detalle['id'].toString();
+
+  if (detalleId.startsWith('nuevo_')) {
+    continue;
+  }
+
+  final cantidadFacturada = double.tryParse(
+        _cantidadFacturadaControllers[detalleId]?.text ?? '',
+      ) ??
+      0;
+
+  await Supabase.instance.client
+      .from('pedido_detalles')
+      .update({
+        'cantidad_facturada': cantidadFacturada,
+      })
+      .eq('id', detalleId);
+}
+for (final detalle in _detalles) {
+  final detalleId = detalle['id'].toString();
+
+  if (!detalleId.startsWith('nuevo_')) {
+    continue;
+  }
+
+  final cantidadFacturada = double.tryParse(
+        _cantidadFacturadaControllers[detalleId]?.text ?? '',
+      ) ??
+      0;
+
+  if (cantidadFacturada <= 0) {
+    continue;
+  }
+
+  final precio = double.tryParse(
+        detalle['precio_unitario']?.toString() ?? '',
+      ) ??
+      0;
+
+  await Supabase.instance.client
+      .from('pedido_detalles')
+      .insert({
+        'pedido_id': widget.pedido['id'],
+        'producto_id': detalle['producto_id'],
+        'cantidad': cantidadFacturada,
+        'precio_unitario': precio,
+        'subtotal': cantidadFacturada * precio,
+        'tipo_precio': detalle['tipo_precio'],
+        'cantidad_facturada': cantidadFacturada,
+      });
+}
+for (final detalleId in _detallesQuitados) {
+  await Supabase.instance.client
+      .from('pedido_detalles')
+      .update({
+        'cantidad_facturada': 0,
+      })
+      .eq('id', detalleId);
+}
     await Supabase.instance.client
         .from('pedidos')
         .update({
@@ -153,7 +418,21 @@ String _formatearFecha(dynamic fecha) {
     final nombreCliente =
         cliente?['nombre_comercio']?.toString() ?? 'Cliente sin nombre';
 
-    final total = widget.pedido['total'];
+    final total = _detalles.fold<double>(0, (suma, detalle) {
+  final id = detalle['id'].toString();
+
+  final cantidad = double.tryParse(
+        _cantidadFacturadaControllers[id]?.text ?? '',
+      ) ??
+      0;
+
+  final precio = double.tryParse(
+        detalle['precio_unitario']?.toString() ?? '',
+      ) ??
+      0;
+
+  return suma + (cantidad * precio);
+});
 
     return Scaffold(
       appBar: AppBar(
@@ -230,6 +509,17 @@ String _formatearFecha(dynamic fecha) {
           ),
         ),
         const SizedBox(height: 8),
+        if (!widget.soloLectura) ...[
+  SizedBox(
+    width: double.infinity,
+    child: OutlinedButton.icon(
+      onPressed: _mostrarSelectorProductos,
+      icon: const Icon(Icons.add),
+      label: const Text('Agregar producto'),
+    ),
+  ),
+  const SizedBox(height: 12),
+],
 
         ..._detalles.map((detalle) {
           final producto =
@@ -242,13 +532,22 @@ String _formatearFecha(dynamic fecha) {
               producto?['codigo_original']?.toString() ?? '';
 
           final cantidad =
-              double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+    double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
 
-          final precio =
-              detalle['precio_unitario'];
 
-          final subtotal =
-              detalle['subtotal'];
+
+final precio =
+    detalle['precio_unitario'];
+
+final cantidadFacturada = double.tryParse(
+      _cantidadFacturadaControllers[detalle['id'].toString()]?.text ?? '',
+    ) ??
+    0;
+
+final precioNumerico =
+    double.tryParse(precio?.toString() ?? '') ?? 0;
+
+final subtotal = cantidadFacturada * precioNumerico;
 
           return Card(
             child: Padding(
@@ -267,7 +566,20 @@ String _formatearFecha(dynamic fecha) {
                     Text('Código: $codigo'),
                   ],
                   const SizedBox(height: 6),
-                  Text('Cantidad: ${cantidad.toStringAsFixed(0)}'),
+                  Text('Cantidad pedida: ${cantidad.toStringAsFixed(0)}'),
+const SizedBox(height: 8),
+TextField(
+  controller: _cantidadFacturadaControllers[detalle['id'].toString()],
+  keyboardType: TextInputType.number,
+  onChanged: (_) {
+  setState(() {});
+},
+  decoration: const InputDecoration(
+    labelText: 'Cantidad a facturar',
+    border: OutlineInputBorder(),
+    isDense: true,
+  ),
+),
                   Text(
                     'Precio unitario: ${_formatearPrecio(precio)}',
                   ),
@@ -277,6 +589,30 @@ String _formatearFecha(dynamic fecha) {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  const SizedBox(height: 8),
+Align(
+  alignment: Alignment.centerRight,
+  child: TextButton.icon(
+    onPressed: () {
+  setState(() {
+    final detalleId = detalle['id'].toString();
+
+    if (!detalleId.startsWith('nuevo_')) {
+      _detallesQuitados.add(detalleId);
+    }
+
+    _detalles.removeWhere(
+      (item) => item['id'].toString() == detalleId,
+    );
+
+    _cantidadFacturadaControllers[detalleId]?.dispose();
+    _cantidadFacturadaControllers.remove(detalleId);
+  });
+},
+    icon: const Icon(Icons.delete_outline),
+    label: const Text('Quitar de la boleta'),
+  ),
+),
                 ],
               ),
             ),
