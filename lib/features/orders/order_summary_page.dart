@@ -10,6 +10,7 @@ class OrderSummaryPage extends StatefulWidget {
   final Map<String, double> preciosFijados;
   final Map<String, String> tiposPrecioFijados;
   final DateTime fechaEntrega;
+  final String tipoOperacion;
 
   const OrderSummaryPage({
     super.key,
@@ -20,6 +21,7 @@ class OrderSummaryPage extends StatefulWidget {
     required this.preciosFijados,
     required this.tiposPrecioFijados,
     required this.fechaEntrega,
+    required this.tipoOperacion,
   });
 
   @override
@@ -175,6 +177,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
             'cliente_id': widget.cliente['id'],
             'preventista_id': usuario.id,
             'tipo_precio': widget.tipoPrecio,
+            'tipo_operacion': widget.tipoOperacion,
             'estado': 'pendiente',
             'total': _totalPedido,
             'fecha_entrega': widget.fechaEntrega.toIso8601String().split('T').first,

@@ -45,6 +45,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
       resultado_entrega,
       motivo_no_entrega,
       total,
+      tipo_operacion,
       facturado,
       fecha_facturacion,
       numero_comprobante,
@@ -670,6 +671,15 @@ final numeroComprobante =
                     const SizedBox(height: 4),
                     Text('Preventista: $vendedor'),
                   ],
+                  if (pedido['tipo_operacion']?.toString() == 'venta_directa') ...[
+  const SizedBox(height: 4),
+  const Text(
+    'VENTA DIRECTA',
+    style: TextStyle(
+      fontWeight: FontWeight.bold,
+    ),
+  ),
+],
                   const SizedBox(height: 8),
                   Text(
                     'Estado: ${estado.toUpperCase()}',

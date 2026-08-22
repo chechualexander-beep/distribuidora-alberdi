@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'order_products_page.dart';
 import '../clients/client_detail_page.dart';
 import 'order_detail_page.dart';
+import '../clients/new_client_page.dart';
 
 class NewOrderPage extends StatefulWidget {
   const NewOrderPage({super.key});
@@ -19,6 +20,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
   List<Map<String, dynamic>> _clientes = [];
   Map<String, dynamic>? _clienteSeleccionado;
   List<Map<String, dynamic>> _ultimosPedidos = [];
+  String _tipoOperacion = 'pedido';
 bool _cargandoSaldoCliente = false;
 double _deudaCliente = 0;
 int _pedidosPendientesCliente = 0;
@@ -307,9 +309,8 @@ Future<void> _seleccionarFechaEntrega() async {
 
       return Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+        child: ListView(
+  children: [
             const Text(
               'Cliente seleccionado',
               style: TextStyle(
@@ -344,6 +345,45 @@ Future<void> _seleccionarFechaEntrega() async {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+
+const Text(
+  'Tipo de operación',
+  style: TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.bold,
+  ),
+),
+const SizedBox(height: 10),
+
+SegmentedButton<String>(
+  segments: const [
+    ButtonSegment<String>(
+      value: 'pedido',
+      icon: Icon(Icons.shopping_cart_outlined),
+      label: Text('Pedido'),
+    ),
+    ButtonSegment<String>(
+      value: 'venta_directa',
+      icon: Icon(Icons.point_of_sale),
+      label: Text('Venta directa'),
+    ),
+  ],
+  selected: {_tipoOperacion},
+  onSelectionChanged: (seleccion) {
+  setState(() {
+    _tipoOperacion = seleccion.first;
+
+    if (_tipoOperacion == 'venta_directa') {
+      final hoy = DateTime.now();
+      _fechaEntrega = DateTime(hoy.year, hoy.month, hoy.day);
+      _ultimaFechaEntrega = _fechaEntrega;
+    }
+  });
+},
+),
+
+const SizedBox(height: 16),
             if (_cargandoSaldoCliente) ...[
   const SizedBox(height: 16),
   const Center(
@@ -502,16 +542,26 @@ if (_ultimosPedidos.isNotEmpty) ...[
 Card(
   child: ListTile(
     leading: const Icon(Icons.calendar_month_outlined),
-    title: const Text('Fecha de entrega'),
-    subtitle: Text(
-      _fechaEntrega == null
-          ? 'Seleccionar fecha'
-          : '${_fechaEntrega!.day.toString().padLeft(2, '0')}/'
-              '${_fechaEntrega!.month.toString().padLeft(2, '0')}/'
-              '${_fechaEntrega!.year}',
+    title: Text(
+      _tipoOperacion == 'venta_directa'
+          ? 'Entrega inmediata'
+          : 'Fecha de entrega',
     ),
-    trailing: const Icon(Icons.chevron_right),
-    onTap: _seleccionarFechaEntrega,
+    subtitle: Text(
+      _tipoOperacion == 'venta_directa'
+          ? 'Hoy'
+          : _fechaEntrega == null
+              ? 'Seleccionar fecha'
+              : '${_fechaEntrega!.day.toString().padLeft(2, '0')}/'
+                '${_fechaEntrega!.month.toString().padLeft(2, '0')}/'
+                '${_fechaEntrega!.year}',
+    ),
+    trailing: _tipoOperacion == 'venta_directa'
+        ? const Icon(Icons.check_circle_outline)
+        : const Icon(Icons.chevron_right),
+    onTap: _tipoOperacion == 'venta_directa'
+        ? null
+        : _seleccionarFechaEntrega,
   ),
 ),
             const SizedBox(height: 24),
@@ -531,6 +581,7 @@ Card(
       builder: (_) => OrderProductsPage(
         cliente: _clienteSeleccionado!,
         fechaEntrega: _fechaEntrega,
+        tipoOperacion: _tipoOperacion,
       ),
     ),
   );
@@ -577,6 +628,38 @@ Card(
             },
           ),
         ),
+        Padding(
+  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+  child: SizedBox(
+    width: double.infinity,
+    child: OutlinedButton.icon(
+      onPressed: () async {
+        final clienteCreado =
+    await Navigator.of(context).push<Map<String, dynamic>>(
+  MaterialPageRoute(
+    builder: (_) => const NewClientPage(),
+  ),
+);
+
+if (clienteCreado != null) {
+  await _cargarClientes();
+
+  if (!mounted) return;
+
+  setState(() {
+    _clienteSeleccionado = clienteCreado;
+    _busqueda = '';
+  });
+
+  await _cargarSaldoCliente(clienteCreado);
+  await _cargarUltimosPedidos(clienteCreado);
+}
+      },
+      icon: const Icon(Icons.person_add_alt_1),
+      label: const Text('NUEVO CLIENTE'),
+    ),
+  ),
+),
         Expanded(
           child: clientesFiltrados.isEmpty
               ? const Center(

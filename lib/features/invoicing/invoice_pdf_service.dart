@@ -183,14 +183,25 @@ pw.SizedBox(height: 12),
                 final nombre =
                     producto['nombre']?.toString() ?? 'Producto';
 
-                final cantidadNumero =
-    double.tryParse(detalle['cantidad']?.toString() ?? '0') ?? 0;
+                final cantidadNumero = double.tryParse(
+      detalle['cantidad_facturada']?.toString() ?? '',
+    ) ??
+    double.tryParse(
+      detalle['cantidad']?.toString() ?? '0',
+    ) ??
+    0;
+    if (cantidadNumero <= 0) {
+  return pw.SizedBox();
+}
 
 final cantidad = cantidadNumero % 1 == 0
     ? cantidadNumero.toInt().toString()
     : cantidadNumero.toString();
                 final precio = detalle['precio_unitario'] ?? 0;
-                final subtotal = detalle['subtotal'] ?? 0;
+                final precioNumero =
+    double.tryParse(precio?.toString() ?? '') ?? 0;
+
+final subtotal = cantidadNumero * precioNumero;
 
                 return pw.Padding(
                   padding: const pw.EdgeInsets.symmetric(vertical: 2),
@@ -233,6 +244,7 @@ final cantidad = cantidadNumero % 1 == 0
 
               pw.SizedBox(height: 14),
 
+
               // TOTAL
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.end,
@@ -245,7 +257,24 @@ final cantidad = cantidadNumero % 1 == 0
                     ),
                   ),
                   pw.Text(
-                    _formatearPrecio(pedido['total']),
+                    _formatearPrecio(
+  detalles.fold<double>(0, (suma, detalle) {
+    final cantidad = double.tryParse(
+          detalle['cantidad_facturada']?.toString() ?? '',
+        ) ??
+        double.tryParse(
+          detalle['cantidad']?.toString() ?? '0',
+        ) ??
+        0;
+
+    final precio = double.tryParse(
+          detalle['precio_unitario']?.toString() ?? '',
+        ) ??
+        0;
+
+    return suma + (cantidad * precio);
+  }),
+),
                     style: pw.TextStyle(
                       fontSize: 12,
                       fontWeight: pw.FontWeight.bold,

@@ -36,6 +36,11 @@ class _InvoicedOrdersPageState extends State<InvoicedOrdersPage> {
             tipo_precio,
             fecha_facturacion,
             numero_comprobante,
+            pedido_detalles (
+  cantidad,
+  cantidad_facturada,
+  precio_unitario
+),
             clientes (
               nombre_comercio,
               direccion
@@ -227,7 +232,25 @@ class _InvoicedOrdersPageState extends State<InvoicedOrdersPage> {
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    _formatearPrecio(pedido['total']),
+                    _formatearPrecio(
+  (pedido['pedido_detalles'] as List<dynamic>? ?? [])
+      .fold<double>(0, (suma, detalle) {
+    final cantidad = double.tryParse(
+          detalle['cantidad_facturada']?.toString() ?? '',
+        ) ??
+        double.tryParse(
+          detalle['cantidad']?.toString() ?? '0',
+        ) ??
+        0;
+
+    final precio = double.tryParse(
+          detalle['precio_unitario']?.toString() ?? '',
+        ) ??
+        0;
+
+    return suma + (cantidad * precio);
+  }),
+),
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

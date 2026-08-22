@@ -6,11 +6,13 @@ import 'order_summary_page.dart';
 class OrderProductsPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
   final DateTime? fechaEntrega;
+  final String tipoOperacion;
 
   const OrderProductsPage({
     super.key,
     required this.cliente,
     this.fechaEntrega,
+    required this.tipoOperacion,
   });
 
   @override
@@ -198,6 +200,7 @@ void initState() {
       builder: (_) => OrderSummaryPage(
         fechaEntrega: fechaEntrega,
         cliente: widget.cliente,
+        tipoOperacion: widget.tipoOperacion,
         productos: _productos,
         cantidades: Map<String, int>.from(_cantidades),
         tipoPrecio: _tipoPrecio,

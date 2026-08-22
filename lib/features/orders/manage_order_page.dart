@@ -261,6 +261,7 @@ String? medioPagoParcial;
 if (resultado == 'entregado') {
   medioPagoCompleto = await showDialog<String>(
     context: context,
+    barrierDismissible: false,
     builder: (context) {
       return AlertDialog(
         title: const Text('¿Cómo quedó el pago?'),
@@ -268,6 +269,10 @@ if (resultado == 'entregado') {
           'Si el cliente pagó todo el pedido, seleccioná el medio de pago.',
         ),
         actions: [
+          TextButton(
+  onPressed: () => Navigator.pop(context, null),
+  child: const Text('CANCELAR'),
+),
           TextButton(
            onPressed: () => Navigator.pop(context, 'Parcial'),
             child: const Text('DEJÓ SALDO'),
@@ -284,6 +289,9 @@ if (resultado == 'entregado') {
       );
     },
   );
+}
+if (medioPagoCompleto == null) {
+  return;
 }
 if (!mounted) return;
 if (resultado == 'entregado' && medioPagoCompleto == 'Parcial') {
@@ -408,7 +416,7 @@ if (importe != null) {
           })
           .eq('id', widget.pedido['id']);
          if (resultado == 'entregado' &&
-    medioPagoCompleto != null &&
+    
     medioPagoCompleto != 'Parcial' &&
     totalPedido > 0) {
       if (resultado == 'entregado' &&
@@ -601,6 +609,16 @@ if (importe != null) {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  if (widget.pedido['tipo_operacion']?.toString() == 'venta_directa') ...[
+  const SizedBox(height: 8),
+  const Text(
+    'VENTA DIRECTA',
+    style: TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.bold,
+    ),
+  ),
+],
                   const SizedBox(height: 18),
                   DropdownButtonFormField<String>(
                     initialValue: _estado,

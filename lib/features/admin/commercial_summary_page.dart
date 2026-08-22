@@ -12,17 +12,84 @@ class CommercialSummaryPage extends StatefulWidget {
 class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
     
   int _periodoSeleccionado = 0;
-  final _supabase = Supabase.instance.client;
-  Future<void> _probarConexion() async {
-  await _supabase
-      .from('pedido_detalles')
-      .select('cantidad_entregada, precio_unitario')
-      .limit(1);
+
+final _supabase = Supabase.instance.client;
+
+bool _cargando = false;
+String? _error;
+double _ventaTotal = 0;
+
+Future<void> _cargarResumen() async {
+  setState(() {
+    _cargando = true;
+    _error = null;
+  });
+
+  try {
+    final hoy = DateTime.now();
+
+    final inicio = DateTime(
+      hoy.year,
+      hoy.month,
+      hoy.day,
+    );
+
+    final fin = inicio.add(const Duration(days: 1));
+
+    final pedidos = await _supabase
+        .from('pedidos')
+        .select('''
+          id,
+          created_at,
+          resultado_entrega,
+          pedido_detalles (
+            cantidad_entregada,
+            precio_unitario
+          )
+        ''')
+        .gte('created_at', inicio.toIso8601String())
+        .lt('created_at', fin.toIso8601String());
+
+    double venta = 0;
+
+    for (final pedido in pedidos) {
+      final detalles = pedido['pedido_detalles'] as List<dynamic>? ?? [];
+
+      for (final detalle in detalles) {
+        final cantidadEntregada = double.tryParse(
+              detalle['cantidad_entregada']?.toString() ?? '',
+            ) ??
+            0;
+
+        final precioUnitario = double.tryParse(
+              detalle['precio_unitario']?.toString() ?? '',
+            ) ??
+            0;
+
+        venta += cantidadEntregada * precioUnitario;
+      }
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _ventaTotal = venta;
+      _cargando = false;
+    });
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() {
+      _error = 'No se pudo cargar el resumen comercial.';
+      _cargando = false;
+    });
+  }
 }
+
 @override
 void initState() {
   super.initState();
-  _probarConexion();
+  _cargarResumen();
 }
 
   @override
@@ -76,13 +143,43 @@ void initState() {
 
           const SizedBox(height: 32),
 
-          const Expanded(
-            child: Center(
-              child: Text(
-                'Aquí aparecerá la información comercial.',
+          Expanded(
+  child: Center(
+    child: _cargando
+        ? const CircularProgressIndicator()
+        : _error != null
+            ? Text(_error!)
+            : Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'VENTA TOTAL',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '\$${_ventaTotal.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Mercadería efectivamente entregada',
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
+  ),
+),
         ],
       ),
     );

@@ -80,7 +80,9 @@ Future<void> _obtenerUbicacionActual() async {
     });
 
     try {
-      await Supabase.instance.client.from('clientes').insert({
+      final clienteCreado = await Supabase.instance.client
+    .from('clientes')
+    .insert({
         'nombre_comercio': _comercioController.text.trim(),
         'direccion': _direccionController.text.trim(),
         'propietario': _textoOpcional(_propietarioController),
@@ -93,11 +95,13 @@ Future<void> _obtenerUbicacionActual() async {
 'ubicacion_actualizada_at': _ubicacionActualizadaAt?.toIso8601String(),
         'preventista_id': usuario.id,
         'activo': true,
-      });
+      })
+    .select()
+    .single();
 
       if (!mounted) return;
 
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(clienteCreado);
     } on PostgrestException catch (error) {
       _mostrarMensaje(
         'No se pudo guardar el cliente: ${error.message}',
