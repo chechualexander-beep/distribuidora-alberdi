@@ -200,6 +200,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
           'precio_unitario': precio,
           'subtotal': subtotal,
           'tipo_precio': _tipoPrecioProducto(producto),
+          'costo_unitario': double.tryParse(producto['costo']?.toString() ?? '') ?? 0,
         };
       }).toList();
 

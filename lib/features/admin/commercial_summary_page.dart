@@ -12,6 +12,7 @@ class CommercialSummaryPage extends StatefulWidget {
 class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
     
   int _periodoSeleccionado = 0;
+  DateTimeRange? _rangoPersonalizado;
 
 final _supabase = Supabase.instance.client;
 
@@ -21,6 +22,9 @@ double _ventaTotal = 0;
 double _mercaderiaEntregada = 0;
 double _recaudacion = 0;
 double _saldoPendiente = 0;
+double _costoMercaderia = 0;
+double _comisiones = 0;
+double _ganancia = 0;
 
 Future<void> _cargarResumen() async {
   setState(() {
@@ -31,13 +35,48 @@ Future<void> _cargarResumen() async {
   try {
     final hoy = DateTime.now();
 
-    final inicio = DateTime(
-      hoy.year,
-      hoy.month,
-      hoy.day,
-    );
+late DateTime inicio;
+late DateTime fin;
 
-    final fin = inicio.add(const Duration(days: 1));
+if (_periodoSeleccionado == 1) {
+  // SEMANA
+  final inicioHoy = DateTime(
+    hoy.year,
+    hoy.month,
+    hoy.day,
+  );
+
+  inicio = inicioHoy.subtract(
+    Duration(days: hoy.weekday - DateTime.monday),
+  );
+
+  fin = inicio.add(const Duration(days: 7));
+} else if (_periodoSeleccionado == 2 &&
+    _rangoPersonalizado != null) {
+  // PERSONALIZADO
+  inicio = DateTime(
+    _rangoPersonalizado!.start.year,
+    _rangoPersonalizado!.start.month,
+    _rangoPersonalizado!.start.day,
+  );
+
+  final ultimoDia = DateTime(
+    _rangoPersonalizado!.end.year,
+    _rangoPersonalizado!.end.month,
+    _rangoPersonalizado!.end.day,
+  );
+
+  fin = ultimoDia.add(const Duration(days: 1));
+} else {
+  // HOY
+  inicio = DateTime(
+    hoy.year,
+    hoy.month,
+    hoy.day,
+  );
+
+  fin = inicio.add(const Duration(days: 1));
+}
 
     final pedidos = await _supabase
     .from('pedidos')
@@ -81,9 +120,11 @@ Future<void> _cargarResumen() async {
       fecha_entrega,
       resultado_entrega,
       pedido_detalles (
-        cantidad_entregada,
-        precio_unitario
-      )
+  cantidad_entregada,
+  precio_unitario,
+  costo_unitario,
+  importe_comision
+)
     ''')
     .gte(
       'fecha_entrega',
@@ -95,6 +136,8 @@ Future<void> _cargarResumen() async {
     );
 
 double mercaderiaEntregada = 0;
+double costoMercaderia = 0;
+double comisiones = 0;
 
 for (final pedido in pedidosEntregados) {
   final detalles = pedido['pedido_detalles'] as List<dynamic>? ?? [];
@@ -109,8 +152,18 @@ for (final pedido in pedidosEntregados) {
           detalle['precio_unitario']?.toString() ?? '',
         ) ??
         0;
+    final costoUnitario = double.tryParse(
+      detalle['costo_unitario']?.toString() ?? '',
+    ) ??
+    0;
+    final importeComision = double.tryParse(
+      detalle['importe_comision']?.toString() ?? '',
+    ) ??
+    0;
 
     mercaderiaEntregada += cantidadEntregada * precioUnitario;
+costoMercaderia += cantidadEntregada * costoUnitario;
+comisiones += importeComision;
   }
 }
 double saldoPendiente = 0;
@@ -173,6 +226,9 @@ for (final pago in pagos) {
 
   recaudacion += importe;
 }
+final ganancia =
+    mercaderiaEntregada - costoMercaderia - comisiones;
+
     if (!mounted) return;
 
     setState(() {
@@ -180,6 +236,9 @@ for (final pago in pagos) {
       _mercaderiaEntregada = mercaderiaEntregada;
       _recaudacion = recaudacion;
       _saldoPendiente = saldoPendiente;
+      _costoMercaderia = costoMercaderia;
+      _comisiones = comisiones;
+      _ganancia = ganancia;
       _cargando = false;
     });
   } catch (e) {
@@ -240,11 +299,38 @@ void initState() {
               ),
             ],
             selected: {_periodoSeleccionado},
-            onSelectionChanged: (seleccion) {
-              setState(() {
-                _periodoSeleccionado = seleccion.first;
-              });
-            },
+            onSelectionChanged: (seleccion) async {
+  final nuevoPeriodo = seleccion.first;
+
+  if (nuevoPeriodo == 2) {
+    final rango = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: _rangoPersonalizado,
+    );
+
+    if (rango == null) {
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _periodoSeleccionado = 2;
+      _rangoPersonalizado = rango;
+    });
+    _cargarResumen();
+
+    return;
+  }
+
+  setState(() {
+    _periodoSeleccionado = nuevoPeriodo;
+  });
+
+  _cargarResumen();
+},
           ),
 
           const SizedBox(height: 32),
@@ -291,7 +377,13 @@ void initState() {
                 ),
               ),
               const SizedBox(height: 6),
-              const Text('Facturado en la jornada'),
+              Text(
+  _periodoSeleccionado == 0
+      ? 'Facturado hoy'
+      : _periodoSeleccionado == 1
+          ? 'Facturado en la semana'
+          : 'Facturado en el período',
+),
             ],
           ),
         ),
@@ -332,7 +424,13 @@ void initState() {
                 ),
               ),
               const SizedBox(height: 6),
-              const Text('Valor entregado en la jornada'),
+              Text(
+  _periodoSeleccionado == 0
+      ? 'Valor entregado hoy'
+      : _periodoSeleccionado == 1
+          ? 'Valor entregado en la semana'
+          : 'Valor entregado en el período',
+),
             ],
           ),
         ),
@@ -369,7 +467,13 @@ void initState() {
                 ),
               ),
               const SizedBox(height: 6),
-              const Text('Cobrado efectivamente'),
+              Text(
+  _periodoSeleccionado == 0
+      ? 'Cobrado hoy'
+      : _periodoSeleccionado == 1
+          ? 'Cobrado en la semana'
+          : 'Cobrado en el período',
+),
             ],
           ),
         ),
@@ -410,7 +514,154 @@ void initState() {
             ),
           ),
           const SizedBox(height: 6),
-          const Text('Pendiente de cobro'),
+          Text(
+  _periodoSeleccionado == 0
+      ? 'Pendiente de cobro hoy'
+      : _periodoSeleccionado == 1
+          ? 'Pendiente de cobro en la semana'
+          : 'Pendiente de cobro en el período',
+),
+        ],
+      ),
+    ),
+  ),
+),
+SizedBox(
+  width: 280,
+  child: Card(
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.inventory_2_outlined, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'COSTO DE MERCADERÍA',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '\$${_costoMercaderia.toStringAsFixed(0)}',
+            style: const TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _periodoSeleccionado == 0
+                ? 'Costo de lo entregado hoy'
+                : _periodoSeleccionado == 1
+                    ? 'Costo de lo entregado en la semana'
+                    : 'Costo de lo entregado en el período',
+          ),
+        ],
+      ),
+    ),
+  ),
+),
+SizedBox(
+  width: 280,
+  child: Card(
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.payments_outlined, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'COMISIONES',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '\$${_comisiones.toStringAsFixed(0)}',
+            style: const TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _periodoSeleccionado == 0
+                ? 'Comisiones de lo entregado hoy'
+                : _periodoSeleccionado == 1
+                    ? 'Comisiones de lo entregado en la semana'
+                    : 'Comisiones de lo entregado en el período',
+          ),
+        ],
+      ),
+    ),
+  ),
+),
+SizedBox(
+  width: 280,
+  child: Card(
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.trending_up_outlined, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'GANANCIA',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '\$${_ganancia.toStringAsFixed(0)}',
+            style: const TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _periodoSeleccionado == 0
+                ? 'Ganancia de lo entregado hoy'
+                : _periodoSeleccionado == 1
+                    ? 'Ganancia de lo entregado en la semana'
+                    : 'Ganancia de lo entregado en el período',
+          ),
         ],
       ),
     ),

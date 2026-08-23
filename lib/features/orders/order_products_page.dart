@@ -58,8 +58,8 @@ void initState() {
       final respuesta = await Supabase.instance.client
           .from('productos')
           .select(
-            'id, codigo, nombre, precio_normal, precio_promo, precio_interior',
-          )
+  'id, codigo, nombre, precio_normal, precio_promo, precio_interior, costo',
+)
           .eq('activo', true)
           .order('nombre');
 
