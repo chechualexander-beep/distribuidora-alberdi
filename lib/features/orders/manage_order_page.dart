@@ -415,48 +415,45 @@ if (importe != null) {
                     : _motivoController.text.trim(),
           })
           .eq('id', widget.pedido['id']);
-         if (resultado == 'entregado' &&
-    
-    medioPagoCompleto != 'Parcial' &&
-    totalPedido > 0) {
-      if (resultado == 'entregado' &&
-    importePagoParcial != null &&
-    medioPagoParcial != null &&
-    importePagoParcial > 0) {
-  await Supabase.instance.client
-      .from('pedido_pagos')
-      .insert({
-        'pedido_id': widget.pedido['id'],
-        'importe': importePagoParcial,
-        'medio_pago': medioPagoParcial,
-        'fecha_pago': DateTime.now().toIso8601String(),
-        'observacion': 'Pago parcial al entregar el pedido',
-      });
-}
-  final pagosExistentes = await Supabase.instance.client
-      .from('pedido_pagos')
-      .select('importe')
-      .eq('pedido_id', widget.pedido['id']);
-
-  double pagadoPedido = 0;
-
-  for (final pago in pagosExistentes) {
-    pagadoPedido +=
-        double.tryParse(pago['importe']?.toString() ?? '') ?? 0;
-  }
-
-  final saldoPedido = totalPedido - pagadoPedido;
-
-  if (saldoPedido > 0) {
+         if (resultado == 'entregado' && totalPedido > 0) {
+  if (importePagoParcial != null &&
+      medioPagoParcial != null &&
+      importePagoParcial > 0) {
     await Supabase.instance.client
         .from('pedido_pagos')
         .insert({
-          'pedido_id': widget.pedido['id'],
-          'importe': saldoPedido,
-          'medio_pago': medioPagoCompleto,
-          'fecha_pago': DateTime.now().toIso8601String(),
-          'observacion': 'Pago completo al entregar el pedido',
-        });
+      'pedido_id': widget.pedido['id'],
+      'importe': importePagoParcial,
+      'medio_pago': medioPagoParcial,
+      'fecha_pago': DateTime.now().toIso8601String(),
+      'observacion': 'Pago parcial al entregar el pedido',
+    });
+  } else if (medioPagoCompleto != 'Parcial') {
+    final pagosExistentes = await Supabase.instance.client
+        .from('pedido_pagos')
+        .select('importe')
+        .eq('pedido_id', widget.pedido['id']);
+
+    double pagadoPedido = 0;
+
+    for (final pago in pagosExistentes) {
+      pagadoPedido +=
+          double.tryParse(pago['importe']?.toString() ?? '') ?? 0;
+    }
+
+    final saldoPedido = totalPedido - pagadoPedido;
+
+    if (saldoPedido > 0) {
+      await Supabase.instance.client
+          .from('pedido_pagos')
+          .insert({
+        'pedido_id': widget.pedido['id'],
+        'importe': saldoPedido,
+        'medio_pago': medioPagoCompleto,
+        'fecha_pago': DateTime.now().toIso8601String(),
+        'observacion': 'Pago completo al entregar el pedido',
+      });
+    }
   }
 }
 
