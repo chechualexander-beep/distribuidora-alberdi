@@ -298,12 +298,24 @@ void initState() {
         ),
       );
     }
+    String normalizarTexto(String texto) {
+  return texto
+      .toLowerCase()
+      .replaceAll('á', 'a')
+      .replaceAll('é', 'e')
+      .replaceAll('í', 'i')
+      .replaceAll('ó', 'o')
+      .replaceAll('ú', 'u')
+      .replaceAll('ü', 'u')
+      .replaceAll('ñ', 'n');
+}
 
-    final texto = _busqueda.toLowerCase();
+    final texto = normalizarTexto(_busqueda.trim());
 
     final productosFiltrados = _productos.where((producto) {
-      final nombre =
-          producto['nombre']?.toString().toLowerCase() ?? '';
+      final nombre = normalizarTexto(
+  producto['nombre']?.toString() ?? '',
+);
 
       final codigo =
           producto['codigo']?.toString().toLowerCase() ?? '';

@@ -1011,14 +1011,28 @@ _eliminandoProducto = true;
       );
     }
 
+String normalizarTexto(String texto) {
+  return texto
+      .toLowerCase()
+      .replaceAll('á', 'a')
+      .replaceAll('é', 'e')
+      .replaceAll('í', 'i')
+      .replaceAll('ó', 'o')
+      .replaceAll('ú', 'u')
+      .replaceAll('ü', 'u')
+      .replaceAll('ñ', 'n');
+}
     final productosFiltrados = _productos.where((producto) {
-  final texto = _busqueda.toLowerCase().trim();
+  final texto = normalizarTexto(_busqueda.trim());
 
   if (texto.isEmpty) {
     return true;
   }
 
-  final nombre = producto['nombre']?.toString().toLowerCase() ?? '';
+  final nombre = normalizarTexto(
+    producto['nombre']?.toString() ?? '',
+  );
+
   final codigo = producto['codigo_original']?.toString().toLowerCase() ?? '';
 
   return nombre.contains(texto) || codigo.contains(texto);
