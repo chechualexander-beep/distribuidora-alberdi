@@ -25,6 +25,7 @@ double _saldoPendiente = 0;
 double _costoMercaderia = 0;
 double _comisiones = 0;
 double _ganancia = 0;
+final Map<String, double> comisionesPorPreventista = {};
 
 Future<void> _cargarResumen() async {
   setState(() {
@@ -117,6 +118,7 @@ if (_periodoSeleccionado == 1) {
     .from('pedidos')
     .select('''
       id,
+      preventista_id,
       fecha_entrega,
       resultado_entrega,
       pedido_detalles (
@@ -141,6 +143,7 @@ double comisiones = 0;
 
 for (final pedido in pedidosEntregados) {
   final detalles = pedido['pedido_detalles'] as List<dynamic>? ?? [];
+  final preventistaId = pedido['preventista_id']?.toString();
 
   for (final detalle in detalles) {
     final cantidadEntregada = double.tryParse(
@@ -164,6 +167,10 @@ for (final pedido in pedidosEntregados) {
     mercaderiaEntregada += cantidadEntregada * precioUnitario;
 costoMercaderia += cantidadEntregada * costoUnitario;
 comisiones += importeComision;
+if (preventistaId != null) {
+  comisionesPorPreventista[preventistaId] =
+      (comisionesPorPreventista[preventistaId] ?? 0) + importeComision;
+}
   }
 }
 double saldoPendiente = 0;
