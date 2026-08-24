@@ -335,6 +335,9 @@ for (final fila in filasCsv.skip(1)) {
 
               final datos = Map<String, dynamic>.from(producto);
               datos.remove('id');
+              if (datos['codigo_original']?.toString().trim().isEmpty ?? true) {
+  datos['codigo_original'] = null;
+}
 
               await Supabase.instance.client
                   .from('productos')
