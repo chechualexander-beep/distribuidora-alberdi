@@ -25,7 +25,8 @@ double _saldoPendiente = 0;
 double _costoMercaderia = 0;
 double _comisiones = 0;
 double _ganancia = 0;
-final Map<String, double> comisionesPorPreventista = {};
+Map<String, double> _comisionesPorPreventista = {};
+Map<String, String> _nombresPreventistas = {};
 
 Future<void> _cargarResumen() async {
   setState(() {
@@ -140,6 +141,7 @@ if (_periodoSeleccionado == 1) {
 double mercaderiaEntregada = 0;
 double costoMercaderia = 0;
 double comisiones = 0;
+final Map<String, double> comisionesPorPreventista = {};
 
 for (final pedido in pedidosEntregados) {
   final detalles = pedido['pedido_detalles'] as List<dynamic>? ?? [];
@@ -235,6 +237,25 @@ for (final pago in pagos) {
 }
 final ganancia =
     mercaderiaEntregada - costoMercaderia - comisiones;
+    final usuariosRespuesta = await _supabase
+    .from('usuarios')
+    .select('id, nombre, apellido')
+    .eq('activo', true);
+
+final Map<String, String> nombresPreventistas = {};
+
+for (final usuario in usuariosRespuesta) {
+  final id = usuario['id']?.toString();
+  if (id == null) continue;
+
+  final nombre = usuario['nombre']?.toString().trim() ?? '';
+  final apellido = usuario['apellido']?.toString().trim() ?? '';
+
+  final nombreCompleto = '$nombre $apellido'.trim();
+
+  nombresPreventistas[id] =
+      nombreCompleto.isEmpty ? 'Preventista' : nombreCompleto;
+}
 
     if (!mounted) return;
 
@@ -245,6 +266,12 @@ final ganancia =
       _saldoPendiente = saldoPendiente;
       _costoMercaderia = costoMercaderia;
       _comisiones = comisiones;
+      _comisionesPorPreventista = Map<String, double>.from(
+  comisionesPorPreventista,
+);
+_nombresPreventistas = Map<String, String>.from(
+  nombresPreventistas,
+);
       _ganancia = ganancia;
       _cargando = false;
     });
@@ -622,6 +649,46 @@ SizedBox(
                     ? 'Comisiones de lo entregado en la semana'
                     : 'Comisiones de lo entregado en el período',
           ),
+          const SizedBox(height: 16),
+const Divider(),
+const SizedBox(height: 8),
+const Text(
+  'POR PREVENTISTA',
+  style: TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.bold,
+  ),
+),
+const SizedBox(height: 8),
+
+if (_comisionesPorPreventista.isEmpty)
+  const Text('Sin comisiones en este período')
+else
+  ..._comisionesPorPreventista.entries.map((entry) {
+    final nombre =
+        _nombresPreventistas[entry.key] ?? 'Preventista';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              nombre,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '\$${entry.value.toStringAsFixed(0)}',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }),
         ],
       ),
     ),
