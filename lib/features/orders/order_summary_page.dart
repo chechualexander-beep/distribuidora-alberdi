@@ -31,6 +31,15 @@ class OrderSummaryPage extends StatefulWidget {
 class _OrderSummaryPageState extends State<OrderSummaryPage> {
   bool _guardando = false;
 
+  final TextEditingController _observacionController =
+    TextEditingController();
+
+    @override
+void dispose() {
+  _observacionController.dispose();
+  super.dispose();
+}
+
   List<Map<String, dynamic>> get _productosSeleccionados {
     return widget.productos.where((producto) {
       final id = producto['id'].toString();
@@ -180,6 +189,9 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
             'tipo_operacion': widget.tipoOperacion,
             'estado': 'pendiente',
             'total': _totalPedido,
+            'observacion': _observacionController.text.trim().isEmpty
+    ? null
+    : _observacionController.text.trim(),
             'fecha_entrega': widget.fechaEntrega.toIso8601String().split('T').first,
           })
           .select('id')
@@ -403,6 +415,20 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  TextField(
+  controller: _observacionController,
+  enabled: !_guardando,
+  minLines: 2,
+  maxLines: 3,
+  decoration: const InputDecoration(
+    labelText: 'Observaciones (opcional)',
+    hintText:
+        'Detalles del pedido o mercadería que no figure en la lista',
+    border: OutlineInputBorder(),
+  ),
+),
+
+const SizedBox(height: 10),
                   OutlinedButton.icon(
                     onPressed: _guardando
                         ? null

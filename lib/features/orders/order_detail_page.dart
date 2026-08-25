@@ -18,6 +18,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   String? _error;
 
   List<Map<String, dynamic>> _detalles = [];
+  String? _observacion;
 
   @override
   void initState() {
@@ -32,6 +33,12 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     });
 
     try {
+      final pedidoRespuesta = await Supabase.instance.client
+    .from('pedidos')
+    .select('observacion')
+    .eq('id', widget.pedido['id'])
+    .single();
+
       final respuesta = await Supabase.instance.client
           .from('pedido_detalles')
           .select(
@@ -52,9 +59,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       if (!mounted) return;
 
       setState(() {
-        _detalles = List<Map<String, dynamic>>.from(respuesta);
-        _cargando = false;
-      });
+  _detalles = List<Map<String, dynamic>>.from(respuesta);
+  _observacion = pedidoRespuesta['observacion']?.toString();
+  _cargando = false;
+});
     } catch (_) {
       if (!mounted) return;
 
@@ -203,6 +211,21 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                               Text(
                                 'Estado: ${estado.toUpperCase()}',
                               ),
+                              if (_observacion != null && _observacion!.trim().isNotEmpty) ...[
+  const SizedBox(height: 12),
+  const Divider(),
+  const SizedBox(height: 8),
+  const Text(
+    'OBSERVACIONES',
+    style: TextStyle(
+      fontWeight: FontWeight.bold,
+    ),
+  ),
+  const SizedBox(height: 4),
+  Text(
+    _observacion!,
+  ),
+],
                             ],
                           ),
                         ),
