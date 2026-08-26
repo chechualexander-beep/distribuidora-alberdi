@@ -21,6 +21,7 @@ class InvoiceDetailPage extends StatefulWidget {
 class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   bool _cargando = true;
   String? _error;
+  String? _observacion;
 
   List<Map<String, dynamic>> _detalles = [];
   List<Map<String, dynamic>> _productosDisponibles = [];
@@ -225,6 +226,11 @@ setState(() {
     });
 
     try {
+      final pedidoRespuesta = await Supabase.instance.client
+    .from('pedidos')
+    .select('observacion')
+    .eq('id', widget.pedido['id'])
+    .single();
       final respuesta = await Supabase.instance.client
           .from('pedido_detalles')
           .select('''
@@ -247,6 +253,7 @@ setState(() {
 
       setState(() {
   _detalles = List<Map<String, dynamic>>.from(respuesta);
+  _observacion = pedidoRespuesta['observacion']?.toString();
 
   for (final detalle in _detalles) {
     final id = detalle['id'].toString();
@@ -501,6 +508,27 @@ String _formatearFecha(dynamic fecha) {
           ),
         ),
         const SizedBox(height: 12),
+        if (_observacion != null && _observacion!.trim().isNotEmpty) ...[
+  Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'OBSERVACIONES',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(_observacion!),
+        ],
+      ),
+    ),
+  ),
+  const SizedBox(height: 12),
+],
         const Text(
           'Productos',
           style: TextStyle(

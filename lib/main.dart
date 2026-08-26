@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/orders/new_order_page.dart';
 import 'features/clients/clients_page.dart';
@@ -26,6 +27,11 @@ class DistribuidoraAlberdiApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Distribuidora Alberdi',
+      locale: const Locale('es', 'AR'),
+supportedLocales: const [
+  Locale('es', 'AR'),
+],
+localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: ThemeData(
   useMaterial3: true,
   colorSchemeSeed: Colors.indigo,
