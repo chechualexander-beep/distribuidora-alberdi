@@ -1,4 +1,4 @@
-package com.example.distribuidora_alberdi
+package com.distribuidoraalberdi.app
 
 import io.flutter.embedding.android.FlutterActivity
 

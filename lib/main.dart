@@ -44,9 +44,53 @@ darkTheme: ThemeData(
 themeMode: Platform.isWindows ? ThemeMode.dark : ThemeMode.light,
 
 
-      home: Supabase.instance.client.auth.currentSession == null
-          ? const LoginPage()
-          : const HomePage(),
+      home: const SplashPage(),
+    );
+  }
+}
+class SplashPage extends StatefulWidget {
+  const SplashPage({super.key});
+
+  @override
+  State<SplashPage> createState() => _SplashPageState();
+}
+
+class _SplashPageState extends State<SplashPage> {
+  @override
+  void initState() {
+    super.initState();
+    _continuar();
+  }
+
+  Future<void> _continuar() async {
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    final tieneSesion =
+        Supabase.instance.client.auth.currentSession != null;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) =>
+            tieneSesion ? const HomePage() : const LoginPage(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Image.asset(
+            'assets/logo/logo_alberdi.png',
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
     );
   }
 }
