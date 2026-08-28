@@ -44,30 +44,42 @@ DateTimeRange? _filtroFechas;
         return;
       }
 
-      final respuesta = await Supabase.instance.client
-          .from('pedidos')
-         .select(
-  '''
-  id,
-  created_at,
-  estado,
-  resultado_entrega,
-motivo_no_entrega,
-  total,
-  cliente_id,
-  preventista_id,
-  clientes (
-    nombre_comercio,
-    direccion,
-    localidad
-  ),
-  pedido_detalles (
-    cantidad
-  )
-  ''',
-)
-          .eq('preventista_id', usuario.id)
-          .order('created_at', ascending: false);
+      final datosUsuario = await Supabase.instance.client
+    .from('usuarios')
+    .select('rol')
+    .eq('id', usuario.id)
+    .single();
+
+final String rol = datosUsuario['rol']?.toString() ?? '';
+
+dynamic consulta = Supabase.instance.client
+    .from('pedidos')
+    .select('''
+      id,
+      created_at,
+      estado,
+      resultado_entrega,
+      motivo_no_entrega,
+      total,
+      cliente_id,
+      preventista_id,
+      tipo_precio,
+      clientes (
+        nombre_comercio,
+        direccion,
+        localidad
+      ),
+      pedido_detalles (
+        cantidad
+      )
+    ''');
+
+if (rol != 'administrador') {
+  consulta = consulta.eq('preventista_id', usuario.id);
+}
+
+final respuesta =
+    await consulta.order('created_at', ascending: false);
 
       if (!mounted) return;
 
