@@ -303,6 +303,63 @@ Card(
     },
   ),
 ),
+const SizedBox(height: 10),
+
+Card(
+  child: ListTile(
+    leading: const CircleAvatar(
+      child: Icon(Icons.inventory_outlined),
+    ),
+    title: const Text(
+      'Productos',
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+    subtitle: const Text(
+      'Administrar productos, costos y precios',
+    ),
+    trailing: const Icon(
+      Icons.chevron_right,
+    ),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const AdminProductsPage(),
+        ),
+      );
+    },
+  ),
+),
+
+const SizedBox(height: 10),
+
+Card(
+  child: ListTile(
+    leading: const CircleAvatar(
+      child: Icon(Icons.analytics_outlined),
+    ),
+    title: const Text(
+      'Resumen comercial',
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+    subtitle: const Text(
+      'Ventas, costos, ganancias y comisiones',
+    ),
+    trailing: const Icon(
+      Icons.chevron_right,
+    ),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const CommercialSummaryPage(),
+        ),
+      );
+    },
+  ),
+),
         ],
       ),
       ),

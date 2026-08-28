@@ -15,6 +15,8 @@ class _OrdersPageState extends State<OrdersPage> {
   String? _error;
 
   List<Map<String, dynamic>> _pedidos = [];
+  String _filtroCliente = '';
+DateTimeRange? _filtroFechas;
 
   @override
   void initState() {
@@ -194,15 +196,158 @@ motivo_no_entrega,
         ),
       );
     }
+    final pedidosFiltrados = _pedidos.where((pedido) {
+  final cliente =
+      pedido['clientes'] as Map<String, dynamic>?;
+
+  final nombreCliente =
+      cliente?['nombre_comercio']?.toString().toLowerCase() ?? '';
+
+  final textoBuscado = _filtroCliente.trim().toLowerCase();
+
+  final coincideCliente =
+      textoBuscado.isEmpty ||
+      nombreCliente.contains(textoBuscado);
+
+  bool coincideFecha = true;
+
+  if (_filtroFechas != null) {
+    final fechaPedido =
+        DateTime.tryParse(pedido['created_at']?.toString() ?? '');
+
+    if (fechaPedido != null) {
+      final fechaLocal = fechaPedido.toLocal();
+
+      final inicio = DateTime(
+        _filtroFechas!.start.year,
+        _filtroFechas!.start.month,
+        _filtroFechas!.start.day,
+      );
+
+      final fin = DateTime(
+        _filtroFechas!.end.year,
+        _filtroFechas!.end.month,
+        _filtroFechas!.end.day,
+        23,
+        59,
+        59,
+        999,
+      );
+
+      coincideFecha =
+          !fechaLocal.isBefore(inicio) &&
+          !fechaLocal.isAfter(fin);
+    } else {
+      coincideFecha = false;
+    }
+  }
+
+  return coincideCliente && coincideFecha;
+}).toList();
 
     return RefreshIndicator(
-      onRefresh: _cargarPedidos,
-      child: ListView.separated(
+  onRefresh: _cargarPedidos,
+  child: Column(
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: TextField(
+          decoration: InputDecoration(
+            hintText: 'Buscar cliente...',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _filtroCliente.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      setState(() {
+                        _filtroCliente = '';
+                      });
+                    },
+                  )
+                : null,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          onChanged: (valor) {
+            setState(() {
+              _filtroCliente = valor;
+            });
+          },
+        ),
+      ),
+              Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+  onPressed: () async {
+    final ahora = DateTime.now();
+
+    final rango = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(ahora.year + 2),
+      initialDateRange: _filtroFechas,
+    );
+
+    if (rango != null) {
+      setState(() {
+        _filtroFechas = rango;
+      });
+    }
+  },
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      const Icon(
+        Icons.calendar_month_outlined,
+        size: 18,
+      ),
+      const SizedBox(width: 8),
+      Flexible(
+        child: Text(
+          _filtroFechas == null
+              ? 'Todas las fechas'
+              : '${_filtroFechas!.start.day.toString().padLeft(2, '0')}/'
+                  '${_filtroFechas!.start.month.toString().padLeft(2, '0')}/'
+                  '${_filtroFechas!.start.year}'
+                  ' - '
+                  '${_filtroFechas!.end.day.toString().padLeft(2, '0')}/'
+                  '${_filtroFechas!.end.month.toString().padLeft(2, '0')}/'
+                  '${_filtroFechas!.end.year}',
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      if (_filtroFechas != null) ...[
+        const SizedBox(width: 6),
+        InkWell(
+          onTap: () {
+            setState(() {
+              _filtroFechas = null;
+            });
+          },
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Icon(
+              Icons.close,
+              size: 18,
+            ),
+          ),
+        ),
+      ],
+    ],
+  ),
+),
+          ),
+        ),
+      Expanded(
+        child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: _pedidos.length,
+        itemCount: pedidosFiltrados.length,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
-          final pedido = _pedidos[index];
+          final pedido = pedidosFiltrados[index];
 
           final cliente =
               pedido['clientes'] as Map<String, dynamic>?;
@@ -311,6 +456,9 @@ Text('$renglones renglones • $unidades unidades'),
           );
         },
       ),
+      ),
+],
+),
     );
   }
 }

@@ -421,17 +421,42 @@ class _HomePageState extends State<HomePage> {
         _rol == 'administrador';
 
     return Scaffold(
-      appBar: AppBar(
-        title:
-            const Text('Distribuidora Alberdi'),
-        actions: [
-          IconButton(
-            tooltip: 'Cerrar sesión',
-            onPressed: _cerrarSesion,
-            icon: const Icon(Icons.logout),
+  appBar: AppBar(
+    backgroundColor: const Color(0xFF062A5E),
+    foregroundColor: Colors.white,
+    elevation: 0,
+    toolbarHeight: 72,
+    title: const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'DISTRIBUIDORA',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 2.2,
+            color: Color(0xFFE5A72D),
           ),
-        ],
+        ),
+        Text(
+          'Alberdi',
+          style: TextStyle(
+            fontSize: 25,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    ),
+    actions: [
+      IconButton(
+        tooltip: 'Cerrar sesión',
+        onPressed: _cerrarSesion,
+        icon: const Icon(Icons.logout),
       ),
+      const SizedBox(width: 8),
+    ],
+  ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -458,117 +483,245 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 32),
 
             // CLIENTES
-            Card(
-              child: ListTile(
-                leading: const Icon(
-                  Icons.people_outline,
-                ),
-                title:
-                    const Text('Clientes'),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                ),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const ClientsPage(),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // PRODUCTOS
-            Card(
-              child: ListTile(
-                leading: const Icon(
-                  Icons.inventory_2_outlined,
-                ),
-                title:
-                    const Text('Productos'),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                ),
-                onTap: () {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => const ProductsPage(),
+Card(
+  elevation: 2,
+  margin: const EdgeInsets.only(bottom: 10),
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(16),
+  ),
+  child: ListTile(
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: 18,
+      vertical: 8,
     ),
-  );
-},
-              ),
-            ),
+    leading: const Icon(
+      Icons.people_outline,
+      size: 32,
+      color: Color(0xFF0B4A91),
+    ),
+    title: const Text(
+      'Clientes',
+      style: TextStyle(
+        fontSize: 17,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF0B2854),
+      ),
+    ),
+    subtitle: const Padding(
+      padding: EdgeInsets.only(top: 3),
+      child: Text(
+        'Gestión de clientes',
+        style: TextStyle(
+          fontSize: 13,
+          color: Colors.black54,
+        ),
+      ),
+    ),
+    trailing: const Icon(
+      Icons.chevron_right,
+      color: Color(0xFF0B2854),
+    ),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const ClientsPage(),
+        ),
+      );
+    },
+  ),
+),
+
+           // PRODUCTOS
+Card(
+  elevation: 2,
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(14),
+  ),
+  child: ListTile(
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: 16,
+      vertical: 8,
+    ),
+    leading: const Icon(
+      Icons.inventory_2_outlined,
+      size: 30,
+      color: Color(0xFF0B2854),
+    ),
+    title: const Text(
+      'Productos',
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF0B2854),
+      ),
+    ),
+    subtitle: const Padding(
+      padding: EdgeInsets.only(top: 3),
+      child: Text(
+        'Consultá precios y stock',
+        style: TextStyle(
+          fontSize: 13,
+          color: Colors.black54,
+        ),
+      ),
+    ),
+    trailing: const Icon(
+      Icons.chevron_right,
+      color: Color(0xFF0B2854),
+    ),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const ProductsPage(),
+        ),
+      );
+    },
+  ),
+),
 
             // NUEVO PEDIDO
-            Card(
-              child: ListTile(
-                leading: const Icon(
-                  Icons.shopping_cart_outlined,
-                ),
-                title:
-                    const Text('Nuevo pedido'),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                ),
-                onTap: () {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => const NewOrderPage(),
+Card(
+  elevation: 2,
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(14),
+  ),
+  color: const Color(0xFF1565C0),
+  child: ListTile(
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: 16,
+      vertical: 8,
     ),
-  );
-},
-              ),
-            ),
+    leading: const Icon(
+      Icons.shopping_cart_outlined,
+      size: 30,
+      color: Colors.white,
+    ),
+    title: const Text(
+      'Nuevo pedido',
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+    ),
+    subtitle: const Padding(
+      padding: EdgeInsets.only(top: 3),
+      child: Text(
+        'Crear un nuevo pedido',
+        style: TextStyle(
+          fontSize: 13,
+          color: Colors.white70,
+        ),
+      ),
+    ),
+    trailing: const Icon(
+      Icons.chevron_right,
+      color: Colors.white,
+    ),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const NewOrderPage(),
+        ),
+      );
+    },
+  ),
+),
 
             // PEDIDOS
-            Card(
-              child: ListTile(
-                leading: const Icon(
-                  Icons.receipt_long_outlined,
-                ),
-                title:
-                    const Text('Pedidos'),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                ),
-                onTap: () {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => const OrdersPage(),
+Card(
+  elevation: 2,
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(14),
+  ),
+  child: ListTile(
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: 16,
+      vertical: 8,
     ),
-  );
-},
-              ),
-            ),
+    leading: const Icon(
+      Icons.receipt_long_outlined,
+      size: 30,
+      color: Color(0xFF0B2854),
+    ),
+    title: const Text(
+      'Pedidos',
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF0B2854),
+      ),
+    ),
+    subtitle: const Padding(
+      padding: EdgeInsets.only(top: 3),
+      child: Text(
+        'Ver pedidos realizados',
+        style: TextStyle(
+          fontSize: 13,
+          color: Colors.black54,
+        ),
+      ),
+    ),
+    trailing: const Icon(
+      Icons.chevron_right,
+      color: Color(0xFF0B2854),
+    ),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const OrdersPage(),
+        ),
+      );
+    },
+  ),
+),
 
             // ADMINISTRACIÓN
-            if (esAdministrador)
-              Card(
-                child: ListTile(
-                  leading: const Icon(
-                    Icons
-                        .admin_panel_settings_outlined,
-                  ),
-                  title: const Text(
-                    'Administración',
-                  ),
-                  subtitle: const Text(
-                    'Solo administrador',
-                  ),
-                  trailing: const Icon(
-                    Icons.chevron_right,
-                  ),
-                  onTap: () {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => const AdminPage(),
+if (esAdministrador)
+  Card(
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
     ),
-  );
-},
-  
-                ),
-              ),
+    child: ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 8,
+      ),
+      leading: const Icon(
+        Icons.admin_panel_settings_outlined,
+        color: Color(0xFF0B2854),
+        size: 28,
+      ),
+      title: const Text(
+        'Administración',
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF0B2854),
+        ),
+      ),
+      subtitle: const Padding(
+        padding: EdgeInsets.only(top: 3),
+        child: Text(
+          'Solo administrador',
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.black54,
+          ),
+        ),
+      ),
+      trailing: const Icon(
+        Icons.chevron_right,
+        color: Color(0xFF0B2854),
+      ),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const AdminPage(),
+          ),
+        );
+      },
+    ),
+  ),
           ],
         ),
       ),

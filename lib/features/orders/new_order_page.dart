@@ -630,33 +630,92 @@ Card(
         ),
         Padding(
   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-  child: SizedBox(
-    width: double.infinity,
-    child: OutlinedButton.icon(
-      onPressed: () async {
+  child: Material(
+    color: const Color(0xFFF0F5FF),
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () async {
         final clienteCreado =
-    await Navigator.of(context).push<Map<String, dynamic>>(
-  MaterialPageRoute(
-    builder: (_) => const NewClientPage(),
-  ),
-);
+            await Navigator.of(context).push<Map<String, dynamic>>(
+          MaterialPageRoute(
+            builder: (_) => const NewClientPage(),
+          ),
+        );
 
-if (clienteCreado != null) {
-  await _cargarClientes();
+        if (clienteCreado != null) {
+          await _cargarClientes();
 
-  if (!mounted) return;
+          if (!mounted) return;
 
-  setState(() {
-    _clienteSeleccionado = clienteCreado;
-    _busqueda = '';
-  });
+          setState(() {
+            _clienteSeleccionado = clienteCreado;
+            _busqueda = '';
+          });
 
-  await _cargarSaldoCliente(clienteCreado);
-  await _cargarUltimosPedidos(clienteCreado);
-}
+          await _cargarSaldoCliente(clienteCreado);
+          await _cargarUltimosPedidos(clienteCreado);
+        }
       },
-      icon: const Icon(Icons.person_add_alt_1),
-      label: const Text('NUEVO CLIENTE'),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFF1565C0),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                color: Color(0xFFD8E6FF),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.person_add_alt_1,
+                color: Color(0xFF1565C0),
+                size: 27,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'NUEVO CLIENTE',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0B4A91),
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Agregar un cliente nuevo',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF1565C0),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: Color(0xFF0B4A91),
+            ),
+          ],
+        ),
+      ),
     ),
   ),
 ),

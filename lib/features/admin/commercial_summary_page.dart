@@ -293,45 +293,48 @@ void initState() {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
+    final esMovil = MediaQuery.of(context).size.width < 600;
+    return Container(
+  color: Theme.of(context).scaffoldBackgroundColor,
+  padding: EdgeInsets.all(esMovil ? 12 : 24),
+  child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Resumen comercial',
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
           Text(
-            'Ventas, recaudaciones, comisiones y rentabilidad',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
+  'Resumen comercial',
+  style: TextStyle(
+    fontSize: esMovil ? 22 : 26,
+    fontWeight: FontWeight.bold,
+  ),
+),
+const SizedBox(height: 4),
+Text(
+  'Ventas, recaudaciones, comisiones y rentabilidad',
+  style: TextStyle(
+    fontSize: esMovil ? 14 : null,
+    color: Theme.of(context).colorScheme.onSurfaceVariant,
+  ),
+),
           const SizedBox(height: 24),
 
           SegmentedButton<int>(
-            segments: const [
-              ButtonSegment<int>(
-                value: 0,
-                icon: Icon(Icons.today_outlined),
-                label: Text('Hoy'),
-              ),
-              ButtonSegment<int>(
-                value: 1,
-                icon: Icon(Icons.date_range_outlined),
-                label: Text('Semana'),
-              ),
-              ButtonSegment<int>(
-                value: 2,
-                icon: Icon(Icons.calendar_month_outlined),
-                label: Text('Personalizado'),
-              ),
-            ],
+  segments: [
+    ButtonSegment<int>(
+      value: 0,
+      icon: esMovil ? null : const Icon(Icons.today_outlined),
+      label: const Text('Hoy'),
+    ),
+    ButtonSegment<int>(
+      value: 1,
+      icon: esMovil ? null : const Icon(Icons.date_range_outlined),
+      label: const Text('Semana'),
+    ),
+    ButtonSegment<int>(
+      value: 2,
+      icon: esMovil ? null : const Icon(Icons.calendar_month_outlined),
+      label: const Text('Personalizado'),
+    ),
+  ],
             selected: {_periodoSeleccionado},
             onSelectionChanged: (seleccion) async {
   final nuevoPeriodo = seleccion.first;
@@ -375,7 +378,8 @@ void initState() {
         ? const CircularProgressIndicator()
         : _error != null
             ? Text(_error!)
-            : Wrap(
+            : SingleChildScrollView(
+    child: Wrap(
   spacing: 16,
   runSpacing: 16,
   alignment: WrapAlignment.center,
@@ -743,8 +747,10 @@ SizedBox(
 ),
   ],
 ),
+),
   ),
 ),
+          
         ],
       ),
     );

@@ -999,6 +999,7 @@ _eliminandoProducto = true;
 
   @override
   Widget build(BuildContext context) {
+    final esMovil = MediaQuery.of(context).size.width < 700;
     if (_cargando) {
       return const Center(
         child: CircularProgressIndicator(),
@@ -1038,49 +1039,89 @@ String normalizarTexto(String texto) {
   return nombre.contains(texto) || codigo.contains(texto);
 }).toList();
 
-return Column(
+return Material(
+  child: Column(
   children: [
     Padding(
   padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-  child: Row(
-    children: [
-      Expanded(
-        child: TextField(
-          decoration: const InputDecoration(
-            labelText: 'Buscar producto',
-            hintText: 'Nombre o código',
-            prefixIcon: Icon(Icons.search),
-            border: OutlineInputBorder(),
+  child: esMovil
+    ? Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            decoration: const InputDecoration(
+              labelText: 'Buscar producto',
+              hintText: 'Nombre o código',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (valor) {
+              setState(() {
+                _busqueda = valor;
+              });
+            },
           ),
-          onChanged: (valor) {
-            setState(() {
-              _busqueda = valor;
-            });
-          },
-        ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () {
+              _nuevoProducto();
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Nuevo producto'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _exportarProductos,
+            icon: const Icon(Icons.download_outlined),
+            label: const Text('Exportar productos'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _seleccionarArchivoImportacion,
+            icon: const Icon(Icons.upload_file_outlined),
+            label: const Text('Importar productos'),
+          ),
+        ],
+      )
+    : Row(
+        children: [
+          Expanded(
+            child: TextField(
+              decoration: const InputDecoration(
+                labelText: 'Buscar producto',
+                hintText: 'Nombre o código',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (valor) {
+                setState(() {
+                  _busqueda = valor;
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton.icon(
+            onPressed: () {
+              _nuevoProducto();
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Nuevo producto'),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: _exportarProductos,
+            icon: const Icon(Icons.download_outlined),
+            label: const Text('Exportar productos'),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: _seleccionarArchivoImportacion,
+            icon: const Icon(Icons.upload_file_outlined),
+            label: const Text('Importar productos'),
+          ),
+        ],
       ),
-      const SizedBox(width: 12),
-      FilledButton.icon(
-        onPressed: () {
-  _nuevoProducto();
-},
-        icon: const Icon(Icons.add),
-        label: const Text('Nuevo producto'),
-      ),
-      const SizedBox(width: 12),
-OutlinedButton.icon(
-  onPressed: _exportarProductos,
-  icon: const Icon(Icons.download_outlined),
-  label: const Text('Exportar productos'),
-),
-const SizedBox(width: 12),
-OutlinedButton.icon(
-  onPressed: _seleccionarArchivoImportacion,
-  icon: const Icon(Icons.upload_file_outlined),
-  label: const Text('Importar productos'),
-),
-    ],
-  ),
 ),
     Expanded(
       child: ListView.builder(
@@ -1148,6 +1189,7 @@ OutlinedButton.icon(
     ),
   ),
 ],
-);
+    ),
+  );
   }
 }
