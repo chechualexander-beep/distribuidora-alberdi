@@ -25,72 +25,66 @@ class _ClientsPageState extends State<ClientsPage> {
   }
 
   Future<void> _cargarClientes() async {
-  setState(() {
-    _cargando = true;
-    _error = null;
-  });
-
-  try {
-    final supabase = Supabase.instance.client;
-    final user = supabase.auth.currentUser;
-
-    if (user == null) {
-      throw Exception('No hay usuario autenticado');
-    }
-
-    // Obtener el rol del usuario actual
-    final usuario = await supabase
-        .from('usuarios')
-        .select('rol')
-        .eq('id', user.id)
-        .single();
-
-    final String rol = usuario['rol']?.toString() ?? '';
-
-    dynamic consulta = supabase
-        .from('clientes')
-        .select()
-        .eq('activo', true);
-
-    // Los preventistas solamente ven sus propios clientes.
-    // El administrador puede ver todos.
-    if (rol != 'administrador') {
-      consulta = consulta.eq('preventista_id', user.id);
-    }
-
-    final respuesta = await consulta.order('nombre_comercio');
-
-    if (!mounted) return;
-
     setState(() {
-      _clientes = List<Map<String, dynamic>>.from(respuesta);
-      _cargando = false;
+      _cargando = true;
+      _error = null;
     });
-  } catch (e) {
-    if (!mounted) return;
 
-    setState(() {
-      _error = 'No se pudieron cargar los clientes.';
-      _cargando = false;
-    });
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('No hay usuario autenticado');
+      }
+
+      // Obtener el rol del usuario actual
+      final usuario = await supabase
+          .from('usuarios')
+          .select('rol')
+          .eq('id', user.id)
+          .single();
+
+      final String rol = usuario['rol']?.toString() ?? '';
+
+      dynamic consulta = supabase.from('clientes').select().eq('activo', true);
+
+      // Los preventistas solamente ven sus propios clientes.
+      // El administrador puede ver todos.
+      if (rol != 'administrador') {
+        consulta = consulta.eq('preventista_id', user.id);
+      }
+
+      final respuesta = await consulta.order('nombre_comercio');
+
+      if (!mounted) return;
+
+      setState(() {
+        _clientes = List<Map<String, dynamic>>.from(respuesta);
+        _cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = 'No se pudieron cargar los clientes.';
+        _cargando = false;
+      });
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Clientes'),
-      ),
+      appBar: AppBar(title: const Text('Clientes')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          final clienteCreado = await Navigator.of(context).push<bool>(
-            MaterialPageRoute(
-              builder: (_) => const NewClientPage(),
-            ),
-          );
+          final clienteCreado = await Navigator.of(context)
+              .push<Map<String, dynamic>>(
+                MaterialPageRoute(builder: (_) => const NewClientPage()),
+              );
 
-          if (clienteCreado == true) {
+          if (clienteCreado != null) {
             await _cargarClientes();
           }
         },
@@ -103,9 +97,7 @@ class _ClientsPageState extends State<ClientsPage> {
 
   Widget _construirContenido() {
     if (_cargando) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -115,10 +107,7 @@ class _ClientsPageState extends State<ClientsPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.error_outline,
-                size: 60,
-              ),
+              const Icon(Icons.error_outline, size: 60),
               const SizedBox(height: 16),
               Text(
                 _error!,
@@ -145,17 +134,11 @@ class _ClientsPageState extends State<ClientsPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.people_outline,
-              size: 80,
-            ),
+            Icon(Icons.people_outline, size: 80),
             SizedBox(height: 20),
             Text(
               'Todavía no hay clientes cargados',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
             ),
             SizedBox(height: 8),
             Text(
@@ -176,11 +159,9 @@ class _ClientsPageState extends State<ClientsPage> {
       final propietario =
           cliente['propietario']?.toString().toLowerCase() ?? '';
 
-      final direccion =
-          cliente['direccion']?.toString().toLowerCase() ?? '';
+      final direccion = cliente['direccion']?.toString().toLowerCase() ?? '';
 
-      final telefono =
-          cliente['telefono']?.toString().toLowerCase() ?? '';
+      final telefono = cliente['telefono']?.toString().toLowerCase() ?? '';
 
       return comercio.contains(texto) ||
           propietario.contains(texto) ||
@@ -218,23 +199,19 @@ class _ClientsPageState extends State<ClientsPage> {
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: clientesFiltrados.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final cliente = clientesFiltrados[index];
 
                       final comercio =
                           cliente['nombre_comercio']?.toString() ??
-                              'Sin nombre';
+                          'Sin nombre';
 
-                      final propietario =
-                          cliente['propietario']?.toString();
+                      final propietario = cliente['propietario']?.toString();
 
-                      final direccion =
-                          cliente['direccion']?.toString() ?? '';
+                      final direccion = cliente['direccion']?.toString() ?? '';
 
-                      final localidad =
-                          cliente['localidad']?.toString();
+                      final localidad = cliente['localidad']?.toString();
 
                       return Card(
                         child: ListTile(
@@ -243,32 +220,27 @@ class _ClientsPageState extends State<ClientsPage> {
                           ),
                           title: Text(
                             comercio,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (propietario != null &&
-                                  propietario.isNotEmpty)
+                              if (propietario != null && propietario.isNotEmpty)
                                 Text(propietario),
                               Text(direccion),
-                              if (localidad != null &&
-                                  localidad.isNotEmpty)
+                              if (localidad != null && localidad.isNotEmpty)
                                 Text(localidad),
                             ],
                           ),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () async {
-                            final actualizado =
-                                await Navigator.of(context).push<bool>(
-                              MaterialPageRoute(
-                                builder: (_) => ClientDetailPage(
-                                  cliente: cliente,
-                                ),
-                              ),
-                            );
+                            final actualizado = await Navigator.of(context)
+                                .push<bool>(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        ClientDetailPage(cliente: cliente),
+                                  ),
+                                );
 
                             if (actualizado == true) {
                               await _cargarClientes();

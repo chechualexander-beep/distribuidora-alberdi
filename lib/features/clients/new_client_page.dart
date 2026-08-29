@@ -21,48 +21,49 @@ class _NewClientPageState extends State<NewClientPage> {
   final _observacionesController = TextEditingController();
 
   bool _guardando = false;
-double? _latitud;
-double? _longitud;
-DateTime? _ubicacionActualizadaAt;
+  double? _latitud;
+  double? _longitud;
+  DateTime? _ubicacionActualizadaAt;
 
-Future<void> _obtenerUbicacionActual() async {
-  final servicioActivo = await Geolocator.isLocationServiceEnabled();
+  Future<void> _obtenerUbicacionActual() async {
+    final servicioActivo = await Geolocator.isLocationServiceEnabled();
 
-  if (!servicioActivo) {
-    _mostrarMensaje('Activá la ubicación del dispositivo.');
-    return;
+    if (!servicioActivo) {
+      _mostrarMensaje('Activá la ubicación del dispositivo.');
+      return;
+    }
+
+    var permiso = await Geolocator.checkPermission();
+
+    if (permiso == LocationPermission.denied) {
+      permiso = await Geolocator.requestPermission();
+    }
+
+    if (permiso == LocationPermission.denied) {
+      _mostrarMensaje('No se concedió permiso para acceder a la ubicación.');
+      return;
+    }
+
+    if (permiso == LocationPermission.deniedForever) {
+      _mostrarMensaje(
+        'El permiso de ubicación está bloqueado. Habilitalo desde Configuración.',
+      );
+      return;
+    }
+
+    final posicion = await Geolocator.getCurrentPosition();
+
+    if (!mounted) return;
+
+    setState(() {
+      _latitud = posicion.latitude;
+      _longitud = posicion.longitude;
+      _ubicacionActualizadaAt = DateTime.now();
+    });
+
+    _mostrarMensaje('Ubicación actual obtenida correctamente.');
   }
 
-  var permiso = await Geolocator.checkPermission();
-
-  if (permiso == LocationPermission.denied) {
-    permiso = await Geolocator.requestPermission();
-  }
-
-  if (permiso == LocationPermission.denied) {
-    _mostrarMensaje('No se concedió permiso para acceder a la ubicación.');
-    return;
-  }
-
-  if (permiso == LocationPermission.deniedForever) {
-    _mostrarMensaje(
-      'El permiso de ubicación está bloqueado. Habilitalo desde Configuración.',
-    );
-    return;
-  }
-
-  final posicion = await Geolocator.getCurrentPosition();
-
-  if (!mounted) return;
-
-  setState(() {
-    _latitud = posicion.latitude;
-    _longitud = posicion.longitude;
-    _ubicacionActualizadaAt = DateTime.now();
-  });
-
-  _mostrarMensaje('Ubicación actual obtenida correctamente.');
-}
   Future<void> _guardarCliente() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -81,35 +82,34 @@ Future<void> _obtenerUbicacionActual() async {
 
     try {
       final clienteCreado = await Supabase.instance.client
-    .from('clientes')
-    .insert({
-        'nombre_comercio': _comercioController.text.trim(),
-        'direccion': _direccionController.text.trim(),
-        'propietario': _textoOpcional(_propietarioController),
-        'telefono': _textoOpcional(_telefonoController),
-        'localidad': _textoOpcional(_localidadController),
-        'zona': _textoOpcional(_zonaController),
-        'observaciones': _textoOpcional(_observacionesController),
-        'latitud': _latitud,
-'longitud': _longitud,
-'ubicacion_actualizada_at': _ubicacionActualizadaAt?.toIso8601String(),
-        'preventista_id': usuario.id,
-        'activo': true,
-      })
-    .select()
-    .single();
+          .from('clientes')
+          .insert({
+            'nombre_comercio': _comercioController.text.trim(),
+            'direccion': _direccionController.text.trim(),
+            'propietario': _textoOpcional(_propietarioController),
+            'telefono': _textoOpcional(_telefonoController),
+            'localidad': _textoOpcional(_localidadController),
+            'zona': _textoOpcional(_zonaController),
+            'observaciones': _textoOpcional(_observacionesController),
+            'latitud': _latitud,
+            'longitud': _longitud,
+            'ubicacion_actualizada_at': _ubicacionActualizadaAt
+                ?.toIso8601String(),
+            'preventista_id': usuario.id,
+            'activo': true,
+          })
+          .select()
+          .single();
 
       if (!mounted) return;
 
       Navigator.of(context).pop(clienteCreado);
     } on PostgrestException catch (error) {
-      _mostrarMensaje(
-        'No se pudo guardar el cliente: ${error.message}',
-      );
-    } catch (_) {
-      _mostrarMensaje(
-        'Ocurrió un error al guardar el cliente.',
-      );
+      _mostrarMensaje('No se pudo guardar el cliente: ${error.message}');
+    } catch (error) {
+      debugPrint('ERROR AL GUARDAR CLIENTE: $error');
+
+      _mostrarMensaje('Ocurrió un error al guardar el cliente.');
     } finally {
       if (mounted) {
         setState(() {
@@ -132,11 +132,9 @@ Future<void> _obtenerUbicacionActual() async {
   void _mostrarMensaje(String mensaje) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   @override
@@ -155,9 +153,7 @@ Future<void> _obtenerUbicacionActual() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nuevo cliente'),
-      ),
+      appBar: AppBar(title: const Text('Nuevo cliente')),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -166,10 +162,7 @@ Future<void> _obtenerUbicacionActual() async {
             children: [
               const Text(
                 'Datos principales',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
 
               const SizedBox(height: 20),
@@ -211,35 +204,32 @@ Future<void> _obtenerUbicacionActual() async {
                   return null;
                 },
               ),
-const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-OutlinedButton.icon(
-  onPressed: _obtenerUbicacionActual,
-  icon: const Icon(Icons.my_location),
-  label: Text(
-    _latitud == null || _longitud == null
-        ? 'USAR UBICACIÓN ACTUAL'
-        : 'UBICACIÓN CAPTURADA',
-  ),
-),
+              OutlinedButton.icon(
+                onPressed: _obtenerUbicacionActual,
+                icon: const Icon(Icons.my_location),
+                label: Text(
+                  _latitud == null || _longitud == null
+                      ? 'USAR UBICACIÓN ACTUAL'
+                      : 'UBICACIÓN CAPTURADA',
+                ),
+              ),
 
-if (_latitud != null && _longitud != null) ...[
-  const SizedBox(height: 8),
-  Text(
-    'Latitud: ${_latitud!.toStringAsFixed(6)}\n'
-    'Longitud: ${_longitud!.toStringAsFixed(6)}\n'
-    'Actualizada: ${_ubicacionActualizadaAt?.toLocal()}',
-    style: const TextStyle(fontSize: 13),
-  ),
-],
+              if (_latitud != null && _longitud != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Latitud: ${_latitud!.toStringAsFixed(6)}\n'
+                  'Longitud: ${_longitud!.toStringAsFixed(6)}\n'
+                  'Actualizada: ${_ubicacionActualizadaAt?.toLocal()}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ],
               const SizedBox(height: 28),
 
               const Text(
                 'Datos opcionales',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
 
               const SizedBox(height: 20),
@@ -315,16 +305,10 @@ if (_latitud != null && _longitud != null) ...[
                       ? const SizedBox(
                           width: 22,
                           height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.save_outlined),
-                  label: Text(
-                    _guardando
-                        ? 'Guardando...'
-                        : 'GUARDAR CLIENTE',
-                  ),
+                  label: Text(_guardando ? 'Guardando...' : 'GUARDAR CLIENTE'),
                 ),
               ),
 
@@ -333,9 +317,7 @@ if (_latitud != null && _longitud != null) ...[
               const Text(
                 '* Campos obligatorios',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey,
-                ),
+                style: TextStyle(color: Colors.grey),
               ),
             ],
           ),
