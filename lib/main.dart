@@ -11,10 +11,21 @@ import 'features/admin/admin_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Supabase.initialize(
-    url: 'https://vmbncsqapqdyffscwfwo.supabase.co',
-    publishableKey: 'sb_publishable_w_nz47b753qQkzv2pr7lhA_Yl4eZsTB',
-  );
+  const bool useTesting = bool.fromEnvironment(
+  'USE_TESTING',
+  defaultValue: false,
+);
+
+const String productionUrl = 'https://vmbncsqapqdyffscwfwo.supabase.co';
+const String productionKey = 'sb_publishable_w_nz47b753qQkzv2pr7lhA_Yl4eZsTB';
+
+const String testingUrl = String.fromEnvironment('SUPABASE_TESTING_URL');
+const String testingKey = String.fromEnvironment('SUPABASE_TESTING_KEY');
+
+await Supabase.initialize(
+  url: useTesting ? testingUrl : productionUrl,
+  publishableKey: useTesting ? testingKey : productionKey,
+);
 
   runApp(const DistribuidoraAlberdiApp());
 }
