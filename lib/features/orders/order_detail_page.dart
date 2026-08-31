@@ -19,6 +19,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
   List<Map<String, dynamic>> _detalles = [];
   String? _observacion;
+  List<Map<String, dynamic>> _pagos = [];
 
   @override
   void initState() {
@@ -44,24 +45,40 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           .select(
             '''
             id,
-            cantidad,
-            precio_unitario,
-            subtotal,
-            tipo_precio,
-            productos (
+cantidad,
+cantidad_entregada,
+cantidad_no_entregada,
+precio_unitario,
+subtotal,
+tipo_precio,
+porcentaje_comision,
+importe_comision,
+productos (
               nombre,
               codigo
             )
             ''',
           )
           .eq('pedido_id', widget.pedido['id']);
+          final pagosRespuesta = await Supabase.instance.client
+    .from('pedido_pagos')
+    .select(
+      '''
+      importe,
+      medio_pago,
+      fecha_pago,
+      observacion
+      ''',
+    )
+    .eq('pedido_id', widget.pedido['id']);
 
       if (!mounted) return;
 
       setState(() {
   _detalles = List<Map<String, dynamic>>.from(respuesta);
-  _observacion = pedidoRespuesta['observacion']?.toString();
-  _cargando = false;
+_pagos = List<Map<String, dynamic>>.from(pagosRespuesta);
+_observacion = pedidoRespuesta['observacion']?.toString();
+_cargando = false;
 });
     } catch (_) {
       if (!mounted) return;
@@ -133,8 +150,42 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     final direccion =
         cliente?['direccion']?.toString() ?? '';
 
-    final estado =
-        widget.pedido['estado']?.toString() ?? 'pendiente';
+    
+        final tipoOperacion =
+    widget.pedido['tipo_operacion']?.toString() ?? 'pedido';
+
+final resultadoEntrega =
+    widget.pedido['resultado_entrega']?.toString() ?? 'pendiente';
+
+final facturado =
+    widget.pedido['facturado'] == true;
+        final totalEntregado = _detalles.fold<double>(
+  0,
+  (total, detalle) {
+    final cantidadEntregada = double.tryParse(
+          detalle['cantidad_entregada']?.toString() ?? '0',
+        ) ??
+        0;
+
+    final precioUnitario = double.tryParse(
+          detalle['precio_unitario']?.toString() ?? '0',
+        ) ??
+        0;
+
+    return total + (cantidadEntregada * precioUnitario);
+  },
+  );
+  final totalPagado = _pagos.fold<double>(
+  0,
+  (total, pago) {
+    final importe = double.tryParse(
+          pago['importe']?.toString() ?? '0',
+        ) ??
+        0;
+
+    return total + importe;
+  },
+);
 
     return Scaffold(
       appBar: AppBar(
@@ -208,9 +259,28 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                'Estado: ${estado.toUpperCase()}',
-                              ),
+                              if (tipoOperacion == 'venta_directa') ...[
+  const Text(
+    'VENTA DIRECTA',
+    style: TextStyle(
+      fontWeight: FontWeight.bold,
+    ),
+  ),
+  const SizedBox(height: 4),
+  Text(
+    'Entrega: ${resultadoEntrega.toUpperCase()}',
+  ),
+] else ...[
+  Text(
+    facturado
+        ? 'Facturación: FACTURADO'
+        : 'Facturación: NO FACTURADO',
+  ),
+  const SizedBox(height: 4),
+  Text(
+    'Entrega: ${resultadoEntrega.toUpperCase()}',
+  ),
+],
                               if (_observacion != null && _observacion!.trim().isNotEmpty) ...[
   const SizedBox(height: 12),
   const Divider(),
@@ -258,15 +328,21 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                                     producto?['codigo']?.toString() ?? '';
 
                                 final cantidad =
-                                    detalle['cantidad']?.toString() ?? '0';
+    detalle['cantidad']?.toString() ?? '0';
 
-                                final precio = _formatearPrecio(
-                                  detalle['precio_unitario'],
-                                );
+final cantidadEntregada =
+    detalle['cantidad_entregada']?.toString() ?? '0';
 
-                                final subtotal = _formatearPrecio(
-                                  detalle['subtotal'],
-                                );
+final cantidadNoEntregada =
+    detalle['cantidad_no_entregada']?.toString() ?? '0';
+
+final precio = _formatearPrecio(
+  detalle['precio_unitario'],
+);
+
+final subtotal = _formatearPrecio(
+  detalle['subtotal'],
+);
 
                                 final lista = _nombreLista(
                                   detalle['tipo_precio'],
@@ -301,6 +377,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                                             Text(
                                               '$cantidad × $precio',
                                             ),
+                                            
                                             const Spacer(),
                                             Text(
                                               subtotal,
@@ -310,6 +387,12 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                                             ),
                                           ],
                                         ),
+                                        if (cantidadEntregada != '0' || cantidadNoEntregada != '0') ...[
+  const SizedBox(height: 4),
+  Text('Entregado: $cantidadEntregada'),
+  const SizedBox(height: 2),
+  Text('No entregado: $cantidadNoEntregada'),
+],
                                         const SizedBox(height: 6),
                                         Text(
                                           'Lista usada: $lista',
@@ -337,27 +420,91 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                         child: Card(
                           child: Padding(
                             padding: const EdgeInsets.all(16),
-                            child: Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'TOTAL',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  _formatearPrecio(
-                                    widget.pedido['total'],
-                                  ),
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            child: Column(
+  children: [
+    Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'TOTAL DEL PEDIDO',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          _formatearPrecio(
+            widget.pedido['total'],
+          ),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    ),
+    const SizedBox(height: 12),
+    Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'TOTAL ENTREGADO',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          _formatearPrecio(totalEntregado),
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    ),
+    const SizedBox(height: 12),
+Row(
+  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  children: [
+    const Text(
+      'PAGADO',
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+    Text(
+      _formatearPrecio(totalPagado),
+      style: const TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  ],
+),
+const SizedBox(height: 12),
+Row(
+  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  children: [
+    const Text(
+      'SALDO',
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+    Text(
+      _formatearPrecio(
+        (totalEntregado - totalPagado) > 0
+            ? totalEntregado - totalPagado
+            : 0,
+      ),
+      style: const TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  ],
+),
+  ],
+),
                           ),
                         ),
                       ),
