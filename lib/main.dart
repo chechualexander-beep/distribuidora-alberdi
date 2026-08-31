@@ -430,6 +430,14 @@ class _HomePageState extends State<HomePage> {
 
     final esAdministrador =
         _rol == 'administrador';
+        final bool esModoOscuro =
+    Theme.of(context).brightness == Brightness.dark;
+
+final Color colorPrincipal =
+    esModoOscuro ? Colors.white : const Color(0xFF0B2854);
+
+final Color colorSecundario =
+    esModoOscuro ? Colors.white70 : Colors.black54;
 
     return Scaffold(
   appBar: AppBar(
@@ -505,32 +513,32 @@ Card(
       horizontal: 18,
       vertical: 8,
     ),
-    leading: const Icon(
+    leading: Icon(
       Icons.people_outline,
       size: 32,
-      color: Color(0xFF0B4A91),
+      color: colorPrincipal,
     ),
-    title: const Text(
+    title: Text(
       'Clientes',
       style: TextStyle(
         fontSize: 17,
         fontWeight: FontWeight.bold,
-        color: Color(0xFF0B2854),
+        color: colorPrincipal,
       ),
     ),
-    subtitle: const Padding(
+    subtitle: Padding(
       padding: EdgeInsets.only(top: 3),
       child: Text(
         'Gestión de clientes',
         style: TextStyle(
           fontSize: 13,
-          color: Colors.black54,
+          color: colorSecundario,
         ),
       ),
     ),
-    trailing: const Icon(
+    trailing: Icon(
       Icons.chevron_right,
-      color: Color(0xFF0B2854),
+      color: colorPrincipal,
     ),
     onTap: () {
       Navigator.of(context).push(
@@ -553,32 +561,32 @@ Card(
       horizontal: 16,
       vertical: 8,
     ),
-    leading: const Icon(
+    leading:  Icon(
       Icons.inventory_2_outlined,
       size: 30,
-      color: Color(0xFF0B2854),
+      color: colorPrincipal,
     ),
-    title: const Text(
+    title:  Text(
       'Productos',
       style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        color: Color(0xFF0B2854),
+        color: colorPrincipal,
       ),
     ),
-    subtitle: const Padding(
+    subtitle:  Padding(
       padding: EdgeInsets.only(top: 3),
       child: Text(
         'Consultá precios y stock',
         style: TextStyle(
           fontSize: 13,
-          color: Colors.black54,
+          color: colorSecundario,
         ),
       ),
     ),
-    trailing: const Icon(
+    trailing:  Icon(
       Icons.chevron_right,
-      color: Color(0xFF0B2854),
+      color: colorPrincipal,
     ),
     onTap: () {
       Navigator.of(context).push(
@@ -650,32 +658,32 @@ Card(
       horizontal: 16,
       vertical: 8,
     ),
-    leading: const Icon(
+    leading: Icon(
       Icons.receipt_long_outlined,
       size: 30,
-      color: Color(0xFF0B2854),
+      color: colorPrincipal,
     ),
-    title: const Text(
+    title: Text(
       'Pedidos',
       style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        color: Color(0xFF0B2854),
+        color: colorPrincipal,
       ),
     ),
-    subtitle: const Padding(
+    subtitle:  Padding(
       padding: EdgeInsets.only(top: 3),
       child: Text(
         'Ver pedidos realizados',
         style: TextStyle(
           fontSize: 13,
-          color: Colors.black54,
+          color: colorSecundario,
         ),
       ),
     ),
-    trailing: const Icon(
+    trailing:  Icon(
       Icons.chevron_right,
-      color: Color(0xFF0B2854),
+      color: colorPrincipal,
     ),
     onTap: () {
       Navigator.of(context).push(
@@ -698,31 +706,31 @@ if (esAdministrador)
         horizontal: 16,
         vertical: 8,
       ),
-      leading: const Icon(
+      leading:  Icon(
         Icons.admin_panel_settings_outlined,
-        color: Color(0xFF0B2854),
+        color: colorPrincipal,
         size: 28,
       ),
-      title: const Text(
+      title:  Text(
         'Administración',
         style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: Color(0xFF0B2854),
+          color: colorPrincipal,
         ),
       ),
-      subtitle: const Padding(
+      subtitle:  Padding(
         padding: EdgeInsets.only(top: 3),
         child: Text(
           'Solo administrador',
           style: TextStyle(
             fontSize: 13,
-            color: Colors.black54,
+            color: colorSecundario,
           ),
         ),
       ),
-      trailing: const Icon(
+      trailing:  Icon(
         Icons.chevron_right,
-        color: Color(0xFF0B2854),
+        color: colorPrincipal,
       ),
       onTap: () {
         Navigator.of(context).push(
