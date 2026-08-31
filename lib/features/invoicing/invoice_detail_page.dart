@@ -26,8 +26,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   List<Map<String, dynamic>> _detalles = [];
   List<Map<String, dynamic>> _productosDisponibles = [];
   final Set<String> _detallesQuitados = {};
-  final TextEditingController _comprobanteController =
-    TextEditingController();
+  
     final Map<String, TextEditingController> _cantidadFacturadaControllers = {};
 
   @override
@@ -733,18 +732,7 @@ if (widget.soloLectura) ...[
     ),
   ),
 ],
-if (!widget.soloLectura) ...[
-TextField(
-  controller: _comprobanteController,
-  decoration: const InputDecoration(
-    labelText: 'Número de comprobante',
-    hintText: 'Ej: 0001-00001234',
-    prefixIcon: Icon(Icons.receipt_long_outlined),
-    border: OutlineInputBorder(),
-  ),
-),
 
-const SizedBox(height: 16),
 
 SizedBox(
   width: double.infinity,
@@ -755,7 +743,7 @@ SizedBox(
   ),
 ),
 ],
-      ],
+      
     );
   }
 }
