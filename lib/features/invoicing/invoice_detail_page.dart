@@ -284,16 +284,8 @@ setState(() {
     }
   }
   Future<void> _facturarPedido() async {
-  final numeroComprobante = _comprobanteController.text.trim();
-
-  if (numeroComprobante.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Ingresá el número de comprobante.'),
-      ),
-    );
-    return;
-  }
+  final numeroComprobante = await Supabase.instance.client
+    .rpc('siguiente_numero_comprobante') as String;
 
   try {
     for (final detalle in _detalles) {
