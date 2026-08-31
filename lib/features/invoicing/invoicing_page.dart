@@ -182,15 +182,20 @@ class _InvoicingPageState extends State<InvoicingPage> {
 
           return Card(
   child: InkWell(
-    onTap: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => InvoiceDetailPage(
-            pedido: pedido,
-          ),
-        ),
-      );
-    },
+      onTap: () async {
+  final resultado = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (_) => InvoiceDetailPage(
+        pedido: pedido,
+      ),
+    ),
+  );
+
+  if (resultado == true) {
+    await _cargarPedidos();
+  }
+},
+    
     child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(

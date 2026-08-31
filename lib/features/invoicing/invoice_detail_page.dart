@@ -364,7 +364,18 @@ for (final detalleId in _detallesQuitados) {
           'numero_comprobante': numeroComprobante,
         })
         .eq('id', widget.pedido['id']);
+final pedidoFacturado = Map<String, dynamic>.from(widget.pedido);
+pedidoFacturado['numero_comprobante'] = numeroComprobante;
 
+final pdfBytes = await InvoicePdfService.generarBoleta(
+  pedido: pedidoFacturado,
+  detalles: _detalles,
+);
+
+await Printing.layoutPdf(
+  onLayout: (_) async => pdfBytes,
+  name: 'Boleta $numeroComprobante',
+);
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
