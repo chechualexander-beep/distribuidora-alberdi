@@ -171,6 +171,7 @@ String? _modoEntrega;
 
     return entregada * precio * porcentaje / 100;
   }
+  
 
   String _resultadoEntrega() {
     double totalPedido = 0;
@@ -251,23 +252,31 @@ if (_modoEntrega == null) {
     if (!_validarCantidades()) return;
 
     final resultado = _resultadoEntrega();
-    final totalPedido = double.tryParse(
-  widget.pedido['total']?.toString() ?? '',
-) ?? 0;
+
+final totalEntregado = _detalles.fold<double>(
+  0,
+  (total, detalle) {
+    final cantidadEntregada = _cantidadEntregada(detalle);
+    final precio = _precio(detalle);
+
+    return total + (cantidadEntregada * precio);
+  },
+);
 String? medioPagoCompleto;
 double? importePagoParcial;
 String? medioPagoParcial;
 
-if (resultado == 'entregado') {
+if (resultado != 'no_entregado' && totalEntregado > 0) {
   medioPagoCompleto = await showDialog<String>(
     context: context,
     barrierDismissible: false,
     builder: (context) {
       return AlertDialog(
         title: const Text('¿Cómo quedó el pago?'),
-        content: const Text(
-          'Si el cliente pagó todo el pedido, seleccioná el medio de pago.',
-        ),
+        content: Text(
+  'Mercadería entregada: ${_formatearPrecio(totalEntregado)}\n\n'
+  '¿Cómo pagó el cliente lo entregado?',
+),
         actions: [
           TextButton(
   onPressed: () => Navigator.pop(context, null),
@@ -294,7 +303,8 @@ if (medioPagoCompleto == null) {
   return;
 }
 if (!mounted) return;
-if (resultado == 'entregado' && medioPagoCompleto == 'Parcial') {
+if (resultado != 'no_entregado' &&
+    medioPagoCompleto == 'Parcial') {
   final controller = TextEditingController();
 
   final importe = await showDialog<double>(
@@ -415,7 +425,7 @@ if (importe != null) {
                     : _motivoController.text.trim(),
           })
           .eq('id', widget.pedido['id']);
-         if (resultado == 'entregado' && totalPedido > 0) {
+         if (resultado != 'no_entregado' && totalEntregado > 0) {
   if (importePagoParcial != null &&
       medioPagoParcial != null &&
       importePagoParcial > 0) {
@@ -441,7 +451,7 @@ if (importe != null) {
           double.tryParse(pago['importe']?.toString() ?? '') ?? 0;
     }
 
-    final saldoPedido = totalPedido - pagadoPedido;
+    final saldoPedido = totalEntregado - pagadoPedido;
 
     if (saldoPedido > 0) {
       await Supabase.instance.client
