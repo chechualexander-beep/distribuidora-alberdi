@@ -15,8 +15,11 @@ class _OrdersPageState extends State<OrdersPage> {
   String? _error;
 
   List<Map<String, dynamic>> _pedidos = [];
+  String _filtroPreventista = '';
+bool _esAdministrador = false;
   String _filtroCliente = '';
 DateTimeRange? _filtroFechas;
+bool _mostrarHistorial = false;
 
   @override
   void initState() {
@@ -64,6 +67,10 @@ dynamic consulta = Supabase.instance.client
       cliente_id,
       preventista_id,
       tipo_precio,
+      usuarios!pedidos_preventista_id_fkey (
+  nombre,
+  apellido
+),
       clientes (
         nombre_comercio,
         direccion,
@@ -78,15 +85,28 @@ if (rol != 'administrador') {
   consulta = consulta.eq('preventista_id', usuario.id);
 }
 
-final respuesta =
-    await consulta.order('created_at', ascending: false);
+dynamic consultaFiltrada = consulta;
+
+if (_mostrarHistorial) {
+  consultaFiltrada = consultaFiltrada
+      .neq('resultado_entrega', 'pendiente');
+} else {
+  consultaFiltrada = consultaFiltrada
+      .eq('tipo_operacion', 'pedido')
+      .eq('facturado', false)
+      .eq('resultado_entrega', 'pendiente');
+}
+
+final respuesta = await consultaFiltrada
+    .order('created_at', ascending: false);
 
       if (!mounted) return;
 
       setState(() {
-        _pedidos = List<Map<String, dynamic>>.from(respuesta);
-        _cargando = false;
-      });
+  _pedidos = List<Map<String, dynamic>>.from(respuesta);
+  _esAdministrador = rol == 'administrador';
+  _cargando = false;
+});
     } catch (_) {
       if (!mounted) return;
 
@@ -144,7 +164,39 @@ final respuesta =
       appBar: AppBar(
         title: const Text('Pedidos'),
       ),
-      body: _construirContenido(),
+      body: Column(
+  children: [
+    Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: SegmentedButton<bool>(
+        segments: const [
+          ButtonSegment<bool>(
+            value: false,
+            icon: Icon(Icons.pending_actions_outlined),
+            label: Text('Activos'),
+          ),
+          ButtonSegment<bool>(
+            value: true,
+            icon: Icon(Icons.history),
+            label: Text('Historial'),
+          ),
+        ],
+        selected: {_mostrarHistorial},
+        onSelectionChanged: (seleccion) {
+  setState(() {
+    _mostrarHistorial = seleccion.first;
+  });
+
+  _cargarPedidos();
+},
+        showSelectedIcon: false,
+      ),
+    ),
+    Expanded(
+      child: _construirContenido(),
+    ),
+  ],
+),
     );
   }
 
@@ -253,9 +305,32 @@ final respuesta =
       coincideFecha = false;
     }
   }
+final preventistaId =
+    pedido['preventista_id']?.toString() ?? '';
 
-  return coincideCliente && coincideFecha;
+final coincidePreventista =
+    _filtroPreventista.isEmpty ||
+    preventistaId == _filtroPreventista;
+  return coincideCliente && coincideFecha && coincidePreventista;
 }).toList();
+final preventistasDisponibles = <String, String>{};
+
+for (final pedido in _pedidos) {
+  final id = pedido['preventista_id']?.toString() ?? '';
+  final usuario =
+      pedido['usuarios'] as Map<String, dynamic>?;
+
+  if (id.isEmpty || usuario == null) continue;
+
+  final nombre = usuario['nombre']?.toString() ?? '';
+  final apellido = usuario['apellido']?.toString() ?? '';
+
+  final nombreCompleto =
+      '$nombre $apellido'.trim();
+
+  preventistasDisponibles[id] =
+      nombreCompleto.isEmpty ? 'Preventista' : nombreCompleto;
+}
 
     return RefreshIndicator(
   onRefresh: _cargarPedidos,
@@ -353,6 +428,36 @@ final respuesta =
 ),
           ),
         ),
+        if (_esAdministrador)
+  Padding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+    child: DropdownButtonFormField<String>(
+      initialValue: _filtroPreventista,
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.person_outline),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      items: [
+        const DropdownMenuItem<String>(
+          value: '',
+          child: Text('Todos los preventistas'),
+        ),
+        ...preventistasDisponibles.entries.map(
+          (entrada) => DropdownMenuItem<String>(
+            value: entrada.key,
+            child: Text(entrada.value),
+          ),
+        ),
+      ],
+      onChanged: (valor) {
+        setState(() {
+          _filtroPreventista = valor ?? '';
+        });
+      },
+    ),
+  ),
       Expanded(
         child: ListView.separated(
         padding: const EdgeInsets.all(16),
