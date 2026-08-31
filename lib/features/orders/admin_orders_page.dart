@@ -415,29 +415,35 @@ void _limpiarSeleccion() {
   contentPadding: EdgeInsets.zero,
   leading: const Icon(Icons.pending_actions_outlined),
   title: Text(
-  _filtrarPorFecha
-      ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
-          '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
-          '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
-          '${_fechaSeleccionada.year.toString().substring(2)}'
-      : 'Todos los pendientes',
+  _mostrarVentaDirecta
+      ? 'Ventas directas pendientes'
+      : _filtrarPorFecha
+          ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
+              '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
+              '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
+              '${_fechaSeleccionada.year.toString().substring(2)}'
+          : 'Preventas pendientes',
 ),
 subtitle: Text(
-  _filtrarPorFecha
-      ? 'Pendientes de entrega para esta fecha'
-      : 'Pedidos cuya entrega todavía no fue gestionada',
+  _mostrarVentaDirecta
+      ? 'Operaciones de venta directa todavía no finalizadas'
+      : _filtrarPorFecha
+          ? 'Pendientes de entrega para esta fecha'
+          : 'Preventas cuya entrega todavía no fue gestionada',
 ),
-  trailing: const Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(Icons.calendar_month_outlined, size: 20),
-      SizedBox(width: 8),
-      Text('Filtrar por fecha'),
-      SizedBox(width: 4),
-      Icon(Icons.chevron_right),
-    ],
-  ),
-  onTap: _elegirFecha,
+  trailing: _mostrarVentaDirecta
+    ? null
+    : const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.calendar_month_outlined, size: 20),
+          SizedBox(width: 8),
+          Text('Filtrar por fecha'),
+          SizedBox(width: 4),
+          Icon(Icons.chevron_right),
+        ],
+      ),
+onTap: _mostrarVentaDirecta ? null : _elegirFecha,
 ),
       ),
       const Expanded(
@@ -469,40 +475,48 @@ subtitle: Text(
   contentPadding: EdgeInsets.zero,
   leading: const Icon(Icons.pending_actions_outlined),
   title: Text(
-  _filtrarPorFecha
-      ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
-          '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
-          '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
-          '${_fechaSeleccionada.year.toString().substring(2)}'
-      : 'Todos los pendientes',
+  _mostrarVentaDirecta
+      ? 'Ventas directas pendientes'
+      : _filtrarPorFecha
+          ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
+              '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
+              '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
+              '${_fechaSeleccionada.year.toString().substring(2)}'
+          : 'Preventas pendientes',
 ),
 subtitle: Text(
-  _filtrarPorFecha
-      ? 'Pendientes de entrega para esta fecha'
-      : 'Pedidos cuya entrega todavía no fue gestionada',
+  _mostrarVentaDirecta
+      ? 'Operaciones de venta directa todavía no finalizadas'
+      : _filtrarPorFecha
+          ? 'Pendientes de entrega para esta fecha'
+          : 'Preventas cuya entrega todavía no fue gestionada',
 ),
-  trailing: Row(
-  mainAxisSize: MainAxisSize.min,
-  children: [
-    Icon(
-      _filtrarPorFecha
-          ? Icons.list_alt_outlined
-          : Icons.calendar_month_outlined,
-      size: 20,
-    ),
-    const SizedBox(width: 8),
-    Text(
-      _filtrarPorFecha
-          ? 'Ver todos los pendientes'
-          : 'Filtrar por fecha',
-    ),
-    const SizedBox(width: 4),
-    const Icon(Icons.chevron_right),
-  ],
-),
-onTap: _filtrarPorFecha
-    ? _verTodosLosPendientes
-    : _elegirFecha,
+  trailing: _mostrarVentaDirecta
+    ? null
+    : Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _filtrarPorFecha
+                ? Icons.list_alt_outlined
+                : Icons.calendar_month_outlined,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _filtrarPorFecha
+                ? 'Ver todos los pendientes'
+                : 'Filtrar por fecha',
+          ),
+          const SizedBox(width: 4),
+          const Icon(Icons.chevron_right),
+        ],
+      ),
+onTap: _mostrarVentaDirecta
+    ? null
+    : _filtrarPorFecha
+        ? _verTodosLosPendientes
+        : _elegirFecha,
 ),
     const Divider(),
     Row(
