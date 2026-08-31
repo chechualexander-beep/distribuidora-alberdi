@@ -67,6 +67,10 @@ dynamic consulta = Supabase.instance.client
       cliente_id,
       preventista_id,
       tipo_precio,
+      facturado,
+fecha_facturacion,
+numero_comprobante,
+tipo_operacion,
       usuarios!pedidos_preventista_id_fkey (
   nombre,
   apellido
