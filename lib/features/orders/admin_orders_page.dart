@@ -20,6 +20,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   List<Map<String, dynamic>> _detallesPedidos = [];
   DateTime _fechaSeleccionada = DateTime.now();
   bool _filtrarPorFecha = false;
+  bool _mostrarVentaDirecta = false;
 
   @override
   void initState() {
@@ -61,7 +62,15 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     )
     .eq('resultado_entrega', 'pendiente');
 
-if (_filtrarPorFecha) {
+if (_mostrarVentaDirecta) {
+  consulta = consulta.eq('tipo_operacion', 'venta_directa');
+} else {
+  consulta = consulta
+      .eq('tipo_operacion', 'pedido')
+      .eq('facturado', true);
+}
+
+if (_filtrarPorFecha && !_mostrarVentaDirecta) {
   final fechaFiltro =
       '${_fechaSeleccionada.year.toString().padLeft(4, '0')}-'
       '${_fechaSeleccionada.month.toString().padLeft(2, '0')}-'
@@ -318,8 +327,42 @@ void _limpiarSeleccion() {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Administración de pedidos'),
+  title: const Text('Gestión de reparto'),
+  bottom: PreferredSize(
+    preferredSize: const Size.fromHeight(56),
+    child: Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SegmentedButton<bool>(
+        segments: const [
+          ButtonSegment<bool>(
+            value: false,
+            icon: Icon(Icons.local_shipping_outlined),
+            label: Text('PREVENTAS'),
+          ),
+          ButtonSegment<bool>(
+            value: true,
+            icon: Icon(Icons.point_of_sale_outlined),
+            label: Text('VENTA DIRECTA'),
+          ),
+        ],
+        selected: {_mostrarVentaDirecta},
+        onSelectionChanged: (seleccion) async {
+          setState(() {
+            _mostrarVentaDirecta = seleccion.first;
+
+            if (_mostrarVentaDirecta) {
+              _filtrarPorFecha = false;
+            }
+
+            _pedidosSeleccionados.clear();
+          });
+
+          await _cargarPedidos();
+        },
       ),
+    ),
+  ),
+),
       body: _construirContenido(),
     );
   }
@@ -508,69 +551,65 @@ onTap: _filtrarPorFecha
   }
   if (index == 1) {
   return Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'RESUMEN DE PRODUCTOS',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-  '${_pedidosSeleccionados.length} de ${_pedidos.length} pedidos seleccionados',
-),
-
-const SizedBox(height: 8),
-
-Row(
-  children: [
-    Expanded(
-      child: OutlinedButton(
-        onPressed: _seleccionarTodos,
-        child: const Text('SELECCIONAR TODOS'),
+    child: ExpansionTile(
+      leading: const Icon(Icons.inventory_2_outlined),
+      title: const Text(
+        'RESUMEN DE PRODUCTOS',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+        ),
       ),
-    ),
-    const SizedBox(width: 8),
-    Expanded(
-      child: OutlinedButton(
-        onPressed: _limpiarSeleccion,
-        child: const Text('LIMPIAR'),
+      subtitle: Text(
+        '${_pedidosSeleccionados.length} de ${_pedidos.length} pedidos seleccionados',
       ),
-    ),
-  ],
-),
-
-const SizedBox(height: 12),
-          ..._resumenProductos.map(
-            (producto) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      producto['nombre']?.toString() ??
-                          'Producto sin nombre',
-                    ),
-                  ),
-                 Text(
-  ((producto['cantidad'] as num?) ?? 0).toDouble() % 1 == 0
-      ? ((producto['cantidad'] as num?) ?? 0).toInt().toString()
-      : ((producto['cantidad'] as num?) ?? 0).toString(),
-  style: const TextStyle(
-    fontWeight: FontWeight.bold,
-  ),
-),
-                ],
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _seleccionarTodos,
+                child: const Text('SELECCIONAR TODOS'),
               ),
             ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _limpiarSeleccion,
+                child: const Text('LIMPIAR'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ..._resumenProductos.map(
+          (producto) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    producto['nombre']?.toString() ??
+                        'Producto sin nombre',
+                  ),
+                ),
+                Text(
+                  ((producto['cantidad'] as num?) ?? 0).toDouble() % 1 == 0
+                      ? ((producto['cantidad'] as num?) ?? 0)
+                          .toInt()
+                          .toString()
+                      : ((producto['cantidad'] as num?) ?? 0)
+                          .toString(),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     ),
   );
 }
