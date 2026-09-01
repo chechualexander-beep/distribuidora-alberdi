@@ -98,9 +98,12 @@ pw.SizedBox(height: 10),
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
-            'Cliente: $nombreCliente',
-            style: const pw.TextStyle(fontSize: 9),
-          ),
+  'Cliente: $nombreCliente',
+  style: pw.TextStyle(
+    fontSize: 9,
+    fontWeight: pw.FontWeight.bold,
+  ),
+),
           if (direccion.isNotEmpty)
             pw.Text(
               'Dirección: $direccion',

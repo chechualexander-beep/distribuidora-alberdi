@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
 
 import 'invoice_pdf_service.dart';
 
@@ -365,7 +366,8 @@ final pdfBytes = await InvoicePdfService.generarBoleta(
 
 await Printing.layoutPdf(
   onLayout: (_) async => pdfBytes,
-  name: 'Boleta $numeroComprobante',
+  name: 'Boleta_$numeroComprobante',
+  format: PdfPageFormat.a5,
 );
     if (!mounted) return;
 

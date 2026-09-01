@@ -29,6 +29,9 @@ class _EditClientPageState extends State<EditClientPage> {
   double? _latitud;
 double? _longitud;
 DateTime? _ubicacionActualizadaAt;
+List<Map<String, dynamic>> _preventistas = [];
+String? _preventistaSeleccionadoId;
+bool _esAdministrador = false;
 
   @override
   void initState() {
@@ -72,7 +75,60 @@ _ubicacionActualizadaAt = DateTime.tryParse(
     _observacionesController = TextEditingController(
       text: widget.cliente['observaciones']?.toString() ?? '',
     );
+    _preventistaSeleccionadoId =
+    widget.cliente['preventista_id']?.toString();
+
+_cargarPreventistas();
   }
+  Future<void> _cargarPreventistas() async {
+  final usuarioId =
+      Supabase.instance.client.auth.currentUser?.id;
+
+  if (usuarioId == null) return;
+
+  try {
+    final usuario = await Supabase.instance.client
+        .from('usuarios')
+        .select('rol')
+        .eq('id', usuarioId)
+        .single();
+
+    final esAdministrador =
+        usuario['rol']?.toString() == 'administrador';
+
+    if (!esAdministrador) {
+      if (!mounted) return;
+
+      setState(() {
+        _esAdministrador = false;
+      });
+
+      return;
+    }
+
+    final respuesta = await Supabase.instance.client
+        .from('usuarios')
+        .select('id, nombre, apellido')
+        .eq('rol', 'preventista')
+        .eq('activo', true)
+        .order('nombre');
+
+    if (!mounted) return;
+
+    setState(() {
+      _esAdministrador = true;
+      _preventistas =
+          List<Map<String, dynamic>>.from(respuesta);
+    });
+  } catch (_) {
+    if (!mounted) return;
+
+    setState(() {
+      _esAdministrador = false;
+      _preventistas = [];
+    });
+  }
+}
 
   String? _textoOpcional(TextEditingController controller) {
     final texto = controller.text.trim();
@@ -93,6 +149,9 @@ _ubicacionActualizadaAt = DateTime.tryParse(
           .from('clientes')
           .update({
             'nombre_comercio': _comercioController.text.trim(),
+            'preventista_id': _esAdministrador
+    ? _preventistaSeleccionadoId
+    : widget.cliente['preventista_id'],
             'direccion': _direccionController.text.trim(),
             'propietario': _textoOpcional(_propietarioController),
             'telefono': _textoOpcional(_telefonoController),
@@ -233,6 +292,44 @@ Future<void> _obtenerUbicacionActual() async {
                   return null;
                 },
               ),
+              if (_esAdministrador) ...[
+  DropdownButtonFormField<String>(
+    initialValue: _preventistas.any(
+      (preventista) =>
+          preventista['id']?.toString() ==
+          _preventistaSeleccionadoId,
+    )
+        ? _preventistaSeleccionadoId
+        : null,
+    decoration: const InputDecoration(
+      labelText: 'Preventista asignado',
+      prefixIcon: Icon(Icons.person_outline),
+      border: OutlineInputBorder(),
+    ),
+    items: _preventistas.map((preventista) {
+      final nombre =
+          preventista['nombre']?.toString() ?? '';
+      final apellido =
+          preventista['apellido']?.toString() ?? '';
+
+      final nombreCompleto = [
+        nombre,
+        apellido,
+      ].where((texto) => texto.isNotEmpty).join(' ');
+
+      return DropdownMenuItem<String>(
+        value: preventista['id'].toString(),
+        child: Text(nombreCompleto),
+      );
+    }).toList(),
+    onChanged: (value) {
+      setState(() {
+        _preventistaSeleccionadoId = value;
+      });
+    },
+  ),
+  const SizedBox(height: 16),
+],
               const SizedBox(height: 16),
               TextFormField(
                 controller: _direccionController,
@@ -251,6 +348,7 @@ Future<void> _obtenerUbicacionActual() async {
                 },
               ),
               const SizedBox(height: 16),
+              
 
 OutlinedButton.icon(
   onPressed: _obtenerUbicacionActual,

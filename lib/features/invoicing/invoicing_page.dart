@@ -50,7 +50,8 @@ class _InvoicingPageState extends State<InvoicingPage> {
             )
           ''')
           .eq('facturado', false)
-          .order('created_at', ascending: false);
+.eq('tipo_operacion', 'pedido')
+.order('created_at', ascending: false);
 
       if (!mounted) return;
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
 class OrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -138,6 +139,83 @@ _cargando = false;
 
     return '$dia/$mes/$anio $hora:$minuto';
   }
+  Future<void> _compartirPedidoConfirmado() async {
+  final cliente =
+      widget.pedido['clientes'] as Map<String, dynamic>?;
+
+  final nombreCliente =
+      cliente?['nombre_comercio']?.toString() ??
+      'Cliente sin nombre';
+
+  final buffer = StringBuffer();
+
+  buffer.writeln('DISTRIBUIDORA ALBERDI');
+  buffer.writeln();
+  buffer.writeln('Cliente: $nombreCliente');
+  buffer.writeln();
+  final tipoOperacion =
+    widget.pedido['tipo_operacion']?.toString() ?? 'pedido';
+
+buffer.writeln(
+  tipoOperacion == 'venta_directa'
+      ? 'VENTA DIRECTA'
+      : 'PEDIDO',
+);
+  buffer.writeln();
+
+  for (final detalle in _detalles) {
+    final producto =
+        detalle['productos'] as Map<String, dynamic>?;
+
+    final nombre =
+        producto?['nombre']?.toString() ?? 'Producto';
+
+    final cantidad =
+        double.tryParse(
+          detalle['cantidad']?.toString() ?? '0',
+        ) ??
+        0;
+
+    final subtotal =
+        double.tryParse(
+          detalle['subtotal']?.toString() ?? '0',
+        ) ??
+        0;
+
+    final cantidadTexto = cantidad % 1 == 0
+        ? cantidad.toInt().toString()
+        : cantidad.toString();
+
+    buffer.writeln(
+      '$cantidadTexto x $nombre - ${_formatearPrecio(subtotal)}',
+    );
+  }
+
+  final total =
+      double.tryParse(
+        widget.pedido['total']?.toString() ?? '0',
+      ) ??
+      0;
+
+  buffer.writeln();
+  buffer.writeln('TOTAL: ${_formatearPrecio(total)}');
+
+  final observacion = _observacion?.trim() ?? '';
+
+if (observacion.isNotEmpty) {
+  buffer.writeln();
+  buffer.writeln('Observación: $observacion');
+}
+
+  buffer.writeln();
+  buffer.writeln('Gracias por su compra.');
+
+  await SharePlus.instance.share(
+    ShareParams(
+      text: buffer.toString(),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -189,8 +267,17 @@ final facturado =
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Detalle del pedido'),
-      ),
+  title: const Text('Detalle del pedido'),
+  actions: [
+    IconButton(
+      onPressed: _detalles.isEmpty
+          ? null
+          : _compartirPedidoConfirmado,
+      icon: const Icon(Icons.share_outlined),
+      tooltip: 'Compartir pedido',
+    ),
+  ],
+),
       body: _cargando
           ? const Center(
               child: CircularProgressIndicator(),
