@@ -6,6 +6,7 @@ import 'features/orders/new_order_page.dart';
 import 'features/clients/clients_page.dart';
 import 'features/products/products_page.dart';
 import 'features/orders/orders_page.dart';
+import 'features/commissions/my_commissions_page.dart';
 
 import 'features/admin/admin_page.dart';
 Future<void> main() async {
@@ -689,6 +690,50 @@ Card(
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const OrdersPage(),
+        ),
+      );
+    },
+  ),
+),
+Card(
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(14),
+  ),
+  child: ListTile(
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: 16,
+      vertical: 8,
+    ),
+    leading: Icon(
+      Icons.payments_outlined,
+      color: colorPrincipal,
+    ),
+    title: Text(
+      'Mis comisiones',
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: colorPrincipal,
+      ),
+    ),
+    subtitle: Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Text(
+        'Consultar mis ganancias',
+        style: TextStyle(
+          fontSize: 13,
+          color: colorSecundario,
+        ),
+      ),
+    ),
+    trailing: Icon(
+      Icons.chevron_right,
+      color: colorPrincipal,
+    ),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MyCommissionsPage(),
         ),
       );
     },

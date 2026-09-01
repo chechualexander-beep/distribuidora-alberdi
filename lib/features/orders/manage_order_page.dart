@@ -419,6 +419,7 @@ if (importe != null) {
           .update({
             'estado': _estado,
             'resultado_entrega': resultado,
+            'fecha_finalizacion': DateTime.now().toIso8601String(),
             'motivo_no_entrega':
                 resultado == 'entregado'
                     ? null

@@ -109,6 +109,7 @@ bool _calculoRealizado = false;
             pedidos!inner (
               id,
               created_at,
+              fecha_finalizacion,
               preventista_id,
               resultado_entrega,
               clientes (
@@ -119,15 +120,15 @@ bool _calculoRealizado = false;
           )
           .eq('pedidos.preventista_id', _preventistaId!)
           .gte(
-            'pedidos.created_at',
+            'pedidos.fecha_finalizacion',
             desde.toIso8601String(),
           )
           .lte(
-            'pedidos.created_at',
+            'pedidos.fecha_finalizacion',
             hasta.toIso8601String(),
           )
           .order(
-            'created_at',
+            'fecha_finalizacion',
             referencedTable: 'pedidos',
             ascending: false,
           );

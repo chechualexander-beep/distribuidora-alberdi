@@ -81,8 +81,11 @@ tipo_operacion,
         localidad
       ),
       pedido_detalles (
-        cantidad
-      )
+  cantidad,
+  productos (
+    nombre
+  )
+)
     ''');
 
 if (rol != 'administrador') {
@@ -317,6 +320,26 @@ final coincidePreventista =
     preventistaId == _filtroPreventista;
   return coincideCliente && coincideFecha && coincidePreventista;
 }).toList();
+final resumenProductos = <String, double>{};
+
+for (final pedido in pedidosFiltrados) {
+  final detalles =
+      pedido['pedido_detalles'] as List<dynamic>? ?? [];
+
+  for (final detalle in detalles) {
+    final producto =
+        detalle['productos'] as Map<String, dynamic>?;
+
+    final nombre =
+        producto?['nombre']?.toString() ?? 'Producto sin nombre';
+
+    final cantidad =
+        double.tryParse(detalle['cantidad']?.toString() ?? '0') ?? 0;
+
+    resumenProductos[nombre] =
+        (resumenProductos[nombre] ?? 0) + cantidad;
+  }
+}
 final preventistasDisponibles = <String, String>{};
 
 for (final pedido in _pedidos) {
@@ -462,6 +485,53 @@ for (final pedido in _pedidos) {
       },
     ),
   ),
+  Card(
+  margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+  child: ExpansionTile(
+    leading: const Icon(Icons.inventory_2_outlined),
+    title: const Text(
+      'RESUMEN DE PRODUCTOS',
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+    subtitle: Text(
+      '${resumenProductos.length} productos distintos',
+    ),
+    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+    children: [
+  SizedBox(
+    height: 250,
+    child: ListView(
+      children: resumenProductos.entries.map((entry) {
+        final cantidad = entry.value;
+
+        final cantidadTexto = cantidad % 1 == 0
+            ? cantidad.toInt().toString()
+            : cantidad.toString();
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(entry.key),
+              ),
+              Text(
+                cantidadTexto,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    ),
+  ),
+],
+),
+),
       Expanded(
         child: ListView.separated(
         padding: const EdgeInsets.all(16),
