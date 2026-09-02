@@ -477,9 +477,10 @@ final Color colorSecundario =
       const SizedBox(width: 8),
     ],
   ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
+      body: SingleChildScrollView(
+  child: Padding(
+    padding: const EdgeInsets.all(24),
+    child: Column(
           crossAxisAlignment:
               CrossAxisAlignment.stretch,
           children: [
@@ -788,6 +789,7 @@ if (esAdministrador)
   ),
           ],
         ),
+      ),
       ),
     );
   }

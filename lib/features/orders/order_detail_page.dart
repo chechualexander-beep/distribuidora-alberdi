@@ -269,6 +269,56 @@ final facturado =
       appBar: AppBar(
   title: const Text('Detalle del pedido'),
   actions: [
+    if (!facturado && resultadoEntrega == 'pendiente')
+  IconButton(
+    onPressed: () async {
+  final confirmar = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Eliminar pedido'),
+      content: const Text(
+        '¿Seguro que querés eliminar este pedido? Esta acción no se puede deshacer.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('CANCELAR'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('ELIMINAR'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmar != true) return;
+  try {
+  await Supabase.instance.client.rpc(
+    'eliminar_pedido_pendiente',
+    params: {
+      'p_pedido_id': widget.pedido['id'],
+    },
+  );
+
+  if (!context.mounted) return;
+
+  Navigator.of(context).pop(true);
+} catch (e) {
+  if (!context.mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        'No se pudo eliminar el pedido: $e',
+      ),
+    ),
+  );
+}
+},
+    icon: const Icon(Icons.delete_outline),
+    tooltip: 'Eliminar pedido',
+  ),
     IconButton(
       onPressed: _detalles.isEmpty
           ? null

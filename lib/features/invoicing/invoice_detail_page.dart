@@ -358,6 +358,7 @@ for (final detalleId in _detallesQuitados) {
         .eq('id', widget.pedido['id']);
 final pedidoFacturado = Map<String, dynamic>.from(widget.pedido);
 pedidoFacturado['numero_comprobante'] = numeroComprobante;
+pedidoFacturado['fecha_facturacion'] = DateTime.now().toIso8601String();
 
 final pdfBytes = await InvoicePdfService.generarBoleta(
   pedido: pedidoFacturado,

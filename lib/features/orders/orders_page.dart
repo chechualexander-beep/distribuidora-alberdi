@@ -634,15 +634,19 @@ Text('$renglones renglones • $unidades unidades'),
                   const Icon(Icons.chevron_right),
                 ],
               ),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => OrderDetailPage(
-                      pedido: pedido,
-                    ),
-                  ),
-                );
-              },
+              onTap: () async {
+  final eliminado = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (_) => OrderDetailPage(
+        pedido: pedido,
+      ),
+    ),
+  );
+
+  if (eliminado == true) {
+    await _cargarPedidos();
+  }
+},
             ),
           );
         },
