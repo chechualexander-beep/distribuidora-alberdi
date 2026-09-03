@@ -7,10 +7,13 @@ import 'features/clients/clients_page.dart';
 import 'features/products/products_page.dart';
 import 'features/orders/orders_page.dart';
 import 'features/commissions/my_commissions_page.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'features/admin/admin_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
 
   const bool useTesting = bool.fromEnvironment(
   'USE_TESTING',
@@ -302,6 +305,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  
   bool _cargandoPerfil = true;
 
   String? _nombre;
@@ -313,6 +317,44 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _cargarPerfil();
   }
+  Future<void> _configurarNotificaciones() async {
+  if (!Platform.isAndroid) return;
+
+  final messaging = FirebaseMessaging.instance;
+
+  final settings = await messaging.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+      settings.authorizationStatus == AuthorizationStatus.provisional) {
+    final token = await messaging.getToken();
+
+    if (token == null) return;
+
+    final usuario =
+        Supabase.instance.client.auth.currentUser;
+
+    if (usuario == null) return;
+
+    await Supabase.instance.client
+        .from('dispositivos_notificaciones')
+        .upsert(
+      {
+        'usuario_id': usuario.id,
+        'token': token,
+        'plataforma': 'android',
+        'activo': true,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      onConflict: 'token',
+    );
+
+    debugPrint('Token FCM del administrador registrado correctamente.');
+  }
+}
 
   Future<void> _cargarPerfil() async {
     try {
@@ -375,6 +417,9 @@ class _HomePageState extends State<HomePage> {
         _rol = rol;
         _cargandoPerfil = false;
       });
+      if (rol == 'administrador') {
+  await _configurarNotificaciones();
+}
     } catch (_) {
       if (!mounted) return;
 
