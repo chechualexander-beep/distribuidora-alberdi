@@ -22,6 +22,7 @@ double _ventaTotal = 0;
 double _mercaderiaEntregada = 0;
 double _recaudacion = 0;
 double _saldoPendiente = 0;
+List<Map<String, dynamic>> _saldosPendientesClientes = [];
 double _costoMercaderia = 0;
 double _comisiones = 0;
 double _ganancia = 0;
@@ -122,6 +123,10 @@ if (_periodoSeleccionado == 1) {
       preventista_id,
       fecha_entrega,
       resultado_entrega,
+        cliente_id,
+  clientes (
+    nombre_comercio
+  ),
       pedido_detalles (
   cantidad_entregada,
   precio_unitario,
@@ -177,6 +182,8 @@ if (preventistaId != null) {
 }
 double saldoPendiente = 0;
 
+final Map<String, Map<String, dynamic>> saldosPorCliente = {};
+
 for (final pedido in pedidosEntregados) {
   final pedidoId = pedido['id']?.toString();
 
@@ -215,8 +222,32 @@ for (final pedido in pedidosEntregados) {
   final pendientePedido = totalEntregadoPedido - totalPagadoPedido;
 
   if (pendientePedido > 0) {
-    saldoPendiente += pendientePedido;
+  saldoPendiente += pendientePedido;
+
+  final clienteId = pedido['cliente_id']?.toString();
+  final cliente =
+      pedido['clientes'] as Map<String, dynamic>?;
+
+  final nombreCliente =
+      cliente?['nombre_comercio']?.toString().trim();
+
+  if (clienteId != null) {
+    final saldoCliente = saldosPorCliente[clienteId];
+
+    if (saldoCliente == null) {
+      saldosPorCliente[clienteId] = {
+        'nombre': nombreCliente?.isNotEmpty == true
+            ? nombreCliente
+            : 'Cliente sin nombre',
+        'saldo': pendientePedido,
+      };
+    } else {
+      saldoCliente['saldo'] =
+          ((saldoCliente['saldo'] as num?) ?? 0).toDouble() +
+              pendientePedido;
+    }
   }
+}
 }
 
 final pagos = await _supabase
@@ -264,6 +295,11 @@ for (final usuario in usuariosRespuesta) {
       _mercaderiaEntregada = mercaderiaEntregada;
       _recaudacion = recaudacion;
       _saldoPendiente = saldoPendiente;
+      _saldosPendientesClientes = saldosPorCliente.values.toList()
+  ..sort(
+    (a, b) => ((b['saldo'] as num?) ?? 0)
+        .compareTo((a['saldo'] as num?) ?? 0),
+  );
       _costoMercaderia = costoMercaderia;
       _comisiones = comisiones;
       _comisionesPorPreventista = Map<String, double>.from(
@@ -517,13 +553,13 @@ Text(
         ),
       ),
     ),
-    SizedBox(
+   SizedBox(
   width: 280,
   child: Card(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    child: ExpansionTile(
+      tilePadding: const EdgeInsets.all(20),
+      childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
@@ -553,14 +589,54 @@ Text(
           ),
           const SizedBox(height: 6),
           Text(
-  _periodoSeleccionado == 0
-      ? 'Pendiente de cobro hoy'
-      : _periodoSeleccionado == 1
-          ? 'Pendiente de cobro en la semana'
-          : 'Pendiente de cobro en el período',
-),
+            _periodoSeleccionado == 0
+                ? 'Pendiente de cobro hoy'
+                : _periodoSeleccionado == 1
+                    ? 'Pendiente de cobro en la semana'
+                    : 'Pendiente de cobro en el período',
+          ),
         ],
       ),
+      children: [
+        if (_saldosPendientesClientes.isEmpty)
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text('No hay clientes con saldo pendiente.'),
+          )
+        else
+          ..._saldosPendientesClientes.map(
+            (cliente) {
+              final nombre =
+                  cliente['nombre']?.toString() ?? 'Cliente sin nombre';
+
+              final saldo =
+                  ((cliente['saldo'] as num?) ?? 0).toDouble();
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        nombre,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '\$${saldo.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+      ],
     ),
   ),
 ),
