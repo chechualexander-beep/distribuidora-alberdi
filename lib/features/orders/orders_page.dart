@@ -511,21 +511,14 @@ for (final pedido in _pedidos) {
             : cantidad.toString();
 
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(entry.key),
-              ),
-              Text(
-                cantidadTexto,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        );
+  padding: const EdgeInsets.symmetric(vertical: 3),
+  child: Text(
+    '$cantidadTexto × ${entry.key}',
+    style: const TextStyle(
+      fontWeight: FontWeight.bold,
+    ),
+  ),
+);
       }).toList(),
     ),
   ),

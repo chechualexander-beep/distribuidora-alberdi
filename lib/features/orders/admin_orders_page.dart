@@ -597,32 +597,31 @@ onTap: _mostrarVentaDirecta
         ),
         const SizedBox(height: 12),
         ..._resumenProductos.map(
-          (producto) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    producto['nombre']?.toString() ??
-                        'Producto sin nombre',
-                  ),
-                ),
-                Text(
-                  ((producto['cantidad'] as num?) ?? 0).toDouble() % 1 == 0
-                      ? ((producto['cantidad'] as num?) ?? 0)
-                          .toInt()
-                          .toString()
-                      : ((producto['cantidad'] as num?) ?? 0)
-                          .toString(),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+  (producto) {
+    final cantidad = (producto['cantidad'] as num?) ?? 0;
+
+    final cantidadTexto = cantidad.toDouble() % 1 == 0
+        ? cantidad.toInt().toString()
+        : cantidad.toString();
+
+    final nombre =
+        producto['nombre']?.toString() ?? 'Producto sin nombre';
+
+    return Padding(
+  padding: const EdgeInsets.symmetric(vertical: 3),
+  child: SizedBox(
+    width: double.infinity,
+    child: Text(
+      '$cantidadTexto × $nombre',
+      textAlign: TextAlign.left,
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  ),
+);
+  },
+),
       ],
     ),
   );
