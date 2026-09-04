@@ -13,7 +13,9 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'features/admin/admin_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!Platform.isWindows) {
   await Firebase.initializeApp();
+}
 
   const bool useTesting = bool.fromEnvironment(
   'USE_TESTING',
