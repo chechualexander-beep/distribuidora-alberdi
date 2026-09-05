@@ -97,9 +97,10 @@ if (idsPedidos.isNotEmpty) {
       .select(
         '''
         pedido_id,
-        producto_id,
-        cantidad,
-        productos (
+producto_id,
+cantidad,
+cantidad_facturada,
+productos (
           nombre,
           codigo
         )
@@ -117,8 +118,13 @@ if (idsPedidos.isNotEmpty) {
     final producto =
         detalle['productos'] as Map<String, dynamic>?;
 
-    final cantidad =
-        double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+    final cantidadFacturada = detalle['cantidad_facturada'];
+
+final cantidad = cantidadFacturada != null
+    ? double.tryParse(cantidadFacturada.toString()) ?? 0
+    : double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+
+    if (cantidad <= 0) continue;
 
     if (!productosAgrupados.containsKey(productoId)) {
       productosAgrupados[productoId] = {
@@ -271,8 +277,12 @@ void _recalcularResumenSeleccionados() {
     final producto =
         detalle['productos'] as Map<String, dynamic>?;
 
-    final cantidad =
-        double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+    final cantidadFacturada = detalle['cantidad_facturada'];
+
+final cantidad = cantidadFacturada != null
+    ? double.tryParse(cantidadFacturada.toString()) ?? 0
+    : double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+    if (cantidad <= 0) continue;
 
     if (!productosAgrupados.containsKey(productoId)) {
       productosAgrupados[productoId] = {

@@ -50,9 +50,10 @@ String? _modoEntrega;
             '''
             id,
             pedido_id,
-            producto_id,
-            cantidad,
-            cantidad_entregada,
+producto_id,
+cantidad,
+cantidad_facturada,
+cantidad_entregada,
             cantidad_no_entregada,
             precio_unitario,
             tipo_precio,
@@ -110,11 +111,20 @@ String? _modoEntrega;
   }
 
   double _cantidadPedida(Map<String, dynamic> detalle) {
+  final cantidadFacturada = detalle['cantidad_facturada'];
+
+  if (cantidadFacturada != null) {
     return double.tryParse(
-          detalle['cantidad']?.toString() ?? '0',
+          cantidadFacturada.toString(),
         ) ??
         0;
   }
+
+  return double.tryParse(
+        detalle['cantidad']?.toString() ?? '',
+      ) ??
+      0;
+}
 
   double _cantidadEntregada(Map<String, dynamic> detalle) {
     final id = detalle['id'].toString();
