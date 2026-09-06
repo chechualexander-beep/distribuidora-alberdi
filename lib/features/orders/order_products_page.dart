@@ -8,11 +8,20 @@ class OrderProductsPage extends StatefulWidget {
   final DateTime? fechaEntrega;
   final String tipoOperacion;
 
+  final Map<String, int>? cantidadesIniciales;
+  final Map<String, double>? preciosIniciales;
+  final Map<String, String>? tiposPrecioIniciales;
+  final String? pedidoId;
+
   const OrderProductsPage({
     super.key,
     required this.cliente,
     this.fechaEntrega,
     required this.tipoOperacion,
+    this.cantidadesIniciales,
+    this.preciosIniciales,
+    this.tiposPrecioIniciales,
+    this.pedidoId,
   });
 
   @override
@@ -44,6 +53,17 @@ void initState() {
       tipoHabitual == 'interior') {
     _tipoPrecio = tipoHabitual!;
   }
+  if (widget.cantidadesIniciales != null) {
+  _cantidades.addAll(widget.cantidadesIniciales!);
+}
+
+if (widget.preciosIniciales != null) {
+  _preciosFijados.addAll(widget.preciosIniciales!);
+}
+
+if (widget.tiposPrecioIniciales != null) {
+  _tiposPrecioFijados.addAll(widget.tiposPrecioIniciales!);
+}
 
   _cargarProductos();
 }
@@ -184,6 +204,7 @@ void initState() {
   }
 
   void _verPedido() {
+
   final fechaEntrega = widget.fechaEntrega;
 
   if (fechaEntrega == null) {
@@ -207,6 +228,7 @@ void initState() {
         preciosFijados: Map<String, double>.from(_preciosFijados),
         tiposPrecioFijados:
             Map<String, String>.from(_tiposPrecioFijados),
+            pedidoId: widget.pedidoId,
       ),
     ),
   );

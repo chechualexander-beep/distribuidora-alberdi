@@ -56,9 +56,19 @@ Future<void> _cargarSaldoPendiente() async {
     }
 
     final pedidos = await Supabase.instance.client
-        .from('pedidos')
-        .select('id, total, estado, resultado_entrega, created_at')
-        .eq('cliente_id', clienteId);
+    .from('pedidos')
+    .select('''
+      id,
+      total,
+      estado,
+      resultado_entrega,
+      created_at,
+      pedido_detalles (
+        cantidad_entregada,
+        precio_unitario
+      )
+    ''')
+    .eq('cliente_id', clienteId);
 
     double totalCompras = 0;
     double totalPagado = 0;
@@ -74,8 +84,33 @@ final pedidosPendientes = <Map<String, dynamic>>[];
 
       if (!esCobrable) continue;
 
-      final totalPedido =
-          double.tryParse(pedido['total']?.toString() ?? '') ?? 0;
+      double totalPedido;
+
+if (resultadoEntrega == 'entregado' ||
+    resultadoEntrega == 'parcial') {
+  final detalles =
+      pedido['pedido_detalles'] as List<dynamic>? ?? [];
+
+  totalPedido = detalles.fold<double>(
+    0,
+    (total, detalle) {
+      final cantidadEntregada = double.tryParse(
+            detalle['cantidad_entregada']?.toString() ?? '',
+          ) ??
+          0;
+
+      final precio = double.tryParse(
+            detalle['precio_unitario']?.toString() ?? '',
+          ) ??
+          0;
+
+      return total + (cantidadEntregada * precio);
+    },
+  );
+} else {
+  totalPedido =
+      double.tryParse(pedido['total']?.toString() ?? '') ?? 0;
+}
 double pagadoPedido = 0;
       totalCompras += totalPedido;
 

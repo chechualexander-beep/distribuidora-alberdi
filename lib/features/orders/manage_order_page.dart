@@ -309,7 +309,8 @@ if (resultado != 'no_entregado' && totalEntregado > 0) {
     },
   );
 }
-if (medioPagoCompleto == null) {
+if (resultado != 'no_entregado' &&
+    medioPagoCompleto == null) {
   return;
 }
 if (!mounted) return;

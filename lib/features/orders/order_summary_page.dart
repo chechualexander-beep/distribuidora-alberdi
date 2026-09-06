@@ -11,6 +11,7 @@ class OrderSummaryPage extends StatefulWidget {
   final Map<String, String> tiposPrecioFijados;
   final DateTime fechaEntrega;
   final String tipoOperacion;
+  final String? pedidoId;
 
   const OrderSummaryPage({
     super.key,
@@ -22,6 +23,7 @@ class OrderSummaryPage extends StatefulWidget {
     required this.tiposPrecioFijados,
     required this.fechaEntrega,
     required this.tipoOperacion,
+    this.pedidoId,
   });
 
   @override
@@ -180,45 +182,69 @@ void dispose() {
     });
 
     try {
-      final pedido = await Supabase.instance.client
-          .from('pedidos')
-          .insert({
-            'cliente_id': widget.cliente['id'],
-            'preventista_id': usuario.id,
-            'tipo_precio': widget.tipoPrecio,
-            'tipo_operacion': widget.tipoOperacion,
-            'estado': 'pendiente',
-            'total': _totalPedido,
-            'observacion': _observacionController.text.trim().isEmpty
-    ? null
-    : _observacionController.text.trim(),
-            'fecha_entrega': widget.fechaEntrega.toIso8601String().split('T').first,
-          })
-          .select('id')
-          .single();
+  final detalles = _productosSeleccionados.map((producto) {
+    final productoId = producto['id'].toString();
+    final cantidad = widget.cantidades[productoId] ?? 0;
+    final precio = _precioProducto(producto);
+    final subtotal = precio * cantidad;
 
-      final pedidoId = pedido['id'];
+    return {
+      'producto_id': producto['id'],
+      'cantidad': cantidad,
+      'precio_unitario': precio,
+      'subtotal': subtotal,
+      'tipo_precio': _tipoPrecioProducto(producto),
+      'costo_unitario':
+          double.tryParse(producto['costo']?.toString() ?? '') ?? 0,
+    };
+  }).toList();
 
-      final detalles = _productosSeleccionados.map((producto) {
-        final productoId = producto['id'].toString();
-        final cantidad = widget.cantidades[productoId] ?? 0;
-        final precio = _precioProducto(producto);
-        final subtotal = precio * cantidad;
+  if (widget.pedidoId != null) {
+    await Supabase.instance.client.rpc(
+      'actualizar_pedido_activo',
+      params: {
+        'p_pedido_id': widget.pedidoId,
+        'p_total': _totalPedido,
+        'p_tipo_precio': widget.tipoPrecio,
+        'p_tipo_operacion': widget.tipoOperacion,
+        'p_observacion': _observacionController.text.trim(),
+        'p_fecha_entrega':
+            widget.fechaEntrega.toIso8601String().split('T').first,
+        'p_detalles': detalles,
+      },
+    );
+  } else {
+    final pedido = await Supabase.instance.client
+        .from('pedidos')
+        .insert({
+          'cliente_id': widget.cliente['id'],
+          'preventista_id': usuario.id,
+          'tipo_precio': widget.tipoPrecio,
+          'tipo_operacion': widget.tipoOperacion,
+          'estado': 'pendiente',
+          'total': _totalPedido,
+          'observacion': _observacionController.text.trim().isEmpty
+              ? null
+              : _observacionController.text.trim(),
+          'fecha_entrega':
+              widget.fechaEntrega.toIso8601String().split('T').first,
+        })
+        .select('id')
+        .single();
 
-        return {
-          'pedido_id': pedidoId,
-          'producto_id': producto['id'],
-          'cantidad': cantidad,
-          'precio_unitario': precio,
-          'subtotal': subtotal,
-          'tipo_precio': _tipoPrecioProducto(producto),
-          'costo_unitario': double.tryParse(producto['costo']?.toString() ?? '') ?? 0,
-        };
-      }).toList();
+    final pedidoId = pedido['id'];
 
-      await Supabase.instance.client
-          .from('pedido_detalles')
-          .insert(detalles);
+    final detallesNuevos = detalles.map((detalle) {
+      return {
+        ...detalle,
+        'pedido_id': pedidoId,
+      };
+    }).toList();
+
+    await Supabase.instance.client
+        .from('pedido_detalles')
+        .insert(detallesNuevos);
+  }
 
       if (!mounted) return;
 

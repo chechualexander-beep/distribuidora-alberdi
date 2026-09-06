@@ -100,6 +100,7 @@ if (idsPedidos.isNotEmpty) {
 producto_id,
 cantidad,
 cantidad_facturada,
+precio_unitario,
 productos (
           nombre,
           codigo
@@ -206,6 +207,46 @@ resumenProductos.sort(
 
     return '$dia/$mes/$anio $hora:$minuto';
   }
+  double _totalPedidoParaReparto(Map<String, dynamic> pedido) {
+  final facturado = pedido['facturado'] == true;
+
+  if (!facturado) {
+    return double.tryParse(
+          pedido['total']?.toString() ?? '',
+        ) ??
+        0;
+  }
+
+  final pedidoId = pedido['id']?.toString();
+
+  if (pedidoId == null) return 0;
+
+  double total = 0;
+
+  for (final detalle in _detallesPedidos) {
+    if (detalle['pedido_id']?.toString() != pedidoId) {
+      continue;
+    }
+
+    final cantidadFacturada = detalle['cantidad_facturada'];
+
+    final cantidad = cantidadFacturada != null
+        ? double.tryParse(cantidadFacturada.toString()) ?? 0
+        : double.tryParse(
+              detalle['cantidad']?.toString() ?? '',
+            ) ??
+            0;
+
+    final precio = double.tryParse(
+          detalle['precio_unitario']?.toString() ?? '',
+        ) ??
+        0;
+
+    total += cantidad * precio;
+  }
+
+  return total;
+}
   int get _cantidadPedidos {
   return _pedidos.length;
 }
@@ -214,12 +255,7 @@ double get _ventaTotal {
   return _pedidos.fold<double>(
     0,
     (total, pedido) {
-      final valor = double.tryParse(
-            pedido['total']?.toString() ?? '',
-          ) ??
-          0;
-
-      return total + valor;
+      return total + _totalPedidoParaReparto(pedido);
     },
   );
 }
@@ -710,7 +746,9 @@ final numeroComprobante =
                         ),
                       ),
                       Text(
-                        _formatearPrecio(pedido['total']),
+                        _formatearPrecio(
+  _totalPedidoParaReparto(pedido),
+),
                         style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,

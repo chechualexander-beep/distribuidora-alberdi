@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'order_products_page.dart';
 
 class OrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -20,6 +21,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
   List<Map<String, dynamic>> _detalles = [];
   String? _observacion;
+  String? _fechaEntrega;
   List<Map<String, dynamic>> _pagos = [];
 
   @override
@@ -37,7 +39,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     try {
       final pedidoRespuesta = await Supabase.instance.client
     .from('pedidos')
-    .select('observacion')
+    .select('observacion, fecha_entrega')
     .eq('id', widget.pedido['id'])
     .single();
 
@@ -46,6 +48,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           .select(
             '''
             id,
+            producto_id,
 cantidad,
 cantidad_entregada,
 cantidad_no_entregada,
@@ -79,6 +82,7 @@ productos (
   _detalles = List<Map<String, dynamic>>.from(respuesta);
 _pagos = List<Map<String, dynamic>>.from(pagosRespuesta);
 _observacion = pedidoRespuesta['observacion']?.toString();
+_fechaEntrega = pedidoRespuesta['fecha_entrega']?.toString();
 _cargando = false;
 });
     } catch (_) {
@@ -269,6 +273,82 @@ final facturado =
       appBar: AppBar(
   title: const Text('Detalle del pedido'),
   actions: [
+    if (!facturado && resultadoEntrega == 'pendiente')
+  IconButton(
+    onPressed: () {
+  final cliente =
+      widget.pedido['clientes'] as Map<String, dynamic>?;
+
+  if (cliente == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'No se pudo cargar el cliente del pedido.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  final cantidadesIniciales = <String, int>{};
+  final preciosIniciales = <String, double>{};
+  final tiposPrecioIniciales = <String, String>{};
+
+  for (final detalle in _detalles) {
+    final producto =
+        detalle['productos'] as Map<String, dynamic>?;
+
+    final productoId =
+        detalle['producto_id']?.toString();
+
+    if (productoId == null || productoId.isEmpty) {
+      continue;
+    }
+
+    final cantidad = double.tryParse(
+          detalle['cantidad']?.toString() ?? '0',
+        ) ??
+        0;
+
+    final precio = double.tryParse(
+          detalle['precio_unitario']?.toString() ?? '0',
+        ) ??
+        0;
+
+    final tipoPrecio =
+        detalle['tipo_precio']?.toString() ?? 'normal';
+
+    cantidadesIniciales[productoId] = cantidad.round();
+    preciosIniciales[productoId] = precio;
+    tiposPrecioIniciales[productoId] = tipoPrecio;
+
+    // Solo evita warning si producto todavía no se usa acá.
+    producto;
+  }
+
+  final fechaEntrega = DateTime.tryParse(
+  _fechaEntrega ?? '',
+);
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => OrderProductsPage(
+        cliente: cliente,
+        fechaEntrega: fechaEntrega,
+        tipoOperacion:
+            widget.pedido['tipo_operacion']?.toString() ??
+                'pedido',
+        pedidoId: widget.pedido['id']?.toString(),
+        cantidadesIniciales: cantidadesIniciales,
+        preciosIniciales: preciosIniciales,
+        tiposPrecioIniciales: tiposPrecioIniciales,
+      ),
+    ),
+  );
+},
+    icon: const Icon(Icons.edit_outlined),
+    tooltip: 'Editar pedido',
+  ),
     if (!facturado && resultadoEntrega == 'pendiente')
   IconButton(
     onPressed: () async {
