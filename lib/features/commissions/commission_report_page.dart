@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -365,20 +366,30 @@ OutlinedButton.icon(
     final nombreArchivo =
         'Liquidacion_${preventista.replaceAll(' ', '_')}_${_formatearFecha(desde).replaceAll('/', '-')}_${_formatearFecha(hasta).replaceAll('/', '-')}.pdf';
 
-    final archivo = XFile.fromData(
-      pdf,
-      mimeType: 'application/pdf',
-      name: nombreArchivo,
-    );
+    final rutaArchivo =
+    '${Directory.systemTemp.path}${Platform.pathSeparator}$nombreArchivo';
 
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [archivo],
-        subject: 'Liquidación de comisiones',
-        text:
-            'Liquidación de comisiones de $preventista - ${_formatearFecha(desde)} al ${_formatearFecha(hasta)}',
+final archivoTemporal = File(rutaArchivo);
+
+await archivoTemporal.writeAsBytes(
+  pdf,
+  flush: true,
+);
+
+await SharePlus.instance.share(
+  ShareParams(
+    files: [
+      XFile(
+        archivoTemporal.path,
+        mimeType: 'application/pdf',
+        name: nombreArchivo,
       ),
-    );
+    ],
+    subject: 'Liquidación de comisiones',
+    text:
+        'Liquidación de comisiones de $preventista - ${_formatearFecha(desde)} al ${_formatearFecha(hasta)}',
+  ),
+);
   },
   icon: const Icon(Icons.share_outlined),
   label: const Text('COMPARTIR PDF'),
