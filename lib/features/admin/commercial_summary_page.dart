@@ -28,6 +28,7 @@ double _comisiones = 0;
 double _ganancia = 0;
 Map<String, double> _comisionesPorPreventista = {};
 Map<String, String> _nombresPreventistas = {};
+bool _mostrarTodosLosSaldos = false;
 
 Future<void> _cargarResumen() async {
   setState(() {
@@ -142,6 +143,21 @@ if (_periodoSeleccionado == 1) {
       'fecha_entrega',
       fin.toIso8601String().split('T').first,
     );
+    final pedidosParaSaldos = _mostrarTodosLosSaldos
+    ? await _supabase
+        .from('pedidos')
+        .select('''
+          id,
+          cliente_id,
+          clientes (
+            nombre_comercio
+          ),
+          pedido_detalles (
+            cantidad_entregada,
+            precio_unitario
+          )
+        ''')
+    : pedidosEntregados;
 
 double mercaderiaEntregada = 0;
 double costoMercaderia = 0;
@@ -180,11 +196,38 @@ if (preventistaId != null) {
 }
   }
 }
+final idsPedidosParaSaldos = pedidosParaSaldos
+    .map((pedido) => pedido['id']?.toString())
+    .whereType<String>()
+    .toList();
+
+final Map<String, double> pagosPorPedido = {};
+
+if (idsPedidosParaSaldos.isNotEmpty) {
+  final pagosSaldos = await _supabase
+      .from('pedido_pagos')
+      .select('pedido_id, importe')
+      .inFilter('pedido_id', idsPedidosParaSaldos);
+
+  for (final pago in pagosSaldos) {
+    final pedidoId = pago['pedido_id']?.toString();
+
+    if (pedidoId == null) continue;
+
+    final importe = double.tryParse(
+          pago['importe']?.toString() ?? '',
+        ) ??
+        0;
+
+    pagosPorPedido[pedidoId] =
+        (pagosPorPedido[pedidoId] ?? 0) + importe;
+  }
+}
 double saldoPendiente = 0;
 
 final Map<String, Map<String, dynamic>> saldosPorCliente = {};
 
-for (final pedido in pedidosEntregados) {
+for (final pedido in pedidosParaSaldos) {
   final pedidoId = pedido['id']?.toString();
 
   if (pedidoId == null) continue;
@@ -207,17 +250,7 @@ for (final pedido in pedidosEntregados) {
     totalEntregadoPedido += cantidadEntregada * precioUnitario;
   }
 
-  final pagosPedido = await _supabase
-      .from('pedido_pagos')
-      .select('importe')
-      .eq('pedido_id', pedidoId);
-
-  double totalPagadoPedido = 0;
-
-  for (final pago in pagosPedido) {
-    totalPagadoPedido +=
-        double.tryParse(pago['importe']?.toString() ?? '') ?? 0;
-  }
+  final totalPagadoPedido = pagosPorPedido[pedidoId] ?? 0;
 
   final pendientePedido = totalEntregadoPedido - totalPagadoPedido;
 
@@ -595,6 +628,33 @@ Text(
                     ? 'Pendiente de cobro en la semana'
                     : 'Pendiente de cobro en el período',
           ),
+          const SizedBox(height: 8),
+
+Align(
+  alignment: Alignment.centerLeft,
+  child: TextButton.icon(
+    onPressed: () async {
+      setState(() {
+        _mostrarTodosLosSaldos = !_mostrarTodosLosSaldos;
+      });
+
+      await _cargarResumen();
+    },
+    icon: Icon(
+      _mostrarTodosLosSaldos
+          ? Icons.filter_alt_off_outlined
+          : Icons.history_outlined,
+      size: 18,
+    ),
+    label: Text(
+      _mostrarTodosLosSaldos
+          ? 'Ver saldo del período'
+          : 'Ver todos los saldos',
+    ),
+  ),
+),
+
+const SizedBox(height: 4),
         ],
       ),
       children: [
