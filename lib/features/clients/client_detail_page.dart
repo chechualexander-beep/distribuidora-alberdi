@@ -29,6 +29,7 @@ List<Map<String, dynamic>> _pedidosPendientes = [];
 List<Map<String, dynamic>> _historialPagos = [];
 List<Map<String, dynamic>> _ultimasCompras = [];
 bool _cargandoSaldo = true;
+bool _esAdministrador = false;
 String? _errorSaldo;
 
 double _totalCompras = 0;
@@ -40,12 +41,39 @@ void initState() {
   _cargarUltimasCompras();
   _cargarSaldoPendiente();
   _cargarHistorialPagos();
+  _cargarRolUsuario();
 }
 @override
 void dispose() {
   _importePagoController.dispose();
   _observacionPagoController.dispose();
   super.dispose();
+}
+Future<void> _cargarRolUsuario() async {
+  final usuarioId = Supabase.instance.client.auth.currentUser?.id;
+
+  if (usuarioId == null) return;
+
+  try {
+    final usuario = await Supabase.instance.client
+        .from('usuarios')
+        .select('rol')
+        .eq('id', usuarioId)
+        .single();
+
+    if (!mounted) return;
+
+    setState(() {
+      _esAdministrador =
+          usuario['rol']?.toString() == 'administrador';
+    });
+  } catch (_) {
+    if (!mounted) return;
+
+    setState(() {
+      _esAdministrador = false;
+    });
+  }
 }
 Future<void> _cargarSaldoPendiente() async {
   try {
@@ -648,6 +676,7 @@ final fechaPedido = createdAt == null
   }),
 ],
   const SizedBox(height: 16),
+  if (_esAdministrador)
   SizedBox(
     width: double.infinity,
     child: FilledButton.icon(
@@ -766,6 +795,7 @@ TextField(
             child: const Text('CANCELAR'),
           ),
         
+        if (_esAdministrador)
         FilledButton(
     onPressed: () async {
       final importe =
