@@ -79,8 +79,40 @@ final hasta = desde.add(
           hasta.toIso8601String(),
         );
 
-    final detalles =
-        List<Map<String, dynamic>>.from(respuesta);
+    final detallesRespuesta =
+    List<Map<String, dynamic>>.from(respuesta);
+
+final idsDetalles = detallesRespuesta
+    .map((detalle) => detalle['id']?.toString())
+    .whereType<String>()
+    .toList();
+
+final idsLiquidados = <String>{};
+
+if (idsDetalles.isNotEmpty) {
+  final liquidacionesRespuesta =
+    await Supabase.instance.client.rpc(
+  'obtener_detalles_liquidados_propios',
+  params: {
+    'p_detalle_ids': idsDetalles,
+  },
+);
+
+  for (final liquidacion in liquidacionesRespuesta) {
+    final id =
+        liquidacion['pedido_detalle_id']?.toString();
+
+    if (id != null) {
+      idsLiquidados.add(id);
+    }
+  }
+}
+
+final detalles = detallesRespuesta.where((detalle) {
+  final id = detalle['id']?.toString();
+
+  return id != null && !idsLiquidados.contains(id);
+}).toList();
       
 
     double total = 0;
@@ -172,8 +204,40 @@ Future<void> _cargarSemana() async {
           hasta.toIso8601String(),
         );
 
-    final detalles =
-        List<Map<String, dynamic>>.from(respuesta);
+    final detallesRespuesta =
+    List<Map<String, dynamic>>.from(respuesta);
+
+final idsDetalles = detallesRespuesta
+    .map((detalle) => detalle['id']?.toString())
+    .whereType<String>()
+    .toList();
+
+final idsLiquidados = <String>{};
+
+if (idsDetalles.isNotEmpty) {
+  final liquidacionesRespuesta =
+      await Supabase.instance.client.rpc(
+    'obtener_detalles_liquidados_propios',
+    params: {
+      'p_detalle_ids': idsDetalles,
+    },
+  );
+
+  for (final liquidacion in liquidacionesRespuesta) {
+    final id =
+        liquidacion['pedido_detalle_id']?.toString();
+
+    if (id != null) {
+      idsLiquidados.add(id);
+    }
+  }
+}
+
+final detalles = detallesRespuesta.where((detalle) {
+  final id = detalle['id']?.toString();
+
+  return id != null && !idsLiquidados.contains(id);
+}).toList();
 
     double total = 0;
 
@@ -267,8 +331,40 @@ Future<void> _cargarPersonalizado() async {
           hasta.toIso8601String(),
         );
 
-    final detalles =
-        List<Map<String, dynamic>>.from(respuesta);
+    final detallesRespuesta =
+    List<Map<String, dynamic>>.from(respuesta);
+
+final idsDetalles = detallesRespuesta
+    .map((detalle) => detalle['id']?.toString())
+    .whereType<String>()
+    .toList();
+
+final idsLiquidados = <String>{};
+
+if (idsDetalles.isNotEmpty) {
+  final liquidacionesRespuesta =
+    await Supabase.instance.client.rpc(
+  'obtener_detalles_liquidados_propios',
+  params: {
+    'p_detalle_ids': idsDetalles,
+  },
+);
+
+  for (final liquidacion in liquidacionesRespuesta) {
+    final id =
+        liquidacion['pedido_detalle_id']?.toString();
+
+    if (id != null) {
+      idsLiquidados.add(id);
+    }
+  }
+}
+
+final detalles = detallesRespuesta.where((detalle) {
+  final id = detalle['id']?.toString();
+
+  return id != null && !idsLiquidados.contains(id);
+}).toList();
 
     double total = 0;
 
