@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -5,6 +6,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:csv/csv.dart';
+import 'price_list_pdf_service.dart';
+import 'package:share_plus/share_plus.dart';
 
 
 class AdminProductsPage extends StatefulWidget {
@@ -1107,6 +1110,77 @@ _eliminandoProducto = true;
   _eliminandoProducto = false;
 }
 }
+Future<void> _compartirListaPrecios() async {
+  final tipoPrecio = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return SimpleDialog(
+        title: const Text('Lista de precios'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.of(context).pop('normal');
+            },
+            child: const ListTile(
+              leading: Icon(Icons.sell_outlined),
+              title: Text('Normal'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.of(context).pop('promo');
+            },
+            child: const ListTile(
+              leading: Icon(Icons.local_offer_outlined),
+              title: Text('Promo'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.of(context).pop('interior');
+            },
+            child: const ListTile(
+              leading: Icon(Icons.public_outlined),
+              title: Text('Interior'),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (tipoPrecio == null || !mounted) return;
+
+final pdf = await PriceListPdfService.generarPdf(
+  tipoPrecio: tipoPrecio,
+  productos: _productos,
+);
+
+final nombreArchivo =
+    'Lista_Precios_${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}.pdf';
+
+final directorioTemporal =
+    await Directory.systemTemp.createTemp('lista_precios_');
+
+final archivoPdf = File(
+  '${directorioTemporal.path}${Platform.pathSeparator}$nombreArchivo',
+);
+
+await archivoPdf.writeAsBytes(
+  pdf,
+  flush: true,
+);
+
+await SharePlus.instance.share(
+  ShareParams(
+    files: [
+      XFile(archivoPdf.path),
+    ],
+    subject: 'Lista de precios',
+    text: 'Lista de precios - Distribuidora Alberdi',
+  ),
+);
+}
 
   @override
   Widget build(BuildContext context) {
@@ -1192,47 +1266,63 @@ return Material(
             icon: const Icon(Icons.upload_file_outlined),
             label: const Text('Importar productos'),
           ),
+          const SizedBox(width: 12),
+OutlinedButton.icon(
+  onPressed: _compartirListaPrecios,
+  icon: const Icon(Icons.picture_as_pdf_outlined),
+  label: const Text('Lista de precios'),
+),
         ],
       )
-    : Row(
-        children: [
-          Expanded(
-            child: TextField(
-              decoration: const InputDecoration(
-                labelText: 'Buscar producto',
-                hintText: 'Nombre o código',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (valor) {
-                setState(() {
-                  _busqueda = valor;
-                });
-              },
-            ),
-          ),
-          const SizedBox(width: 12),
-          FilledButton.icon(
-            onPressed: () {
-              _nuevoProducto();
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Nuevo producto'),
-          ),
-          const SizedBox(width: 12),
-          OutlinedButton.icon(
-            onPressed: _exportarProductos,
-            icon: const Icon(Icons.download_outlined),
-            label: const Text('Exportar productos'),
-          ),
-          const SizedBox(width: 12),
-          OutlinedButton.icon(
-            onPressed: _seleccionarArchivoImportacion,
-            icon: const Icon(Icons.upload_file_outlined),
-            label: const Text('Importar productos'),
-          ),
-        ],
+    : Column(
+    children: [
+      TextField(
+        decoration: const InputDecoration(
+          labelText: 'Buscar producto',
+          hintText: 'Nombre o código',
+          prefixIcon: Icon(Icons.search),
+          border: OutlineInputBorder(),
+        ),
+        onChanged: (valor) {
+          setState(() {
+            _busqueda = valor;
+          });
+        },
       ),
+      const SizedBox(height: 12),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: () {
+                _nuevoProducto();
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Nuevo producto'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _exportarProductos,
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Exportar productos'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _seleccionarArchivoImportacion,
+              icon: const Icon(Icons.upload_file_outlined),
+              label: const Text('Importar productos'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _compartirListaPrecios,
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('Lista de precios'),
+            ),
+          ],
+        ),
+      ),
+    ],
+  ),
 ),
     Expanded(
       child: ListView.builder(
