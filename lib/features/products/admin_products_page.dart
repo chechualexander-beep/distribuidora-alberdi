@@ -77,6 +77,7 @@ bool _eliminandoProducto = false;
     'id',
     'codigo_original',
     'nombre',
+    'categoria',
     'costo',
     'precio_normal',
     'precio_promo',
@@ -177,6 +178,7 @@ const encabezadosEsperados = [
   'id',
   'codigo_original',
   'nombre',
+  'categoria',
   'costo',
   'precio_normal',
   'precio_promo',
@@ -261,43 +263,45 @@ for (final fila in filasCsv.skip(1)) {
   }
 
   final cambioTexto =
-      texto(fila[1]) != texto(productoActual['codigo_original']) ||
-      texto(fila[2]) != texto(productoActual['nombre']) ||
-      texto(fila[12]) != texto(productoActual['tipo_margen']);
+    texto(fila[1]) != texto(productoActual['codigo_original']) ||
+    texto(fila[2]) != texto(productoActual['nombre']) ||
+    texto(fila[3]) != texto(productoActual['categoria']) ||
+    texto(fila[13]) != texto(productoActual['tipo_margen']);
 
-  final cambioNumerico =
-      numero(fila[3]) != numero(productoActual['costo']) ||
-      numero(fila[4]) != numero(productoActual['precio_normal']) ||
-      numero(fila[5]) != numero(productoActual['precio_promo']) ||
-      numero(fila[6]) != numero(productoActual['precio_interior']) ||
-      numero(fila[7]) != numero(productoActual['comision_normal']) ||
-      numero(fila[8]) != numero(productoActual['comision_promo']) ||
-      numero(fila[9]) != numero(productoActual['comision_interior']);
+final cambioNumerico =
+    numero(fila[4]) != numero(productoActual['costo']) ||
+    numero(fila[5]) != numero(productoActual['precio_normal']) ||
+    numero(fila[6]) != numero(productoActual['precio_promo']) ||
+    numero(fila[7]) != numero(productoActual['precio_interior']) ||
+    numero(fila[8]) != numero(productoActual['comision_normal']) ||
+    numero(fila[9]) != numero(productoActual['comision_promo']) ||
+    numero(fila[10]) != numero(productoActual['comision_interior']);
 
-  final cambioBooleano =
-      booleano(fila[10]) !=
-          (productoActual['activo'] == true) ||
-      booleano(fila[11]) !=
-          (productoActual['visible_preventistas'] == true);
+final cambioBooleano =
+    booleano(fila[11]) !=
+        (productoActual['activo'] == true) ||
+    booleano(fila[12]) !=
+        (productoActual['visible_preventistas'] == true);
 
   if (cambioTexto || cambioNumerico || cambioBooleano) {
   modificados++;
 
   productosModificados.add({
-    'id': id,
-    'codigo_original': texto(fila[1]),
-    'nombre': texto(fila[2]),
-    'costo': numero(fila[3]),
-    'precio_normal': numero(fila[4]),
-    'precio_promo': numero(fila[5]),
-    'precio_interior': numero(fila[6]),
-    'comision_normal': numero(fila[7]),
-    'comision_promo': numero(fila[8]),
-    'comision_interior': numero(fila[9]),
-    'activo': booleano(fila[10]),
-    'visible_preventistas': booleano(fila[11]),
-    'tipo_margen': texto(fila[12]),
-  });
+  'id': id,
+  'codigo_original': texto(fila[1]),
+  'nombre': texto(fila[2]),
+  'categoria': texto(fila[3]).isEmpty ? null : texto(fila[3]),
+  'costo': numero(fila[4]),
+  'precio_normal': numero(fila[5]),
+  'precio_promo': numero(fila[6]),
+  'precio_interior': numero(fila[7]),
+  'comision_normal': numero(fila[8]),
+  'comision_promo': numero(fila[9]),
+  'comision_interior': numero(fila[10]),
+  'activo': booleano(fila[11]),
+  'visible_preventistas': booleano(fila[12]),
+  'tipo_margen': texto(fila[13]),
+});
 } else {
   sinCambios++;
 }
@@ -386,6 +390,7 @@ final precioPromoController = TextEditingController(text: '0');
 final precioInteriorController = TextEditingController(text: '0');
 
 String tipoMargen = 'normal';
+String? categoriaSeleccionada;
 final comisionNormalController = TextEditingController(text: '10');
 final comisionPromoController = TextEditingController(text: '5');
 final comisionInteriorController = TextEditingController(text: '10');
@@ -450,6 +455,51 @@ costoController.addListener(recalcularPrecios);
                 ),
               ),
               const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+  initialValue: categoriaSeleccionada,
+  decoration: const InputDecoration(
+    labelText: 'Categoría',
+    border: OutlineInputBorder(),
+  ),
+  items: const [
+    DropdownMenuItem(
+      value: 'Snacks',
+      child: Text('Snacks'),
+    ),
+    DropdownMenuItem(
+      value: 'Cereales',
+      child: Text('Cereales'),
+    ),
+    DropdownMenuItem(
+      value: 'Condimentos',
+      child: Text('Condimentos'),
+    ),
+    DropdownMenuItem(
+      value: 'Reposteria',
+      child: Text('Repostería'),
+    ),
+    DropdownMenuItem(
+      value: 'Aves',
+      child: Text('Aves'),
+    ),
+    DropdownMenuItem(
+      value: 'Legumbres',
+      child: Text('Legumbres'),
+    ),
+    DropdownMenuItem(
+      value: 'Balanceados',
+      child: Text('Balanceados'),
+    ),
+    DropdownMenuItem(
+      value: 'Otros',
+      child: Text('Otros'),
+    ),
+  ],
+  onChanged: (value) {
+    categoriaSeleccionada = value;
+  },
+),
+const SizedBox(height: 12),
               
               TextField(
                 controller: costoController,
@@ -612,10 +662,21 @@ guardando = true;
         comisionInteriorController.text.replaceAll(',', '.'),
       ) ??
       0;
+  if (categoriaSeleccionada == null) {
+  if (!context.mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Seleccioná una categoría'),
+    ),
+  );
+  return;
+}
 
   try {
   await Supabase.instance.client.from('productos').insert({
     'nombre': nombre,
+    'categoria': categoriaSeleccionada,
     'costo': costo,
     'precio_normal': precioNormal,
     'precio_promo': precioPromo,
@@ -672,6 +733,8 @@ child: const Text('Guardar'),
   final precioInteriorController = TextEditingController(
     text: producto['precio_interior']?.toString() ?? '0',
   );
+  String? categoriaSeleccionada =
+    producto['categoria']?.toString();
   double precioNormalCalculado = 0;
 double precioPromoCalculado = 0;
 double precioInteriorCalculado = 0;
@@ -740,11 +803,58 @@ bool guardando = false;
         title: Text(
           producto['nombre']?.toString() ?? 'Editar producto',
         ),
+        
+
         content: SizedBox(
   child: SingleChildScrollView(
   child: Column(
   mainAxisSize: MainAxisSize.min,
   children: [
+    DropdownButtonFormField<String>(
+  initialValue: categoriaSeleccionada,
+  decoration: const InputDecoration(
+    labelText: 'Categoría',
+    border: OutlineInputBorder(),
+  ),
+  items: const [
+    DropdownMenuItem(
+      value: 'Snacks',
+      child: Text('Snacks'),
+    ),
+    DropdownMenuItem(
+      value: 'Cereales',
+      child: Text('Cereales'),
+    ),
+    DropdownMenuItem(
+      value: 'Condimentos',
+      child: Text('Condimentos'),
+    ),
+    DropdownMenuItem(
+      value: 'Reposteria',
+      child: Text('Repostería'),
+    ),
+    DropdownMenuItem(
+      value: 'Aves',
+      child: Text('Aves'),
+    ),
+    DropdownMenuItem(
+      value: 'Legumbres',
+      child: Text('Legumbres'),
+    ),
+    DropdownMenuItem(
+      value: 'Balanceados',
+      child: Text('Balanceados'),
+    ),
+    DropdownMenuItem(
+      value: 'Otros',
+      child: Text('Otros'),
+    ),
+  ],
+  onChanged: (value) {
+    categoriaSeleccionada = value;
+  },
+),
+const SizedBox(height: 12),
     TextField(
       controller: costoController,
       keyboardType: const TextInputType.numberWithOptions(
@@ -902,6 +1012,7 @@ final comisionInterior = double.tryParse(
       .from('productos')
       .update({
         'costo': costo,
+        'categoria': categoriaSeleccionada,
         'precio_normal': precioNormal,
         'precio_promo': precioPromo,
         'precio_interior': precioInterior,
