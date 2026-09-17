@@ -614,6 +614,18 @@ else if (_errorSaldo != null)
   )
 else
   Card(
+    color: _saldoPendiente > 0
+    ? Colors.orange.withValues(alpha: 0.12)
+    : Colors.green.withValues(alpha: 0.12),
+shape: RoundedRectangleBorder(
+  borderRadius: BorderRadius.circular(12),
+  side: BorderSide(
+    color: _saldoPendiente > 0
+        ? Colors.orange
+        : Colors.green,
+    width: 1.5,
+  ),
+),
     margin: const EdgeInsets.only(bottom: 20),
     child: Padding(
       padding: const EdgeInsets.all(16),
@@ -623,19 +635,25 @@ else
           Row(
             children: [
               Icon(
-                _saldoPendiente > 0
-                    ? Icons.warning_amber_rounded
-                    : Icons.check_circle_outline,
-              ),
+  _saldoPendiente > 0
+      ? Icons.warning_amber_rounded
+      : Icons.check_circle_outline,
+  color: _saldoPendiente > 0
+      ? Colors.orange
+      : Colors.green,
+),
               const SizedBox(width: 8),
               Text(
                 _saldoPendiente > 0
                     ? 'Saldo pendiente'
                     : 'Sin saldos pendientes',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(
+  fontSize: 18,
+  fontWeight: FontWeight.bold,
+  color: _saldoPendiente > 0
+      ? Colors.orange
+      : Colors.green,
+),
               ),
             ],
           ),
