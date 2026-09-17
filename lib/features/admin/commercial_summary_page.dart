@@ -143,30 +143,18 @@ if (_periodoSeleccionado == 1) {
       'fecha_entrega',
       fin.toIso8601String().split('T').first,
     );
-    final pedidosParaSaldos = _mostrarTodosLosSaldos
-    ? await _supabase
-        .from('pedidos')
-        .select('''
-          id,
-          cliente_id,
-          clientes (
-            nombre_comercio
-          ),
-          pedido_detalles (
-            cantidad_entregada,
-            precio_unitario
-          )
-        ''')
-    : pedidosEntregados;
-
-double mercaderiaEntregada = 0;
+    double mercaderiaEntregada = 0;
 double costoMercaderia = 0;
 double comisiones = 0;
+
 final Map<String, double> comisionesPorPreventista = {};
 
 for (final pedido in pedidosEntregados) {
-  final detalles = pedido['pedido_detalles'] as List<dynamic>? ?? [];
-  final preventistaId = pedido['preventista_id']?.toString();
+  final detalles =
+      pedido['pedido_detalles'] as List<dynamic>? ?? [];
+
+  final preventistaId =
+      pedido['preventista_id']?.toString();
 
   for (final detalle in detalles) {
     final cantidadEntregada = double.tryParse(
@@ -178,122 +166,118 @@ for (final pedido in pedidosEntregados) {
           detalle['precio_unitario']?.toString() ?? '',
         ) ??
         0;
+
     final costoUnitario = double.tryParse(
-      detalle['costo_unitario']?.toString() ?? '',
-    ) ??
-    0;
-    final importeComision = double.tryParse(
-      detalle['importe_comision']?.toString() ?? '',
-    ) ??
-    0;
-
-    mercaderiaEntregada += cantidadEntregada * precioUnitario;
-costoMercaderia += cantidadEntregada * costoUnitario;
-comisiones += importeComision;
-if (preventistaId != null) {
-  comisionesPorPreventista[preventistaId] =
-      (comisionesPorPreventista[preventistaId] ?? 0) + importeComision;
-}
-  }
-}
-final idsPedidosParaSaldos = pedidosParaSaldos
-    .map((pedido) => pedido['id']?.toString())
-    .whereType<String>()
-    .toList();
-
-final Map<String, double> pagosPorPedido = {};
-
-if (idsPedidosParaSaldos.isNotEmpty) {
-  final pagosSaldos = await _supabase
-      .from('pedido_pagos')
-      .select('pedido_id, importe')
-      .inFilter('pedido_id', idsPedidosParaSaldos);
-
-  for (final pago in pagosSaldos) {
-    final pedidoId = pago['pedido_id']?.toString();
-
-    if (pedidoId == null) continue;
-
-    final importe = double.tryParse(
-          pago['importe']?.toString() ?? '',
+          detalle['costo_unitario']?.toString() ?? '',
         ) ??
         0;
 
-    pagosPorPedido[pedidoId] =
-        (pagosPorPedido[pedidoId] ?? 0) + importe;
+    final importeComision = double.tryParse(
+          detalle['importe_comision']?.toString() ?? '',
+        ) ??
+        0;
+
+    mercaderiaEntregada +=
+        cantidadEntregada * precioUnitario;
+
+    costoMercaderia +=
+        cantidadEntregada * costoUnitario;
+
+    comisiones += importeComision;
+
+    if (preventistaId != null) {
+      comisionesPorPreventista[preventistaId] =
+          (comisionesPorPreventista[preventistaId] ?? 0) +
+              importeComision;
+    }
   }
 }
+    var consultaSaldos = _supabase
+    .from('saldos_pendientes_pedidos')
+    .select('''
+      pedido_id,
+      cliente_id,
+      nombre_comercio,
+      fecha_entrega,
+      saldo_pendiente
+    ''');
+
+if (!_mostrarTodosLosSaldos) {
+  consultaSaldos = consultaSaldos
+      .gte(
+        'fecha_entrega',
+        inicio.toIso8601String().split('T').first,
+      )
+      .lt(
+        'fecha_entrega',
+        fin.toIso8601String().split('T').first,
+      );
+}
+
+final saldosPedidos = await consultaSaldos
+    .gt('saldo_pendiente', 0);
+
 double saldoPendiente = 0;
 
 final Map<String, Map<String, dynamic>> saldosPorCliente = {};
 
-for (final pedido in pedidosParaSaldos) {
-  final pedidoId = pedido['id']?.toString();
+for (final pedido in saldosPedidos) {
+  final clienteId = pedido['cliente_id']?.toString();
 
-  if (pedidoId == null) continue;
+  if (clienteId == null) continue;
 
-  final detalles = pedido['pedido_detalles'] as List<dynamic>? ?? [];
+  final pendientePedido = double.tryParse(
+        pedido['saldo_pendiente']?.toString() ?? '',
+      ) ??
+      0;
 
-  double totalEntregadoPedido = 0;
+  if (pendientePedido <= 0) continue;
 
-  for (final detalle in detalles) {
-    final cantidadEntregada = double.tryParse(
-          detalle['cantidad_entregada']?.toString() ?? '',
-        ) ??
-        0;
-
-    final precioUnitario = double.tryParse(
-          detalle['precio_unitario']?.toString() ?? '',
-        ) ??
-        0;
-
-    totalEntregadoPedido += cantidadEntregada * precioUnitario;
-  }
-
-  final totalPagadoPedido = pagosPorPedido[pedidoId] ?? 0;
-
-  final pendientePedido = totalEntregadoPedido - totalPagadoPedido;
-
-  if (pendientePedido > 0) {
   saldoPendiente += pendientePedido;
 
-  final clienteId = pedido['cliente_id']?.toString();
-  final cliente =
-      pedido['clientes'] as Map<String, dynamic>?;
-
   final nombreCliente =
-      cliente?['nombre_comercio']?.toString().trim();
+      pedido['nombre_comercio']?.toString().trim();
 
-  if (clienteId != null) {
-    final saldoCliente = saldosPorCliente[clienteId];
+  final saldoCliente = saldosPorCliente[clienteId];
 
-    if (saldoCliente == null) {
-      saldosPorCliente[clienteId] = {
-        'nombre': nombreCliente?.isNotEmpty == true
-            ? nombreCliente
-            : 'Cliente sin nombre',
-        'saldo': pendientePedido,
-      };
-    } else {
-      saldoCliente['saldo'] =
-          ((saldoCliente['saldo'] as num?) ?? 0).toDouble() +
-              pendientePedido;
-    }
+  if (saldoCliente == null) {
+    saldosPorCliente[clienteId] = {
+      'nombre': nombreCliente?.isNotEmpty == true
+          ? nombreCliente
+          : 'Cliente sin nombre',
+      'saldo': pendientePedido,
+    };
+  } else {
+    saldoCliente['saldo'] =
+        ((saldoCliente['saldo'] as num?) ?? 0).toDouble() +
+            pendientePedido;
   }
 }
-}
 
-final pagos = await _supabase
-    .from('pedido_pagos')
-    .select('pedido_id, importe, fecha_pago')
-    .gte('fecha_pago', inicio.toIso8601String())
-    .lt('fecha_pago', fin.toIso8601String());
+final inicioUtcArgentina = DateTime.utc(
+  inicio.year,
+  inicio.month,
+  inicio.day,
+  3,
+);
+
+final finUtcArgentina = DateTime.utc(
+  fin.year,
+  fin.month,
+  fin.day,
+  3,
+);
+final cobros = await _supabase
+    .from('cobros_cliente')
+    .select('importe, fecha_pago')
+    .gte('fecha_pago', inicioUtcArgentina.toIso8601String())
+    .lt('fecha_pago', finUtcArgentina.toIso8601String());
 
 double recaudacion = 0;
 
-for (final pago in pagos) {
+for (final cobro in cobros) {
   final importe = double.tryParse(
-        pago['importe']?.toString() ?? '',
+        cobro['importe']?.toString() ?? '',
       ) ??
       0;
 

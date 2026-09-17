@@ -83,6 +83,17 @@ Future<void> _cargarSaldoPendiente() async {
       throw Exception('Cliente sin ID');
     }
 
+final saldoCentral = await Supabase.instance.client
+    .from('saldos_pendientes_clientes')
+    .select('''
+      total_entregado,
+      total_pagado,
+      saldo_pendiente,
+      cantidad_pedidos_con_saldo
+    ''')
+    .eq('cliente_id', clienteId)
+    .maybeSingle();
+
     final pedidos = await Supabase.instance.client
     .from('pedidos')
     .select('''
@@ -98,8 +109,7 @@ Future<void> _cargarSaldoPendiente() async {
     ''')
     .eq('cliente_id', clienteId);
 
-    double totalCompras = 0;
-    double totalPagado = 0;
+    
 final pedidosPendientes = <Map<String, dynamic>>[];
     for (final pedido in pedidos) {
       final estado = pedido['estado']?.toString().toLowerCase() ?? '';
@@ -107,10 +117,11 @@ final pedidosPendientes = <Map<String, dynamic>>[];
           pedido['resultado_entrega']?.toString().toLowerCase() ?? '';
 
       final esCobrable =
-          estado != 'cancelado' &&
-          resultadoEntrega != 'no_entregado';
+    estado != 'cancelado' &&
+    (resultadoEntrega == 'entregado' ||
+        resultadoEntrega == 'parcial');
 
-      if (!esCobrable) continue;
+if (!esCobrable) continue;
 
       double totalPedido;
 
@@ -140,7 +151,7 @@ if (resultadoEntrega == 'entregado' ||
       double.tryParse(pedido['total']?.toString() ?? '') ?? 0;
 }
 double pagadoPedido = 0;
-      totalCompras += totalPedido;
+      
 
       final pagos = await Supabase.instance.client
           .from('pedido_pagos')
@@ -152,7 +163,7 @@ double pagadoPedido = 0;
       double.tryParse(pago['importe']?.toString() ?? '') ?? 0;
 
   pagadoPedido += importePago;
-  totalPagado += importePago;
+  
 }
 final saldoPedido = totalPedido - pagadoPedido;
 
@@ -172,16 +183,24 @@ if (saldoPedido > 0) {
     if (!mounted) return;
 
     setState(() {
-      _totalCompras = totalCompras;
-      _totalPagado = totalPagado;
-      _saldoPendiente = totalCompras - totalPagado;
-_pedidosPendientes = pedidosPendientes;
-      if (_saldoPendiente < 0) {
-        _saldoPendiente = 0;
-      }
+  _totalCompras = double.tryParse(
+        saldoCentral?['total_entregado']?.toString() ?? '',
+      ) ??
+      0;
 
-      _cargandoSaldo = false;
-    });
+  _totalPagado = double.tryParse(
+        saldoCentral?['total_pagado']?.toString() ?? '',
+      ) ??
+      0;
+
+  _saldoPendiente = double.tryParse(
+        saldoCentral?['saldo_pendiente']?.toString() ?? '',
+      ) ??
+      0;
+
+  _pedidosPendientes = pedidosPendientes;
+  _cargandoSaldo = false;
+});
   } catch (_) {
     if (!mounted) return;
 
@@ -201,20 +220,15 @@ Future<void> _cargarHistorialPagos() async {
     }
 
     final respuesta = await Supabase.instance.client
-        .from('pedido_pagos')
+        .from('cobros_cliente')
         .select('''
           id,
           importe,
           medio_pago,
           fecha_pago,
-          observacion,
-          pedidos!inner (
-            id,
-            cliente_id,
-            created_at
-          )
+          observacion
         ''')
-        .eq('pedidos.cliente_id', clienteId)
+        .eq('cliente_id', clienteId)
         .order('fecha_pago', ascending: false);
 
     if (!mounted) return;
@@ -689,43 +703,15 @@ final fechaPedido = createdAt == null
        content: Column(
   mainAxisSize: MainAxisSize.min,
   children: [
-    DropdownButtonFormField<String>(
-      isExpanded: true,
-  decoration: const InputDecoration(
-    labelText: 'Pedido a pagar',
-    border: OutlineInputBorder(),
+    Text(
+  'Saldo pendiente total: '
+  '\$${_saldoPendiente.toStringAsFixed(0)}',
+  style: const TextStyle(
+    fontWeight: FontWeight.bold,
   ),
-  initialValue: _pedidoPendienteId,
-  items: _pedidosPendientes.map((pedido) {
-    final id = pedido['id'].toString();
-    final createdAt = DateTime.tryParse(
-  pedido['created_at']?.toString() ?? '',
-)?.toLocal();
-
-final fechaPedido = createdAt == null
-    ? 'Sin fecha'
-    : '${createdAt.day.toString().padLeft(2, '0')}/'
-        '${createdAt.month.toString().padLeft(2, '0')}/'
-        '${createdAt.year}';
-    final total = double.tryParse(pedido['total'].toString()) ?? 0;
-    final pagado =
-        double.tryParse(pedido['pagado'].toString()) ?? 0;
-    final saldo = total - pagado;
-
-    return DropdownMenuItem<String>(
-      value: id,
-    child: Text(
-  '$fechaPedido · \$${saldo.toStringAsFixed(0)} pendiente',
-  overflow: TextOverflow.ellipsis,
 ),
-    );
-  }).toList(),
-  onChanged: (value) {
-    setState(() {
-      _pedidoPendienteId = value;
-    });
-  },
-),
+
+const SizedBox(height: 12),
 
 const SizedBox(height: 16),
     TextField(
@@ -819,27 +805,21 @@ TextField(
         return;
       }
 
-      if (_pedidoPendienteId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se encontró un pedido pendiente'),
-          ),
-        );
-        return;
-      }
+      
 
     try {
-  await Supabase.instance.client
-      .from('pedido_pagos')
-      .insert({
-        'pedido_id': _pedidoPendienteId,
-        'importe': importe,
-        'medio_pago': _medioPago,
-        'fecha_pago': DateTime.now().toIso8601String(),
-        'observacion': _observacionPagoController.text.trim().isEmpty
+  await Supabase.instance.client.rpc(
+  'registrar_pago_cliente',
+  params: {
+    'p_cliente_id': widget.cliente['id'],
+    'p_importe': importe,
+    'p_medio_pago': _medioPago,
+    'p_observacion':
+        _observacionPagoController.text.trim().isEmpty
             ? null
             : _observacionPagoController.text.trim(),
-      });
+  },
+);
 
   if (!context.mounted) return;
 
@@ -906,9 +886,13 @@ if (_historialPagos.isNotEmpty) ...[
   const SizedBox(height: 12),
 
   ..._historialPagos.map((pago) {
-    final fecha = DateTime.tryParse(
-      pago['fecha_pago']?.toString() ?? '',
-    );
+    final fechaUtc = DateTime.tryParse(
+  pago['fecha_pago']?.toString() ?? '',
+);
+
+final fecha = fechaUtc
+    ?.toUtc()
+    .subtract(const Duration(hours: 3));
 
     final fechaTexto = fecha == null
         ? 'Fecha sin información'

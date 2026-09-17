@@ -22,6 +22,10 @@ revoke all
 on function public.obtener_detalles_liquidados_propios(uuid[])
 from public;
 
+revoke execute
+on function public.obtener_detalles_liquidados_propios(uuid[])
+from anon;
+
 grant execute
 on function public.obtener_detalles_liquidados_propios(uuid[])
 to authenticated;

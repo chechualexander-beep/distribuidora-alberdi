@@ -41,6 +41,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     .select(
       '''
       id,
+      cliente_id,
       created_at,
       estado,
       resultado_entrega,

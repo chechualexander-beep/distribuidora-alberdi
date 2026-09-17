@@ -441,15 +441,15 @@ if (importe != null) {
   if (importePagoParcial != null &&
       medioPagoParcial != null &&
       importePagoParcial > 0) {
-    await Supabase.instance.client
-        .from('pedido_pagos')
-        .insert({
-      'pedido_id': widget.pedido['id'],
-      'importe': importePagoParcial,
-      'medio_pago': medioPagoParcial,
-      'fecha_pago': DateTime.now().toIso8601String(),
-      'observacion': 'Pago parcial al entregar el pedido',
-    });
+    await Supabase.instance.client.rpc(
+  'registrar_pago_cliente',
+  params: {
+    'p_cliente_id': widget.pedido['cliente_id'],
+    'p_importe': importePagoParcial,
+    'p_medio_pago': medioPagoParcial,
+    'p_observacion': 'Pago parcial al entregar el pedido',
+  },
+);
   } else if (medioPagoCompleto != 'Parcial') {
     final pagosExistentes = await Supabase.instance.client
         .from('pedido_pagos')
@@ -466,16 +466,16 @@ if (importe != null) {
     final saldoPedido = totalEntregado - pagadoPedido;
 
     if (saldoPedido > 0) {
-      await Supabase.instance.client
-          .from('pedido_pagos')
-          .insert({
-        'pedido_id': widget.pedido['id'],
-        'importe': saldoPedido,
-        'medio_pago': medioPagoCompleto,
-        'fecha_pago': DateTime.now().toIso8601String(),
-        'observacion': 'Pago completo al entregar el pedido',
-      });
-    }
+  await Supabase.instance.client.rpc(
+    'registrar_pago_cliente',
+    params: {
+      'p_cliente_id': widget.pedido['cliente_id'],
+      'p_importe': saldoPedido,
+      'p_medio_pago': medioPagoCompleto,
+      'p_observacion': 'Pago completo al entregar el pedido',
+    },
+  );
+}
   }
 }
 
