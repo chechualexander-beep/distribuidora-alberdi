@@ -714,6 +714,7 @@ if (widget.soloLectura) ...[
 
   const SizedBox(height: 12),
 
+
   SizedBox(
     width: double.infinity,
     child: FilledButton.icon(
@@ -734,7 +735,7 @@ if (widget.soloLectura) ...[
       label: const Text('REIMPRIMIR'),
     ),
   ),
-],
+] else ...[
 
 
 SizedBox(
@@ -746,7 +747,7 @@ SizedBox(
   ),
 ),
 ],
-      
+  ],    
     );
   }
 }

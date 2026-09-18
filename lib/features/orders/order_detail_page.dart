@@ -57,6 +57,7 @@ subtotal,
 tipo_precio,
 porcentaje_comision,
 importe_comision,
+agregado_en_entrega,
 productos (
               nombre,
               codigo
@@ -560,6 +561,24 @@ final precio = _formatearPrecio(
 final subtotal = _formatearPrecio(
   detalle['subtotal'],
 );
+final esAgregado =
+    detalle['agregado_en_entrega'] == true;
+
+final cantidadParaMostrar =
+    esAgregado ? cantidadEntregada : cantidad;
+
+final subtotalParaMostrar = esAgregado
+    ? _formatearPrecio(
+        (double.tryParse(
+                  cantidadEntregada.toString(),
+                ) ??
+                0) *
+            (double.tryParse(
+                  detalle['precio_unitario']?.toString() ?? '',
+                ) ??
+                0),
+      )
+    : subtotal;
 
                                 final lista = _nombreLista(
                                   detalle['tipo_precio'],
@@ -579,6 +598,26 @@ final subtotal = _formatearPrecio(
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
+                                        if (esAgregado) ...[
+  const SizedBox(height: 4),
+  const Row(
+    children: [
+      Icon(
+        Icons.add_circle_outline,
+        size: 16,
+        color: Colors.orange,
+      ),
+      SizedBox(width: 6),
+      Text(
+        'Agregado durante la entrega',
+        style: TextStyle(
+          color: Colors.orange,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ],
+  ),
+],
                                         if (codigo.isNotEmpty) ...[
                                           const SizedBox(height: 4),
                                           Text(
@@ -592,16 +631,17 @@ final subtotal = _formatearPrecio(
                                         Row(
                                           children: [
                                             Text(
-                                              '$cantidad × $precio',
-                                            ),
-                                            
-                                            const Spacer(),
-                                            Text(
-                                              subtotal,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
+  '$cantidadParaMostrar × $precio',
+),
+
+const Spacer(),
+
+Text(
+  subtotalParaMostrar,
+  style: const TextStyle(
+    fontWeight: FontWeight.bold,
+  ),
+),
                                           ],
                                         ),
                                         if (cantidadEntregada != '0' || cantidadNoEntregada != '0') ...[
