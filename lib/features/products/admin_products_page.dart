@@ -720,6 +720,14 @@ child: const Text('Guardar'),
 
   Future<void> _editarProducto(Map<String, dynamic> producto) async {
   
+final nombreController = TextEditingController(
+  text: producto['nombre']?.toString() ?? '',
+);
+
+String tipoMargen =
+    producto['tipo_margen']?.toString() == 'competitivo'
+        ? 'competitivo'
+        : 'normal';
 
   final costoController = TextEditingController(
     text: producto['costo']?.toString() ?? '0',
@@ -750,8 +758,7 @@ costoController.addListener(() {
       ) ??
       0;
 
-  final esCompetitivo =
-    producto['tipo_margen'] == 'competitivo';
+  final esCompetitivo = tipoMargen == 'competitivo';
 
 if (esCompetitivo) {
   precioNormalCalculado = redondearHaciaArriba100(
@@ -813,6 +820,15 @@ bool guardando = false;
   child: Column(
   mainAxisSize: MainAxisSize.min,
   children: [
+    TextField(
+  controller: nombreController,
+  decoration: const InputDecoration(
+    labelText: 'Nombre',
+    border: OutlineInputBorder(),
+  ),
+),
+
+const SizedBox(height: 12),
     DropdownButtonFormField<String>(
   initialValue: categoriaSeleccionada,
   decoration: const InputDecoration(
@@ -870,6 +886,70 @@ const SizedBox(height: 12),
       ),
     ),
     const SizedBox(height: 12),
+    DropdownButtonFormField<String>(
+  initialValue: tipoMargen,
+  decoration: const InputDecoration(
+    labelText: 'Tipo de margen',
+    border: OutlineInputBorder(),
+  ),
+  items: const [
+    DropdownMenuItem(
+      value: 'normal',
+      child: Text('Normal'),
+    ),
+    DropdownMenuItem(
+      value: 'competitivo',
+      child: Text('Competitivo'),
+    ),
+  ],
+  onChanged: (valor) {
+    if (valor == null) return;
+
+    setDialogState(() {
+      tipoMargen = valor;
+
+      if (tipoMargen == 'competitivo') {
+        comisionNormalController.text = '6';
+        comisionPromoController.text = '5';
+        comisionInteriorController.text = '6';
+      } else {
+        comisionNormalController.text = '10';
+        comisionPromoController.text = '5';
+        comisionInteriorController.text = '10';
+      }
+
+      final costo = double.tryParse(
+            costoController.text.replaceAll(',', '.'),
+          ) ??
+          0;
+
+      final esCompetitivo = tipoMargen == 'competitivo';
+
+      precioNormalCalculado = redondearHaciaArriba100(
+        costo * (esCompetitivo ? 1.30 : 1.50),
+      );
+
+      precioPromoCalculado = redondearHaciaArriba100(
+        costo * 1.21,
+      );
+
+      precioInteriorCalculado = redondearHaciaArriba100(
+        precioNormalCalculado * 1.07,
+      );
+
+      precioNormalController.text =
+          precioNormalCalculado.toStringAsFixed(0);
+
+      precioPromoController.text =
+          precioPromoCalculado.toStringAsFixed(0);
+
+      precioInteriorController.text =
+          precioInteriorCalculado.toStringAsFixed(0);
+    });
+  },
+),
+
+const SizedBox(height: 12),
     TextField(
       controller: precioNormalController,
       readOnly: true,
@@ -1009,13 +1089,27 @@ final comisionInterior = double.tryParse(
       comisionInteriorController.text.replaceAll(',', '.'),
     ) ??
     0;
+final nombre = nombreController.text.trim();
+
+if (nombre.isEmpty) {
+  guardando = false;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('El nombre del producto no puede quedar vacío.'),
+    ),
+  );
+  return;
+}
 
   try {
   await Supabase.instance.client
       .from('productos')
       .update({
-        'costo': costo,
-        'categoria': categoriaSeleccionada,
+  'nombre': nombre,
+  'costo': costo,
+  'categoria': categoriaSeleccionada,
+  'tipo_margen': tipoMargen,
         'precio_normal': precioNormal,
         'precio_promo': precioPromo,
         'precio_interior': precioInterior,
