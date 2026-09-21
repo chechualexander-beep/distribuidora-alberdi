@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/argentina_date_utils.dart';
 class CommercialSummaryPage extends StatefulWidget {
   const CommercialSummaryPage({super.key});
 
@@ -37,7 +38,7 @@ Future<void> _cargarResumen() async {
   });
 
   try {
-    final hoy = DateTime.now();
+    final hoy = ArgentinaDateUtils.ahoraArgentina();
 
 late DateTime inicio;
 late DateTime fin;
@@ -81,6 +82,11 @@ if (_periodoSeleccionado == 1) {
 
   fin = inicio.add(const Duration(days: 1));
 }
+final inicioUtcArgentina =
+    ArgentinaDateUtils.inicioDiaUtc(inicio);
+
+final finUtcArgentina =
+    ArgentinaDateUtils.inicioDiaUtc(fin);
 
     final pedidos = await _supabase
     .from('pedidos')
@@ -95,8 +101,14 @@ if (_periodoSeleccionado == 1) {
       )
     ''')
     .eq('facturado', true)
-    .gte('fecha_facturacion', inicio.toIso8601String())
-    .lt('fecha_facturacion', fin.toIso8601String());
+    .gte(
+  'fecha_facturacion',
+  inicioUtcArgentina.toIso8601String(),
+)
+.lt(
+  'fecha_facturacion',
+  finUtcArgentina.toIso8601String(),
+);
 
     double venta = 0;
 
@@ -254,19 +266,7 @@ for (final pedido in saldosPedidos) {
   }
 }
 
-final inicioUtcArgentina = DateTime.utc(
-  inicio.year,
-  inicio.month,
-  inicio.day,
-  3,
-);
 
-final finUtcArgentina = DateTime.utc(
-  fin.year,
-  fin.month,
-  fin.day,
-  3,
-);
 final cobros = await _supabase
     .from('cobros_cliente')
     .select('importe, fecha_pago')

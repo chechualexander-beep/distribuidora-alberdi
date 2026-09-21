@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_order_detail.dart';
 import 'commission_report_page.dart';
+import '../../core/argentina_date_utils.dart';
 class CommissionsPage extends StatefulWidget {
   const CommissionsPage({super.key});
 
@@ -75,20 +76,11 @@ bool _calculoRealizado = false;
     });
 
     try {
-      final desde = DateTime(
-        _desde.year,
-        _desde.month,
-        _desde.day,
-      );
+      final desde =
+    ArgentinaDateUtils.inicioDiaUtc(_desde);
 
-      final hasta = DateTime(
-        _hasta.year,
-        _hasta.month,
-        _hasta.day,
-        23,
-        59,
-        59,
-      );
+final hastaExclusivo =
+    ArgentinaDateUtils.finDiaExclusivoUtc(_hasta);
 
       final respuesta = await Supabase.instance.client
           .from('pedido_detalles')
@@ -120,13 +112,13 @@ bool _calculoRealizado = false;
           )
           .eq('pedidos.preventista_id', _preventistaId!)
           .gte(
-            'pedidos.fecha_finalizacion',
-            desde.toIso8601String(),
-          )
-          .lte(
-            'pedidos.fecha_finalizacion',
-            hasta.toIso8601String(),
-          )
+  'pedidos.fecha_finalizacion',
+  desde.toIso8601String(),
+)
+.lt(
+  'pedidos.fecha_finalizacion',
+  hastaExclusivo.toIso8601String(),
+)
           .order(
             'fecha_finalizacion',
             referencedTable: 'pedidos',

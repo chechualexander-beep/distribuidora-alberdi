@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_order_detail.dart';
+import '../../core/argentina_date_utils.dart';
 
 class MyCommissionsPage extends StatefulWidget {
   const MyCommissionsPage({super.key});
@@ -29,22 +30,14 @@ Future<void> _cargarHoy() async {
   });
 
   try {
-    final ahoraArgentina = DateTime.now()
-    .toUtc()
-    .subtract(const Duration(hours: 3));
+    final ahoraArgentina =
+    ArgentinaDateUtils.ahoraArgentina();
 
-final desde = DateTime.utc(
-  ahoraArgentina.year,
-  ahoraArgentina.month,
-  ahoraArgentina.day,
-  3,
-);
+final desde =
+    ArgentinaDateUtils.inicioDiaUtc(ahoraArgentina);
 
-final hasta = desde.add(
-  const Duration(days: 1),
-).subtract(
-  const Duration(milliseconds: 1),
-);
+final hastaExclusivo =
+    ArgentinaDateUtils.finDiaExclusivoUtc(ahoraArgentina);
 
     final respuesta = await Supabase.instance.client
         .from('pedido_detalles')
@@ -74,10 +67,10 @@ final hasta = desde.add(
           'pedidos.fecha_finalizacion',
           desde.toIso8601String(),
         )
-        .lte(
-          'pedidos.fecha_finalizacion',
-          hasta.toIso8601String(),
-        );
+        .lt(
+  'pedidos.fecha_finalizacion',
+  hastaExclusivo.toIso8601String(),
+);
 
     final detallesRespuesta =
     List<Map<String, dynamic>>.from(respuesta);
@@ -152,24 +145,18 @@ Future<void> _cargarSemana() async {
   });
 
   try {
-    final ahoraArgentina = DateTime.now()
-        .toUtc()
-        .subtract(const Duration(hours: 3));
+    final ahoraArgentina =
+    ArgentinaDateUtils.ahoraArgentina();
 
-    final inicioSemanaArgentina = ahoraArgentina.subtract(
-      Duration(days: ahoraArgentina.weekday - 1),
-    );
+final inicioSemanaArgentina = ahoraArgentina.subtract(
+  Duration(days: ahoraArgentina.weekday - 1),
+);
 
-    final desde = DateTime.utc(
-      inicioSemanaArgentina.year,
-      inicioSemanaArgentina.month,
-      inicioSemanaArgentina.day,
-      3,
-    );
+final desde =
+    ArgentinaDateUtils.inicioDiaUtc(inicioSemanaArgentina);
 
-    final hasta = desde
-        .add(const Duration(days: 7))
-        .subtract(const Duration(milliseconds: 1));
+final hastaExclusivo =
+    desde.add(const Duration(days: 7));
 
     final respuesta = await Supabase.instance.client
         .from('pedido_detalles')
@@ -199,10 +186,10 @@ Future<void> _cargarSemana() async {
           'pedidos.fecha_finalizacion',
           desde.toIso8601String(),
         )
-        .lte(
-          'pedidos.fecha_finalizacion',
-          hasta.toIso8601String(),
-        );
+        .lt(
+  'pedidos.fecha_finalizacion',
+  hastaExclusivo.toIso8601String(),
+);
 
     final detallesRespuesta =
     List<Map<String, dynamic>>.from(respuesta);
@@ -282,21 +269,11 @@ Future<void> _cargarPersonalizado() async {
   });
 
   try {
-    final desde = DateTime.utc(
-      fechaDesde.year,
-      fechaDesde.month,
-      fechaDesde.day,
-      3,
-    );
+    final desde =
+    ArgentinaDateUtils.inicioDiaUtc(fechaDesde);
 
-    final hasta = DateTime.utc(
-      fechaHasta.year,
-      fechaHasta.month,
-      fechaHasta.day,
-      3,
-    )
-        .add(const Duration(days: 1))
-        .subtract(const Duration(milliseconds: 1));
+final hastaExclusivo =
+    ArgentinaDateUtils.finDiaExclusivoUtc(fechaHasta);
 
     final respuesta = await Supabase.instance.client
         .from('pedido_detalles')
@@ -326,9 +303,9 @@ Future<void> _cargarPersonalizado() async {
           'pedidos.fecha_finalizacion',
           desde.toIso8601String(),
         )
-        .lte(
-          'pedidos.fecha_finalizacion',
-          hasta.toIso8601String(),
+        .lt(
+  'pedidos.fecha_finalizacion',
+  hastaExclusivo.toIso8601String(),
         );
 
     final detallesRespuesta =
