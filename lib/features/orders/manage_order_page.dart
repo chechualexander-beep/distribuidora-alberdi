@@ -4,10 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class ManageOrderPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
 
-  const ManageOrderPage({
-    super.key,
-    required this.pedido,
-  });
+  const ManageOrderPage({super.key, required this.pedido});
 
   @override
   State<ManageOrderPage> createState() => _ManageOrderPageState();
@@ -19,7 +16,7 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
   String? _error;
 
   String _estado = 'pendiente';
-String? _modoEntrega;
+  String? _modoEntrega;
   List<Map<String, dynamic>> _detalles = [];
 
   final Map<String, TextEditingController> _entregadosControllers = {};
@@ -46,8 +43,7 @@ String? _modoEntrega;
     try {
       final respuesta = await Supabase.instance.client
           .from('pedido_detalles')
-          .select(
-            '''
+          .select('''
             id,
             pedido_id,
 producto_id,
@@ -66,21 +62,18 @@ cantidad_entregada,
               comision_promo,
               comision_interior
             )
-            ''',
-          )
+            ''')
           .eq('pedido_id', widget.pedido['id']);
 
       if (!mounted) return;
 
-      final detalles =
-          List<Map<String, dynamic>>.from(respuesta);
+      final detalles = List<Map<String, dynamic>>.from(respuesta);
 
       for (final detalle in detalles) {
         final id = detalle['id'].toString();
 
-        final entregada = double.tryParse(
-              detalle['cantidad_entregada']?.toString() ?? '0',
-            ) ??
+        final entregada =
+            double.tryParse(detalle['cantidad_entregada']?.toString() ?? '0') ??
             0;
 
         _entregadosControllers[id] = TextEditingController(
@@ -109,40 +102,35 @@ cantidad_entregada,
 
     return valor.toStringAsFixed(2);
   }
-bool _esAgregadoEnEntrega(Map<String, dynamic> detalle) {
-  return detalle['agregado_en_entrega_local'] == true;
-}
-void _quitarProductoAgregado(Map<String, dynamic> detalle) {
-  if (!_esAgregadoEnEntrega(detalle)) return;
 
-  final id = detalle['id'].toString();
-
-  _entregadosControllers.remove(id)?.dispose();
-
-  setState(() {
-    _detalles.remove(detalle);
-  });
-}
-
-  double _cantidadPedida(Map<String, dynamic> detalle) {
-  final cantidadFacturada = detalle['cantidad_facturada'];
-
-  if (cantidadFacturada != null) {
-    return double.tryParse(
-          cantidadFacturada.toString(),
-        ) ??
-        0;
+  bool _esAgregadoEnEntrega(Map<String, dynamic> detalle) {
+    return detalle['agregado_en_entrega_local'] == true;
   }
 
-  return double.tryParse(
-        detalle['cantidad']?.toString() ?? '',
-      ) ??
-      0;
-}
+  void _quitarProductoAgregado(Map<String, dynamic> detalle) {
+    if (!_esAgregadoEnEntrega(detalle)) return;
+
+    final id = detalle['id'].toString();
+
+    _entregadosControllers.remove(id)?.dispose();
+
+    setState(() {
+      _detalles.remove(detalle);
+    });
+  }
+
+  double _cantidadPedida(Map<String, dynamic> detalle) {
+    final cantidadFacturada = detalle['cantidad_facturada'];
+
+    if (cantidadFacturada != null) {
+      return double.tryParse(cantidadFacturada.toString()) ?? 0;
+    }
+
+    return double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+  }
 
   double _cantidadEntregada(Map<String, dynamic> detalle) {
     final id = detalle['id'].toString();
-
 
     return double.tryParse(
           _entregadosControllers[id]?.text.replaceAll(',', '.') ?? '0',
@@ -160,18 +148,13 @@ void _quitarProductoAgregado(Map<String, dynamic> detalle) {
   }
 
   double _precio(Map<String, dynamic> detalle) {
-    return double.tryParse(
-          detalle['precio_unitario']?.toString() ?? '0',
-        ) ??
-        0;
+    return double.tryParse(detalle['precio_unitario']?.toString() ?? '0') ?? 0;
   }
 
   double _porcentajeComision(Map<String, dynamic> detalle) {
-    final producto =
-        detalle['productos'] as Map<String, dynamic>?;
+    final producto = detalle['productos'] as Map<String, dynamic>?;
 
-    final tipoPrecio =
-        detalle['tipo_precio']?.toString() ?? 'normal';
+    final tipoPrecio = detalle['tipo_precio']?.toString() ?? 'normal';
 
     dynamic valor;
 
@@ -196,31 +179,32 @@ void _quitarProductoAgregado(Map<String, dynamic> detalle) {
 
     return entregada * precio * porcentaje / 100;
   }
-  double _precioProductoSegunLista(
-  Map<String, dynamic> producto,
-  String tipoPrecio,
-) {
-  dynamic valor;
 
-  switch (tipoPrecio) {
-    case 'promo':
-      valor = producto['precio_promo'];
-      break;
-    case 'interior':
-      valor = producto['precio_interior'];
-      break;
-    default:
-      valor = producto['precio_normal'];
+  double _precioProductoSegunLista(
+    Map<String, dynamic> producto,
+    String tipoPrecio,
+  ) {
+    dynamic valor;
+
+    switch (tipoPrecio) {
+      case 'promo':
+        valor = producto['precio_promo'];
+        break;
+      case 'interior':
+        valor = producto['precio_interior'];
+        break;
+      default:
+        valor = producto['precio_normal'];
+    }
+
+    return double.tryParse(valor?.toString() ?? '') ?? 0;
   }
 
-  return double.tryParse(valor?.toString() ?? '') ?? 0;
-}
-
-Future<void> _agregarProductoEnEntrega() async {
-  try {
-    final respuesta = await Supabase.instance.client
-        .from('productos')
-        .select('''
+  Future<void> _agregarProductoEnEntrega() async {
+    try {
+      final respuesta = await Supabase.instance.client
+          .from('productos')
+          .select('''
           id,
           nombre,
           codigo_original,
@@ -232,239 +216,230 @@ Future<void> _agregarProductoEnEntrega() async {
           comision_promo,
           comision_interior
         ''')
-        .eq('activo', true)
-        .order('nombre');
+          .eq('activo', true)
+          .order('nombre');
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    final idsYaIncluidos = _detalles
-        .map((detalle) => detalle['producto_id']?.toString())
-        .whereType<String>()
-        .toSet();
+      final idsYaIncluidos = _detalles
+          .map((detalle) => detalle['producto_id']?.toString())
+          .whereType<String>()
+          .toSet();
 
-    final productosDisponibles =
-        List<Map<String, dynamic>>.from(respuesta)
-            .where(
-              (producto) =>
-                  !idsYaIncluidos.contains(producto['id']?.toString()),
-            )
-            .toList();
+      final productosDisponibles = List<Map<String, dynamic>>.from(respuesta)
+          .where(
+            (producto) => !idsYaIncluidos.contains(producto['id']?.toString()),
+          )
+          .toList();
 
-    final productoSeleccionado =
-        await showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        String busqueda = '';
+      final productoSeleccionado = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) {
+          String busqueda = '';
 
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final texto = busqueda
-                .toLowerCase()
-                .replaceAll('á', 'a')
-                .replaceAll('é', 'e')
-                .replaceAll('í', 'i')
-                .replaceAll('ó', 'o')
-                .replaceAll('ú', 'u');
+          return StatefulBuilder(
+            builder: (context, setModalState) {
+              final texto = busqueda
+                  .toLowerCase()
+                  .replaceAll('á', 'a')
+                  .replaceAll('é', 'e')
+                  .replaceAll('í', 'i')
+                  .replaceAll('ó', 'o')
+                  .replaceAll('ú', 'u');
 
-            final filtrados = productosDisponibles.where((producto) {
-              final nombre = producto['nombre']
-                      ?.toString()
-                      .toLowerCase()
-                      .replaceAll('á', 'a')
-                      .replaceAll('é', 'e')
-                      .replaceAll('í', 'i')
-                      .replaceAll('ó', 'o')
-                      .replaceAll('ú', 'u') ??
-                  '';
+              final filtrados = productosDisponibles.where((producto) {
+                final nombre =
+                    producto['nombre']
+                        ?.toString()
+                        .toLowerCase()
+                        .replaceAll('á', 'a')
+                        .replaceAll('é', 'e')
+                        .replaceAll('í', 'i')
+                        .replaceAll('ó', 'o')
+                        .replaceAll('ú', 'u') ??
+                    '';
 
-              final codigo =
-                  producto['codigo_original']?.toString().toLowerCase() ??
-                      '';
+                final codigo =
+                    producto['codigo_original']?.toString().toLowerCase() ?? '';
 
-              return nombre.contains(texto) || codigo.contains(texto);
-            }).toList();
+                return nombre.contains(texto) || codigo.contains(texto);
+              }).toList();
 
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 16,
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-                ),
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.75,
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Agregar producto a la entrega',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+              return SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 16,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                  ),
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.75,
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Agregar producto a la entrega',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        autofocus: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Buscar producto',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
+                        const SizedBox(height: 16),
+                        TextField(
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Buscar producto',
+                            prefixIcon: Icon(Icons.search),
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (valor) {
+                            setModalState(() {
+                              busqueda = valor.trim();
+                            });
+                          },
                         ),
-                        onChanged: (valor) {
-                          setModalState(() {
-                            busqueda = valor.trim();
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: filtrados.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'No hay productos disponibles.',
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: filtrados.isEmpty
+                              ? const Center(
+                                  child: Text('No hay productos disponibles.'),
+                                )
+                              : ListView.separated(
+                                  itemCount: filtrados.length,
+                                  separatorBuilder: (_, _) =>
+                                      const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final producto = filtrados[index];
+
+                                    return ListTile(
+                                      title: Text(
+                                        producto['nombre']?.toString() ??
+                                            'Producto sin nombre',
+                                      ),
+                                      subtitle: Text(
+                                        'Código: ${producto['codigo_original'] ?? '-'}',
+                                      ),
+                                      trailing: const Icon(
+                                        Icons.add_circle_outline,
+                                      ),
+                                      onTap: () {
+                                        Navigator.pop(context, producto);
+                                      },
+                                    );
+                                  },
                                 ),
-                              )
-                            : ListView.separated(
-                                itemCount: filtrados.length,
-                                separatorBuilder: (_, _) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (context, index) {
-                                  final producto = filtrados[index];
-
-                                  return ListTile(
-                                    title: Text(
-                                      producto['nombre']?.toString() ??
-                                          'Producto sin nombre',
-                                    ),
-                                    subtitle: Text(
-                                      'Código: ${producto['codigo_original'] ?? '-'}',
-                                    ),
-                                    trailing:
-                                        const Icon(Icons.add_circle_outline),
-                                    onTap: () {
-                                      Navigator.pop(context, producto);
-                                    },
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+              );
+            },
+          );
+        },
+      );
+
+      if (productoSeleccionado == null || !mounted) return;
+
+      final tipoPrecio = await showDialog<String>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Lista de precios'),
+            content: Text(
+              productoSeleccionado['nombre']?.toString() ??
+                  'Producto seleccionado',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('CANCELAR'),
               ),
-            );
-          },
-        );
-      },
-    );
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'normal'),
+                child: const Text('NORMAL'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'promo'),
+                child: const Text('PROMO'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'interior'),
+                child: const Text('INTERIOR'),
+              ),
+            ],
+          );
+        },
+      );
 
-    if (productoSeleccionado == null || !mounted) return;
+      if (tipoPrecio == null || !mounted) return;
 
-    final tipoPrecio = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Lista de precios'),
-          content: Text(
-            productoSeleccionado['nombre']?.toString() ??
-                'Producto seleccionado',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('CANCELAR'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'normal'),
-              child: const Text('NORMAL'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'promo'),
-              child: const Text('PROMO'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'interior'),
-              child: const Text('INTERIOR'),
-            ),
-          ],
-        );
-      },
-    );
+      final productoId = productoSeleccionado['id'].toString();
+      final idLocal = 'agregado_$productoId';
 
-    if (tipoPrecio == null || !mounted) return;
+      final precio = _precioProductoSegunLista(
+        productoSeleccionado,
+        tipoPrecio,
+      );
 
-    final productoId = productoSeleccionado['id'].toString();
-    final idLocal = 'agregado_$productoId';
+      _entregadosControllers[idLocal] = TextEditingController(text: '1');
 
-    final precio = _precioProductoSegunLista(
-      productoSeleccionado,
-      tipoPrecio,
-    );
-
-    _entregadosControllers[idLocal] = TextEditingController(
-      text: '1',
-    );
-
-    setState(() {
-      _detalles.add({
-        'id': idLocal,
-        'pedido_id': widget.pedido['id'],
-        'producto_id': productoId,
-        'cantidad': 0,
-        'cantidad_facturada': 0,
-        'cantidad_entregada': 1,
-        'cantidad_no_entregada': 0,
-        'precio_unitario': precio,
-        'tipo_precio': tipoPrecio,
-        'costo_unitario':
-            double.tryParse(
-              productoSeleccionado['costo']?.toString() ?? '',
-            ) ??
-            0,
-        'productos': productoSeleccionado,
-        'agregado_en_entrega_local': true,
+      setState(() {
+        _detalles.add({
+          'id': idLocal,
+          'pedido_id': widget.pedido['id'],
+          'producto_id': productoId,
+          'cantidad': 0,
+          'cantidad_facturada': 0,
+          'cantidad_entregada': 1,
+          'cantidad_no_entregada': 0,
+          'precio_unitario': precio,
+          'tipo_precio': tipoPrecio,
+          'costo_unitario':
+              double.tryParse(
+                productoSeleccionado['costo']?.toString() ?? '',
+              ) ??
+              0,
+          'productos': productoSeleccionado,
+          'agregado_en_entrega_local': true,
+        });
       });
-    });
-  } catch (_) {
-    if (!mounted) return;
+    } catch (_) {
+      if (!mounted) return;
 
-    _mostrarMensaje(
-      'No se pudieron cargar los productos.',
-    );
+      _mostrarMensaje('No se pudieron cargar los productos.');
+    }
   }
-}
-  
 
   String _resultadoEntrega() {
-  double totalPedido = 0;
-  double totalEntregadoOriginal = 0;
-  double totalEntregadoGeneral = 0;
+    double totalPedido = 0;
+    double totalEntregadoOriginal = 0;
+    double totalEntregadoGeneral = 0;
 
-  for (final detalle in _detalles) {
-    final entregada = _cantidadEntregada(detalle);
+    for (final detalle in _detalles) {
+      final entregada = _cantidadEntregada(detalle);
 
-    totalEntregadoGeneral += entregada;
+      totalEntregadoGeneral += entregada;
 
-    if (_esAgregadoEnEntrega(detalle)) {
-      continue;
+      if (_esAgregadoEnEntrega(detalle)) {
+        continue;
+      }
+
+      totalPedido += _cantidadPedida(detalle);
+      totalEntregadoOriginal += entregada;
     }
 
-    totalPedido += _cantidadPedida(detalle);
-    totalEntregadoOriginal += entregada;
-  }
+    if (totalEntregadoGeneral <= 0) {
+      return 'no_entregado';
+    }
 
-  if (totalEntregadoGeneral <= 0) {
-    return 'no_entregado';
-  }
+    if (totalEntregadoOriginal >= totalPedido) {
+      return 'entregado';
+    }
 
-  if (totalEntregadoOriginal >= totalPedido) {
-    return 'entregado';
+    return 'parcial';
   }
-
-  return 'parcial';
-}
 
   String _nombreResultado(String resultado) {
     switch (resultado) {
@@ -498,182 +473,178 @@ Future<void> _agregarProductoEnEntrega() async {
     return '\$${buffer.toString().split('').reversed.join()}';
   }
 
-  bool _validarCantidades() {
-  for (final detalle in _detalles) {
-    final entregada = _cantidadEntregada(detalle);
+  double _totalEntregadoActual() {
+    return _detalles.fold<double>(0, (total, detalle) {
+      final cantidadEntregada = _cantidadEntregada(detalle);
+      final precio = _precio(detalle);
 
-    if (_esAgregadoEnEntrega(detalle)) {
-      if (entregada <= 0) {
+      return total + (cantidadEntregada * precio);
+    });
+  }
+
+  bool _validarCantidades() {
+    for (final detalle in _detalles) {
+      final entregada = _cantidadEntregada(detalle);
+
+      if (_esAgregadoEnEntrega(detalle)) {
+        if (entregada <= 0) {
+          _mostrarMensaje(
+            'La cantidad del producto agregado debe ser mayor que 0.',
+          );
+          return false;
+        }
+
+        continue;
+      }
+
+      final pedida = _cantidadPedida(detalle);
+
+      if (entregada < 0 || entregada > pedida) {
         _mostrarMensaje(
-          'La cantidad del producto agregado debe ser mayor que 0.',
+          'La cantidad entregada no puede ser menor que 0 ni mayor que la pedida.',
         );
         return false;
       }
-
-      continue;
     }
 
-    final pedida = _cantidadPedida(detalle);
-
-    if (entregada < 0 || entregada > pedida) {
-      _mostrarMensaje(
-        'La cantidad entregada no puede ser menor que 0 ni mayor que la pedida.',
-      );
-      return false;
-    }
+    return true;
   }
-
-  return true;
-}
 
   Future<void> _guardarGestion() async {
     if (_guardando) return;
-if (_modoEntrega == null) {
-  _mostrarMensaje(
-    'Seleccioná cómo fue la entrega antes de guardar.',
-  );
-  return;
-}
+    if (_modoEntrega == null) {
+      _mostrarMensaje('Seleccioná cómo fue la entrega antes de guardar.');
+      return;
+    }
     if (!_validarCantidades()) return;
 
     final resultado = _resultadoEntrega();
 
-final totalEntregado = _detalles.fold<double>(
-  0,
-  (total, detalle) {
-    final cantidadEntregada = _cantidadEntregada(detalle);
-    final precio = _precio(detalle);
+    final totalEntregado = _totalEntregadoActual();
+    String? medioPagoCompleto;
+    double? importePagoParcial;
+    String? medioPagoParcial;
 
-    return total + (cantidadEntregada * precio);
-  },
-);
-String? medioPagoCompleto;
-double? importePagoParcial;
-String? medioPagoParcial;
-
-if (resultado != 'no_entregado' && totalEntregado > 0) {
-  medioPagoCompleto = await showDialog<String>(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text('¿Cómo quedó el pago?'),
-        content: Text(
-  'Mercadería entregada: ${_formatearPrecio(totalEntregado)}\n\n'
-  '¿Cómo pagó el cliente lo entregado?',
-),
-        actions: [
-          TextButton(
-  onPressed: () => Navigator.pop(context, null),
-  child: const Text('CANCELAR'),
-),
-          TextButton(
-           onPressed: () => Navigator.pop(context, 'Parcial'),
-            child: const Text('DEJÓ SALDO'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, 'Efectivo'),
-            child: const Text('EFECTIVO'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, 'Transferencia'),
-            child: const Text('TRANSFERENCIA'),
-          ),
-        ],
+    if (resultado != 'no_entregado' && totalEntregado > 0) {
+      medioPagoCompleto = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('¿Cómo quedó el pago?'),
+            content: Text(
+              'Mercadería entregada: ${_formatearPrecio(totalEntregado)}\n\n'
+              '¿Cómo pagó el cliente lo entregado?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, null),
+                child: const Text('CANCELAR'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'Parcial'),
+                child: const Text('DEJÓ SALDO'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'Efectivo'),
+                child: const Text('EFECTIVO'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'Transferencia'),
+                child: const Text('TRANSFERENCIA'),
+              ),
+            ],
+          );
+        },
       );
-    },
-  );
-}
-if (resultado != 'no_entregado' &&
-    medioPagoCompleto == null) {
-  return;
-}
-if (!mounted) return;
-if (resultado != 'no_entregado' &&
-    medioPagoCompleto == 'Parcial') {
-  final controller = TextEditingController();
-
-  final importe = await showDialog<double>(
-    context: context,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('Pago parcial'),
-        content: TextField(
-          controller: controller,
-          keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Importe pagado',
-            prefixText: r'$ ',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('NO PAGÓ NADA'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final valor = double.tryParse(
-                controller.text.trim().replaceAll(',', '.'),
-              );
-
-              if (valor == null || valor <= 0) return;
-
-              Navigator.pop(dialogContext, valor);
-            },
-            child: const Text('CONTINUAR'),
-          ),
-        ],
-      );
-    },
-  );
-
-  await Future<void>.delayed(const Duration(milliseconds: 300));
-
-if (!mounted) return;
-
-controller.dispose();
-
-if (importe != null) {
-    importePagoParcial = importe;
-
-    medioPagoParcial = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Medio de pago'),
-          content: Text(
-            'Importe recibido: \$${importe.toStringAsFixed(0)}',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('CANCELAR'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'Efectivo'),
-              child: const Text('EFECTIVO'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'Transferencia'),
-              child: const Text('TRANSFERENCIA'),
-            ),
-          ],
-        );
-      },
-    );
-
+    }
+    if (resultado != 'no_entregado' && medioPagoCompleto == null) {
+      return;
+    }
     if (!mounted) return;
-  }
-}
+    if (resultado != 'no_entregado' && medioPagoCompleto == 'Parcial') {
+      final controller = TextEditingController();
+
+      final importe = await showDialog<double>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Pago parcial'),
+            content: TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Importe pagado',
+                prefixText: r'$ ',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('NO PAGÓ NADA'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final valor = double.tryParse(
+                    controller.text.trim().replaceAll(',', '.'),
+                  );
+
+                  if (valor == null || valor <= 0) return;
+
+                  Navigator.pop(dialogContext, valor);
+                },
+                child: const Text('CONTINUAR'),
+              ),
+            ],
+          );
+        },
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      if (!mounted) return;
+
+      controller.dispose();
+
+      if (importe != null) {
+        importePagoParcial = importe;
+
+        medioPagoParcial = await showDialog<String>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Medio de pago'),
+              content: Text(
+                'Importe recibido: \$${importe.toStringAsFixed(0)}',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('CANCELAR'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'Efectivo'),
+                  child: const Text('EFECTIVO'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'Transferencia'),
+                  child: const Text('TRANSFERENCIA'),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (!mounted) return;
+      }
+    }
 
     if ((resultado == 'no_entregado' || resultado == 'parcial') &&
         _motivoController.text.trim().isEmpty) {
-      _mostrarMensaje(
-        'Ingresá un motivo para la mercadería no entregada.',
-      );
+      _mostrarMensaje('Ingresá un motivo para la mercadería no entregada.');
       return;
     }
 
@@ -683,68 +654,62 @@ if (importe != null) {
 
     try {
       final detallesGestion = _detalles.map((detalle) {
-  final esAgregado = _esAgregadoEnEntrega(detalle);
+        final esAgregado = _esAgregadoEnEntrega(detalle);
 
-  final entregada = _cantidadEntregada(detalle);
-  final noEntregada =
-      esAgregado ? 0 : _cantidadNoEntregada(detalle);
+        final entregada = _cantidadEntregada(detalle);
+        final noEntregada = esAgregado ? 0 : _cantidadNoEntregada(detalle);
 
-  final porcentaje = _porcentajeComision(detalle);
-  final importeComision = _importeComision(detalle);
+        final porcentaje = _porcentajeComision(detalle);
+        final importeComision = _importeComision(detalle);
 
-  return <String, dynamic>{
-    'id': esAgregado ? null : detalle['id'],
-    'producto_id': detalle['producto_id'],
-    'agregado_en_entrega': esAgregado,
-    'cantidad_entregada': entregada,
-    'cantidad_no_entregada': noEntregada,
-    'precio_unitario': _precio(detalle),
-    'costo_unitario':
-        double.tryParse(
-          detalle['costo_unitario']?.toString() ?? '',
-        ) ??
-        0,
-    'porcentaje_comision': porcentaje,
-    'importe_comision': importeComision,
-    'tipo_precio':
-        detalle['tipo_precio']?.toString() ?? 'normal',
-  };
-}).toList();
+        return <String, dynamic>{
+          'id': esAgregado ? null : detalle['id'],
+          'producto_id': detalle['producto_id'],
+          'agregado_en_entrega': esAgregado,
+          'cantidad_entregada': entregada,
+          'cantidad_no_entregada': noEntregada,
+          'precio_unitario': _precio(detalle),
+          'costo_unitario':
+              double.tryParse(detalle['costo_unitario']?.toString() ?? '') ?? 0,
+          'porcentaje_comision': porcentaje,
+          'importe_comision': importeComision,
+          'tipo_precio': detalle['tipo_precio']?.toString() ?? 'normal',
+        };
+      }).toList();
 
-String tipoPago = 'sin_pago';
-double? importePago;
-String? medioPago;
+      String tipoPago = 'sin_pago';
+      double? importePago;
+      String? medioPago;
 
-if (importePagoParcial != null &&
-    medioPagoParcial != null &&
-    importePagoParcial > 0) {
-  tipoPago = 'parcial';
-  importePago = importePagoParcial;
-  medioPago = medioPagoParcial;
-} else if (resultado != 'no_entregado' &&
-    totalEntregado > 0 &&
-    medioPagoCompleto != null &&
-    medioPagoCompleto != 'Parcial') {
-  tipoPago = 'completo';
-  medioPago = medioPagoCompleto;
-}
+      if (importePagoParcial != null &&
+          medioPagoParcial != null &&
+          importePagoParcial > 0) {
+        tipoPago = 'parcial';
+        importePago = importePagoParcial;
+        medioPago = medioPagoParcial;
+      } else if (resultado != 'no_entregado' &&
+          totalEntregado > 0 &&
+          medioPagoCompleto != null &&
+          medioPagoCompleto != 'Parcial') {
+        tipoPago = 'completo';
+        medioPago = medioPagoCompleto;
+      }
 
-await Supabase.instance.client.rpc(
-  'finalizar_gestion_pedido',
-  params: {
-    'p_pedido_id': widget.pedido['id'],
-    'p_estado': _estado,
-    'p_resultado_entrega': resultado,
-    'p_motivo_no_entrega':
-        resultado == 'entregado'
-            ? null
-            : _motivoController.text.trim(),
-    'p_detalles': detallesGestion,
-    'p_tipo_pago': tipoPago,
-    'p_importe_pago': importePago,
-    'p_medio_pago': medioPago,
-  },
-);
+      await Supabase.instance.client.rpc(
+        'finalizar_gestion_pedido',
+        params: {
+          'p_pedido_id': widget.pedido['id'],
+          'p_estado': _estado,
+          'p_resultado_entrega': resultado,
+          'p_motivo_no_entrega': resultado == 'entregado'
+              ? null
+              : _motivoController.text.trim(),
+          'p_detalles': detallesGestion,
+          'p_tipo_pago': tipoPago,
+          'p_importe_pago': importePago,
+          'p_medio_pago': medioPago,
+        },
+      );
 
       if (!mounted) return;
 
@@ -753,14 +718,9 @@ await Supabase.instance.client.rpc(
         barrierDismissible: false,
         builder: (context) {
           return AlertDialog(
-            icon: const Icon(
-              Icons.check_circle_outline,
-              size: 48,
-            ),
+            icon: const Icon(Icons.check_circle_outline, size: 48),
             title: const Text('Gestión guardada'),
-            content: Text(
-              'Resultado: ${_nombreResultado(resultado)}',
-            ),
+            content: Text('Resultado: ${_nombreResultado(resultado)}'),
             actions: [
               FilledButton(
                 onPressed: () {
@@ -777,13 +737,9 @@ await Supabase.instance.client.rpc(
 
       Navigator.of(context).pop(true);
     } on PostgrestException catch (error) {
-      _mostrarMensaje(
-        'No se pudo guardar: ${error.message}',
-      );
+      _mostrarMensaje('No se pudo guardar: ${error.message}');
     } catch (_) {
-      _mostrarMensaje(
-        'Ocurrió un error al guardar la gestión.',
-      );
+      _mostrarMensaje('Ocurrió un error al guardar la gestión.');
     } finally {
       if (mounted) {
         setState(() {
@@ -796,11 +752,9 @@ await Supabase.instance.client.rpc(
   void _mostrarMensaje(String mensaje) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   @override
@@ -816,44 +770,30 @@ await Supabase.instance.client.rpc(
 
   @override
   Widget build(BuildContext context) {
-    final cliente =
-        widget.pedido['clientes'] as Map<String, dynamic>?;
+    final cliente = widget.pedido['clientes'] as Map<String, dynamic>?;
 
     final clienteNombre =
-        cliente?['nombre_comercio']?.toString() ??
-            'Cliente sin nombre';
+        cliente?['nombre_comercio']?.toString() ?? 'Cliente sin nombre';
 
     if (_cargando) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Gestionar pedido'),
-        ),
-        body: const Center(
-          child: CircularProgressIndicator(),
-        ),
+        appBar: AppBar(title: const Text('Gestionar pedido')),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Gestionar pedido'),
-        ),
+        appBar: AppBar(title: const Text('Gestionar pedido')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
-                  Icons.error_outline,
-                  size: 60,
-                ),
+                const Icon(Icons.error_outline, size: 60),
                 const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                ),
+                Text(_error!, textAlign: TextAlign.center),
                 const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: _cargarDetalles,
@@ -867,11 +807,10 @@ await Supabase.instance.client.rpc(
     }
 
     final resultado = _resultadoEntrega();
+    final totalEntregadoActual = _totalEntregadoActual();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gestionar pedido'),
-      ),
+      appBar: AppBar(title: const Text('Gestionar pedido')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -881,12 +820,7 @@ await Supabase.instance.client.rpc(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'Cliente',
-                    style: TextStyle(
-                      color: Colors.grey,
-                    ),
-                  ),
+                  const Text('Cliente', style: TextStyle(color: Colors.grey)),
                   const SizedBox(height: 4),
                   Text(
                     clienteNombre,
@@ -895,16 +829,17 @@ await Supabase.instance.client.rpc(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (widget.pedido['tipo_operacion']?.toString() == 'venta_directa') ...[
-  const SizedBox(height: 8),
-  const Text(
-    'VENTA DIRECTA',
-    style: TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.bold,
-    ),
-  ),
-],
+                  if (widget.pedido['tipo_operacion']?.toString() ==
+                      'venta_directa') ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'VENTA DIRECTA',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 18),
                   DropdownButtonFormField<String>(
                     initialValue: _estado,
@@ -939,253 +874,261 @@ await Supabase.instance.client.rpc(
             ),
           ),
           const SizedBox(height: 16),
-      const Text(
-  'Mercadería entregada',
-  style: TextStyle(
-    fontSize: 20,
-    fontWeight: FontWeight.bold,
-  ),
-),
-const SizedBox(height: 10),
+          const Text(
+            'Mercadería entregada',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
 
-Card(
-  child: Column(
-    children: [
-      RadioListTile<String>(
-        value: 'completo',
-        groupValue: _modoEntrega,
-        title: const Text('TODO ENTREGADO'),
-        subtitle: const Text(
-          'El cliente recibió todo el pedido',
-        ),
-        onChanged: (valor) {
-          if (valor == null) return;
+          Card(
+            child: Column(
+              children: [
+                RadioListTile<String>(
+                  value: 'completo',
+                  groupValue: _modoEntrega,
+                  title: const Text('TODO ENTREGADO'),
+                  subtitle: const Text('El cliente recibió todo el pedido'),
+                  onChanged: (valor) {
+                    if (valor == null) return;
 
-          setState(() {
-            _modoEntrega = valor;
+                    setState(() {
+                      _modoEntrega = valor;
 
-            for (final detalle in _detalles) {
+                      for (final detalle in _detalles) {
+                        final id = detalle['id'].toString();
+                        final cantidad = _cantidadPedida(detalle);
+
+                        _entregadosControllers[id]?.text = _numeroLimpio(
+                          cantidad,
+                        );
+                      }
+                    });
+                  },
+                ),
+
+                const Divider(height: 1),
+
+                RadioListTile<String>(
+                  value: 'rechazado',
+                  groupValue: _modoEntrega,
+                  title: const Text('TODO NO ENTREGADO'),
+                  subtitle: const Text('El cliente no recibió ningún producto'),
+                  onChanged: (valor) {
+                    if (valor == null) return;
+
+                    setState(() {
+                      _modoEntrega = valor;
+
+                      for (final detalle in _detalles) {
+                        final id = detalle['id'].toString();
+                        _entregadosControllers[id]?.text = '0';
+                      }
+                    });
+                  },
+                ),
+
+                const Divider(height: 1),
+
+                RadioListTile<String>(
+                  value: 'parcial',
+                  groupValue: _modoEntrega,
+                  title: const Text('ENTREGA PARCIAL'),
+                  subtitle: const Text(
+                    'Indicar cantidades producto por producto',
+                  ),
+                  onChanged: (valor) {
+                    if (valor == null) return;
+
+                    setState(() {
+                      _modoEntrega = valor;
+
+                      for (final detalle in _detalles) {
+                        if (_esAgregadoEnEntrega(detalle)) {
+                          continue;
+                        }
+
+                        final id = detalle['id'].toString();
+                        final cantidad = _cantidadPedida(detalle);
+
+                        _entregadosControllers[id]?.text = _numeroLimpio(
+                          cantidad,
+                        );
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          if (_modoEntrega == 'parcial')
+            ..._detalles.map((detalle) {
+              final producto = detalle['productos'] as Map<String, dynamic>?;
+
+              final nombre =
+                  producto?['nombre']?.toString() ?? 'Producto sin nombre';
+
               final id = detalle['id'].toString();
-              final cantidad = _cantidadPedida(detalle);
+              final esAgregado = _esAgregadoEnEntrega(detalle);
 
-              _entregadosControllers[id]?.text =
-                  _numeroLimpio(cantidad);
-            }
-          });
-        },
-      ),
+              final pedida = _cantidadPedida(detalle);
+              final noEntregada = _cantidadNoEntregada(detalle);
 
-      const Divider(height: 1),
+              final porcentaje = _porcentajeComision(detalle);
 
-      RadioListTile<String>(
-        value: 'rechazado',
-        groupValue: _modoEntrega,
-        title: const Text('TODO NO ENTREGADO'),
-        subtitle: const Text(
-          'El cliente no recibió ningún producto',
-        ),
-        onChanged: (valor) {
-          if (valor == null) return;
+              final importe = _importeComision(detalle);
 
-          setState(() {
-            _modoEntrega = valor;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              nombre,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          if (esAgregado)
+                            IconButton(
+                              tooltip: 'Quitar producto agregado',
+                              onPressed: () => _quitarProductoAgregado(detalle),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.orange,
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (esAgregado) ...[
+                        const SizedBox(height: 4),
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.add_circle_outline,
+                              size: 17,
+                              color: Colors.orange,
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'Agregado durante la entrega',
+                              style: TextStyle(
+                                color: Colors.orange,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Text('Cantidad pedida: ${_numeroLimpio(pedida)}'),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _entregadosControllers[id],
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Cantidad entregada',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (_) {
+                          setState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      Text('No entregada: ${_numeroLimpio(noEntregada)}'),
+                      const SizedBox(height: 8),
+                      Text('Precio: ${_formatearPrecio(_precio(detalle))}'),
+                      const SizedBox(height: 4),
+                      Text('Comisión: ${_numeroLimpio(porcentaje)}%'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Comisión generada: ${_formatearPrecio(importe)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          if (_modoEntrega == 'parcial')
+            Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 16),
+              child: OutlinedButton.icon(
+                onPressed: _guardando ? null : _agregarProductoEnEntrega,
+                icon: const Icon(Icons.add_shopping_cart_outlined),
+                label: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('AGREGAR PRODUCTO'),
+                ),
+              ),
+            ),
 
-            for (final detalle in _detalles) {
-              final id = detalle['id'].toString();
-              _entregadosControllers[id]?.text = '0';
-            }
-          });
-        },
-      ),
-
-      const Divider(height: 1),
-
-      RadioListTile<String>(
-        value: 'parcial',
-        groupValue: _modoEntrega,
-        title: const Text('ENTREGA PARCIAL'),
-        subtitle: const Text(
-          'Indicar cantidades producto por producto',
-        ),
-        onChanged: (valor) {
-  if (valor == null) return;
-
-  setState(() {
-    _modoEntrega = valor;
-
-    for (final detalle in _detalles) {
-      if (_esAgregadoEnEntrega(detalle)) {
-        continue;
-      }
-
-      final id = detalle['id'].toString();
-      final cantidad = _cantidadPedida(detalle);
-
-      _entregadosControllers[id]?.text =
-          _numeroLimpio(cantidad);
-    }
-  });
-},
-      ),
-    ],
-  ),
-),
-
-const SizedBox(height: 16),
-
-if (_modoEntrega == 'parcial')
-  ..._detalles.map((detalle) {
-            final producto =
-                detalle['productos'] as Map<String, dynamic>?;
-
-            final nombre =
-                producto?['nombre']?.toString() ??
-                    'Producto sin nombre';
-
-            final id = detalle['id'].toString();
-            final esAgregado = _esAgregadoEnEntrega(detalle);
-
-            final pedida = _cantidadPedida(detalle);
-            final noEntregada =
-                _cantidadNoEntregada(detalle);
-
-            final porcentaje =
-                _porcentajeComision(detalle);
-
-            final importe =
-                _importeComision(detalle);
-
-            return Card(
-              margin: const EdgeInsets.only(bottom: 10),
+          const SizedBox(height: 12),
+          if (_modoEntrega != null) ...[
+            Card(
               child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                padding: const EdgeInsets.all(16),
+                child: Row(
                   children: [
-                    Row(
-  children: [
-    Expanded(
-      child: Text(
-        nombre,
-        style: const TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    ),
-    if (esAgregado)
-      IconButton(
-        tooltip: 'Quitar producto agregado',
-        onPressed: () => _quitarProductoAgregado(detalle),
-        icon: const Icon(
-          Icons.delete_outline,
-          color: Colors.orange,
-        ),
-      ),
-  ],
-),
-if (esAgregado) ...[
-  const SizedBox(height: 4),
-  const Row(
-    children: [
-      Icon(
-        Icons.add_circle_outline,
-        size: 17,
-        color: Colors.orange,
-      ),
-      SizedBox(width: 6),
-      Text(
-        'Agregado durante la entrega',
-        style: TextStyle(
-          color: Colors.orange,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ],
-  ),
-],
-                    const SizedBox(height: 8),
-                    Text(
-                      'Cantidad pedida: ${_numeroLimpio(pedida)}',
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _entregadosControllers[id],
-                      keyboardType:
-                          const TextInputType.numberWithOptions(
-                        decimal: true,
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'TOTAL ACTUAL DE LA ENTREGA',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Se actualiza según la mercadería entregada',
+                            style: TextStyle(fontSize: 13, color: Colors.grey),
+                          ),
+                        ],
                       ),
-                      decoration: const InputDecoration(
-                        labelText: 'Cantidad entregada',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (_) {
-                        setState(() {});
-                      },
                     ),
-                    const SizedBox(height: 10),
                     Text(
-                      'No entregada: ${_numeroLimpio(noEntregada)}',
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Precio: ${_formatearPrecio(_precio(detalle))}',
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Comisión: ${_numeroLimpio(porcentaje)}%',
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Comisión generada: ${_formatearPrecio(importe)}',
+                      _formatearPrecio(totalEntregadoActual),
                       style: const TextStyle(
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
               ),
-            );
-          }),
-          if (_modoEntrega == 'parcial')
-  Padding(
-    padding: const EdgeInsets.only(top: 6, bottom: 16),
-    child: OutlinedButton.icon(
-      onPressed: _guardando ? null : _agregarProductoEnEntrega,
-      icon: const Icon(Icons.add_shopping_cart_outlined),
-      label: const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: Text('AGREGAR PRODUCTO'),
-      ),
-    ),
-  ),
-
-          const SizedBox(height: 12),
+            ),
+            const SizedBox(height: 12),
+          ],
 
           Card(
             child: ListTile(
               title: const Text(
                 'Resultado de entrega',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              subtitle: Text(
-                _nombreResultado(resultado),
-              ),
+              subtitle: Text(_nombreResultado(resultado)),
             ),
           ),
 
-          if (resultado == 'parcial' ||
-              resultado == 'no_entregado') ...[
+          if (resultado == 'parcial' || resultado == 'no_entregado') ...[
             const SizedBox(height: 12),
             TextField(
               controller: _motivoController,
               maxLines: 3,
               decoration: const InputDecoration(
                 labelText: 'Motivo de mercadería no entregada *',
-                hintText:
-                    'Ej.: cliente cerrado, rechazó parte del pedido...',
+                hintText: 'Ej.: cliente cerrado, rechazó parte del pedido...',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -1194,22 +1137,15 @@ if (esAgregado) ...[
           const SizedBox(height: 20),
 
           FilledButton.icon(
-            onPressed:
-                _guardando ? null : _guardarGestion,
+            onPressed: _guardando ? null : _guardarGestion,
             icon: _guardando
                 ? const SizedBox(
                     width: 22,
                     height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                    ),
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.save_outlined),
-            label: Text(
-              _guardando
-                  ? 'GUARDANDO...'
-                  : 'GUARDAR GESTIÓN',
-            ),
+            label: Text(_guardando ? 'GUARDANDO...' : 'GUARDAR GESTIÓN'),
           ),
 
           const SizedBox(height: 20),
