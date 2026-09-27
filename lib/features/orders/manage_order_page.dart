@@ -510,6 +510,65 @@ cantidad_entregada,
     return true;
   }
 
+  Future<void> _cancelarVentaDirecta() async {
+    if (_guardando) return;
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Cancelar venta directa'),
+          content: const Text(
+            '¿Seguro que querés cancelar esta venta directa?\n\n'
+            'La operación todavía no fue finalizada y será eliminada.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('VOLVER'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('CANCELAR VENTA'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmar != true) return;
+
+    setState(() {
+      _guardando = true;
+    });
+
+    try {
+      await Supabase.instance.client.rpc(
+        'eliminar_pedido_pendiente',
+        params: {'p_pedido_id': widget.pedido['id']},
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop(true);
+    } on PostgrestException catch (error) {
+      if (!mounted) return;
+
+      _mostrarMensaje('No se pudo cancelar la venta: ${error.message}');
+    } catch (_) {
+      if (!mounted) return;
+
+      _mostrarMensaje('Ocurrió un error al cancelar la venta directa.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _guardando = false;
+        });
+      }
+    }
+  }
+
   Future<void> _guardarGestion() async {
     if (_guardando) return;
     if (_modoEntrega == null) {
@@ -808,6 +867,16 @@ cantidad_entregada,
 
     final resultado = _resultadoEntrega();
     final totalEntregadoActual = _totalEntregadoActual();
+    final esVentaDirecta =
+        widget.pedido['tipo_operacion']?.toString() == 'venta_directa';
+
+    final facturado = widget.pedido['facturado'] == true;
+
+    final resultadoGuardado =
+        widget.pedido['resultado_entrega']?.toString() ?? 'pendiente';
+
+    final puedeCancelarVentaDirecta =
+        esVentaDirecta && !facturado && resultadoGuardado == 'pendiente';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Gestionar pedido')),
@@ -1133,7 +1202,17 @@ cantidad_entregada,
               ),
             ),
           ],
-
+          if (puedeCancelarVentaDirecta) ...[
+            OutlinedButton.icon(
+              onPressed: _guardando ? null : _cancelarVentaDirecta,
+              icon: const Icon(Icons.cancel_outlined),
+              label: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text('CANCELAR VENTA DIRECTA'),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           const SizedBox(height: 20),
 
           FilledButton.icon(
