@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'order_products_page.dart';
+import 'correct_operation_page.dart';
 
 class OrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
 
-  const OrderDetailPage({
-    super.key,
-    required this.pedido,
-  });
+  const OrderDetailPage({super.key, required this.pedido});
 
   @override
   State<OrderDetailPage> createState() => _OrderDetailPageState();
@@ -18,11 +16,14 @@ class OrderDetailPage extends StatefulWidget {
 class _OrderDetailPageState extends State<OrderDetailPage> {
   bool _cargando = true;
   String? _error;
+  bool _esAdministrador = false;
+  String? _resultadoEntregaActual;
 
   List<Map<String, dynamic>> _detalles = [];
   String? _observacion;
   String? _fechaEntrega;
   List<Map<String, dynamic>> _pagos = [];
+  Set<String> _detalleIdsAgregadosEnCorreccion = {};
 
   @override
   void initState() {
@@ -37,16 +38,30 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     });
 
     try {
+      final usuarioActual = Supabase.instance.client.auth.currentUser;
+
+      bool esAdministrador = false;
+
+      if (usuarioActual != null) {
+        final usuarioRespuesta = await Supabase.instance.client
+            .from('usuarios')
+            .select('rol, activo')
+            .eq('id', usuarioActual.id)
+            .maybeSingle();
+
+        esAdministrador =
+            usuarioRespuesta?['rol']?.toString() == 'administrador' &&
+            usuarioRespuesta?['activo'] == true;
+      }
       final pedidoRespuesta = await Supabase.instance.client
-    .from('pedidos')
-    .select('observacion, fecha_entrega')
-    .eq('id', widget.pedido['id'])
-    .single();
+          .from('pedidos')
+          .select('observacion, fecha_entrega, resultado_entrega')
+          .eq('id', widget.pedido['id'])
+          .single();
 
       final respuesta = await Supabase.instance.client
           .from('pedido_detalles')
-          .select(
-            '''
+          .select('''
             id,
             producto_id,
 cantidad,
@@ -62,30 +77,69 @@ productos (
               nombre,
               codigo
             )
-            ''',
-          )
+            ''')
           .eq('pedido_id', widget.pedido['id']);
-          final pagosRespuesta = await Supabase.instance.client
-    .from('pedido_pagos')
-    .select(
-      '''
+      final pagosRespuesta = await Supabase.instance.client
+          .from('pedido_pagos')
+          .select('''
       importe,
       medio_pago,
       fecha_pago,
       observacion
-      ''',
-    )
-    .eq('pedido_id', widget.pedido['id']);
+      ''')
+          .eq('pedido_id', widget.pedido['id']);
+      final idsAgregadosEnCorreccion = <String>{};
+
+      if (esAdministrador) {
+        final correccionesRespuesta = await Supabase.instance.client
+            .from('correcciones_operacion')
+            .select('detalles_antes, detalles_despues')
+            .eq('pedido_id', widget.pedido['id'])
+            .order('created_at');
+
+        for (final correccion in correccionesRespuesta) {
+          final antes = correccion['detalles_antes'] as List<dynamic>? ?? [];
+
+          final despues =
+              correccion['detalles_despues'] as List<dynamic>? ?? [];
+
+          final idsAntes = <String>{};
+
+          for (final item in antes) {
+            if (item is! Map) continue;
+
+            final id = item['id']?.toString();
+
+            if (id != null && id.isNotEmpty) {
+              idsAntes.add(id);
+            }
+          }
+
+          for (final item in despues) {
+            if (item is! Map) continue;
+
+            final id = item['id']?.toString();
+
+            if (id != null && id.isNotEmpty && !idsAntes.contains(id)) {
+              idsAgregadosEnCorreccion.add(id);
+            }
+          }
+        }
+      }
 
       if (!mounted) return;
 
       setState(() {
-  _detalles = List<Map<String, dynamic>>.from(respuesta);
-_pagos = List<Map<String, dynamic>>.from(pagosRespuesta);
-_observacion = pedidoRespuesta['observacion']?.toString();
-_fechaEntrega = pedidoRespuesta['fecha_entrega']?.toString();
-_cargando = false;
-});
+        _detalles = List<Map<String, dynamic>>.from(respuesta);
+        _pagos = List<Map<String, dynamic>>.from(pagosRespuesta);
+        _observacion = pedidoRespuesta['observacion']?.toString();
+        _fechaEntrega = pedidoRespuesta['fecha_entrega']?.toString();
+        _resultadoEntregaActual = pedidoRespuesta['resultado_entrega']
+            ?.toString();
+        _esAdministrador = esAdministrador;
+        _detalleIdsAgregadosEnCorreccion = idsAgregadosEnCorreccion;
+        _cargando = false;
+      });
     } catch (_) {
       if (!mounted) return;
 
@@ -144,630 +198,576 @@ _cargando = false;
 
     return '$dia/$mes/$anio $hora:$minuto';
   }
+
   Future<void> _compartirPedidoConfirmado() async {
-  final cliente =
-      widget.pedido['clientes'] as Map<String, dynamic>?;
-
-  final nombreCliente =
-      cliente?['nombre_comercio']?.toString() ??
-      'Cliente sin nombre';
-
-  final buffer = StringBuffer();
-
-  buffer.writeln('DISTRIBUIDORA ALBERDI');
-  buffer.writeln();
-  buffer.writeln('Cliente: $nombreCliente');
-  buffer.writeln();
-  final tipoOperacion =
-    widget.pedido['tipo_operacion']?.toString() ?? 'pedido';
-
-buffer.writeln(
-  tipoOperacion == 'venta_directa'
-      ? 'VENTA DIRECTA'
-      : 'PEDIDO',
-);
-  buffer.writeln();
-
-  for (final detalle in _detalles) {
-    final producto =
-        detalle['productos'] as Map<String, dynamic>?;
-
-    final nombre =
-        producto?['nombre']?.toString() ?? 'Producto';
-
-    final cantidad =
-        double.tryParse(
-          detalle['cantidad']?.toString() ?? '0',
-        ) ??
-        0;
-
-    final subtotal =
-        double.tryParse(
-          detalle['subtotal']?.toString() ?? '0',
-        ) ??
-        0;
-
-    final cantidadTexto = cantidad % 1 == 0
-        ? cantidad.toInt().toString()
-        : cantidad.toString();
-
-    buffer.writeln(
-      '$cantidadTexto x $nombre - ${_formatearPrecio(subtotal)}',
-    );
-  }
-
-  final total =
-      double.tryParse(
-        widget.pedido['total']?.toString() ?? '0',
-      ) ??
-      0;
-
-  buffer.writeln();
-  buffer.writeln('TOTAL: ${_formatearPrecio(total)}');
-
-  final observacion = _observacion?.trim() ?? '';
-
-if (observacion.isNotEmpty) {
-  buffer.writeln();
-  buffer.writeln('Observación: $observacion');
-}
-
-  buffer.writeln();
-  buffer.writeln('Gracias por su compra.');
-
-  await SharePlus.instance.share(
-    ShareParams(
-      text: buffer.toString(),
-    ),
-  );
-}
-
-  @override
-  Widget build(BuildContext context) {
-    final cliente =
-        widget.pedido['clientes'] as Map<String, dynamic>?;
+    final cliente = widget.pedido['clientes'] as Map<String, dynamic>?;
 
     final nombreCliente =
         cliente?['nombre_comercio']?.toString() ?? 'Cliente sin nombre';
 
-    final direccion =
-        cliente?['direccion']?.toString() ?? '';
+    final buffer = StringBuffer();
 
-    
-        final tipoOperacion =
-    widget.pedido['tipo_operacion']?.toString() ?? 'pedido';
+    buffer.writeln('DISTRIBUIDORA ALBERDI');
+    buffer.writeln();
+    buffer.writeln('Cliente: $nombreCliente');
+    buffer.writeln();
+    final tipoOperacion =
+        widget.pedido['tipo_operacion']?.toString() ?? 'pedido';
 
-final resultadoEntrega =
-    widget.pedido['resultado_entrega']?.toString() ?? 'pendiente';
+    buffer.writeln(
+      tipoOperacion == 'venta_directa' ? 'VENTA DIRECTA' : 'PEDIDO',
+    );
+    buffer.writeln();
 
-final facturado =
-    widget.pedido['facturado'] == true;
-        final totalEntregado = _detalles.fold<double>(
-  0,
-  (total, detalle) {
-    final cantidadEntregada = double.tryParse(
-          detalle['cantidad_entregada']?.toString() ?? '0',
-        ) ??
-        0;
+    for (final detalle in _detalles) {
+      final producto = detalle['productos'] as Map<String, dynamic>?;
 
-    final precioUnitario = double.tryParse(
-          detalle['precio_unitario']?.toString() ?? '0',
-        ) ??
-        0;
+      final nombre = producto?['nombre']?.toString() ?? 'Producto';
 
-    return total + (cantidadEntregada * precioUnitario);
-  },
-  );
-  final totalPagado = _pagos.fold<double>(
-  0,
-  (total, pago) {
-    final importe = double.tryParse(
-          pago['importe']?.toString() ?? '0',
-        ) ??
-        0;
+      final cantidad =
+          double.tryParse(detalle['cantidad']?.toString() ?? '0') ?? 0;
 
-    return total + importe;
-  },
-);
+      final subtotal =
+          double.tryParse(detalle['subtotal']?.toString() ?? '0') ?? 0;
+
+      final cantidadTexto = cantidad % 1 == 0
+          ? cantidad.toInt().toString()
+          : cantidad.toString();
+
+      buffer.writeln(
+        '$cantidadTexto x $nombre - ${_formatearPrecio(subtotal)}',
+      );
+    }
+
+    final total =
+        double.tryParse(widget.pedido['total']?.toString() ?? '0') ?? 0;
+
+    buffer.writeln();
+    buffer.writeln('TOTAL: ${_formatearPrecio(total)}');
+
+    final observacion = _observacion?.trim() ?? '';
+
+    if (observacion.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln('Observación: $observacion');
+    }
+
+    buffer.writeln();
+    buffer.writeln('Gracias por su compra.');
+
+    await SharePlus.instance.share(ShareParams(text: buffer.toString()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cliente = widget.pedido['clientes'] as Map<String, dynamic>?;
+
+    final nombreCliente =
+        cliente?['nombre_comercio']?.toString() ?? 'Cliente sin nombre';
+
+    final direccion = cliente?['direccion']?.toString() ?? '';
+
+    final tipoOperacion =
+        widget.pedido['tipo_operacion']?.toString() ?? 'pedido';
+
+    final resultadoEntrega =
+        _resultadoEntregaActual ??
+        widget.pedido['resultado_entrega']?.toString() ??
+        'pendiente';
+
+    final facturado = widget.pedido['facturado'] == true;
+    final totalEntregado = _detalles.fold<double>(0, (total, detalle) {
+      final cantidadEntregada =
+          double.tryParse(detalle['cantidad_entregada']?.toString() ?? '0') ??
+          0;
+
+      final precioUnitario =
+          double.tryParse(detalle['precio_unitario']?.toString() ?? '0') ?? 0;
+
+      return total + (cantidadEntregada * precioUnitario);
+    });
+    final totalPagado = _pagos.fold<double>(0, (total, pago) {
+      final importe = double.tryParse(pago['importe']?.toString() ?? '0') ?? 0;
+
+      return total + importe;
+    });
 
     return Scaffold(
       appBar: AppBar(
-  title: const Text('Detalle del pedido'),
-  actions: [
-    if (!facturado && resultadoEntrega == 'pendiente')
-  IconButton(
-    onPressed: () {
-  final cliente =
-      widget.pedido['clientes'] as Map<String, dynamic>?;
+        title: const Text('Detalle del pedido'),
+        actions: [
+          if (!facturado && resultadoEntrega == 'pendiente')
+            IconButton(
+              onPressed: () {
+                final cliente =
+                    widget.pedido['clientes'] as Map<String, dynamic>?;
 
-  if (cliente == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'No se pudo cargar el cliente del pedido.',
-        ),
-      ),
-    );
-    return;
-  }
+                if (cliente == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('No se pudo cargar el cliente del pedido.'),
+                    ),
+                  );
+                  return;
+                }
 
-  final cantidadesIniciales = <String, int>{};
-  final preciosIniciales = <String, double>{};
-  final tiposPrecioIniciales = <String, String>{};
+                final cantidadesIniciales = <String, int>{};
+                final preciosIniciales = <String, double>{};
+                final tiposPrecioIniciales = <String, String>{};
 
-  for (final detalle in _detalles) {
-    final producto =
-        detalle['productos'] as Map<String, dynamic>?;
+                for (final detalle in _detalles) {
+                  final producto =
+                      detalle['productos'] as Map<String, dynamic>?;
 
-    final productoId =
-        detalle['producto_id']?.toString();
+                  final productoId = detalle['producto_id']?.toString();
 
-    if (productoId == null || productoId.isEmpty) {
-      continue;
-    }
+                  if (productoId == null || productoId.isEmpty) {
+                    continue;
+                  }
 
-    final cantidad = double.tryParse(
-          detalle['cantidad']?.toString() ?? '0',
-        ) ??
-        0;
+                  final cantidad =
+                      double.tryParse(detalle['cantidad']?.toString() ?? '0') ??
+                      0;
 
-    final precio = double.tryParse(
-          detalle['precio_unitario']?.toString() ?? '0',
-        ) ??
-        0;
+                  final precio =
+                      double.tryParse(
+                        detalle['precio_unitario']?.toString() ?? '0',
+                      ) ??
+                      0;
 
-    final tipoPrecio =
-        detalle['tipo_precio']?.toString() ?? 'normal';
+                  final tipoPrecio =
+                      detalle['tipo_precio']?.toString() ?? 'normal';
 
-    cantidadesIniciales[productoId] = cantidad.round();
-    preciosIniciales[productoId] = precio;
-    tiposPrecioIniciales[productoId] = tipoPrecio;
+                  cantidadesIniciales[productoId] = cantidad.round();
+                  preciosIniciales[productoId] = precio;
+                  tiposPrecioIniciales[productoId] = tipoPrecio;
 
-    // Solo evita warning si producto todavía no se usa acá.
-    producto;
-  }
+                  // Solo evita warning si producto todavía no se usa acá.
+                  producto;
+                }
 
-  final fechaEntrega = DateTime.tryParse(
-  _fechaEntrega ?? '',
-);
+                final fechaEntrega = DateTime.tryParse(_fechaEntrega ?? '');
 
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => OrderProductsPage(
-        cliente: cliente,
-        fechaEntrega: fechaEntrega,
-        tipoOperacion:
-            widget.pedido['tipo_operacion']?.toString() ??
-                'pedido',
-        pedidoId: widget.pedido['id']?.toString(),
-        cantidadesIniciales: cantidadesIniciales,
-        preciosIniciales: preciosIniciales,
-        tiposPrecioIniciales: tiposPrecioIniciales,
-      ),
-    ),
-  );
-},
-    icon: const Icon(Icons.edit_outlined),
-    tooltip: 'Editar pedido',
-  ),
-    if (!facturado && resultadoEntrega == 'pendiente')
-  IconButton(
-    onPressed: () async {
-  final confirmar = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Eliminar pedido'),
-      content: const Text(
-        '¿Seguro que querés eliminar este pedido? Esta acción no se puede deshacer.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('CANCELAR'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('ELIMINAR'),
-        ),
-      ],
-    ),
-  );
-
-  if (confirmar != true) return;
-  try {
-  await Supabase.instance.client.rpc(
-    'eliminar_pedido_pendiente',
-    params: {
-      'p_pedido_id': widget.pedido['id'],
-    },
-  );
-
-  if (!context.mounted) return;
-
-  Navigator.of(context).pop(true);
-} catch (e) {
-  if (!context.mounted) return;
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        'No se pudo eliminar el pedido: $e',
-      ),
-    ),
-  );
-}
-},
-    icon: const Icon(Icons.delete_outline),
-    tooltip: 'Eliminar pedido',
-  ),
-    IconButton(
-      onPressed: _detalles.isEmpty
-          ? null
-          : _compartirPedidoConfirmado,
-      icon: const Icon(Icons.share_outlined),
-      tooltip: 'Compartir pedido',
-    ),
-  ],
-),
-      body: _cargando
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          size: 60,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _error!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          onPressed: _cargarDetalles,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Reintentar'),
-                        ),
-                      ],
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => OrderProductsPage(
+                      cliente: cliente,
+                      fechaEntrega: fechaEntrega,
+                      tipoOperacion:
+                          widget.pedido['tipo_operacion']?.toString() ??
+                          'pedido',
+                      pedidoId: widget.pedido['id']?.toString(),
+                      cantidadesIniciales: cantidadesIniciales,
+                      preciosIniciales: preciosIniciales,
+                      tiposPrecioIniciales: tiposPrecioIniciales,
                     ),
                   ),
-                )
-              : Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        16,
-                        16,
-                        16,
-                        8,
+                );
+              },
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Editar pedido',
+            ),
+          if (!facturado && resultadoEntrega == 'pendiente')
+            IconButton(
+              onPressed: () async {
+                final confirmar = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Eliminar pedido'),
+                    content: const Text(
+                      '¿Seguro que querés eliminar este pedido? Esta acción no se puede deshacer.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('CANCELAR'),
                       ),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                nombreCliente,
-                                style: const TextStyle(
-                                  fontSize: 21,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (direccion.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Text(direccion),
-                              ],
-                              const SizedBox(height: 12),
-                              Text(
-                                _formatearFecha(
-                                  widget.pedido['created_at'],
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              if (tipoOperacion == 'venta_directa') ...[
-  const Text(
-    'VENTA DIRECTA',
-    style: TextStyle(
-      fontWeight: FontWeight.bold,
-    ),
-  ),
-  const SizedBox(height: 4),
-  Text(
-    'Entrega: ${resultadoEntrega.toUpperCase()}',
-  ),
-] else ...[
-  Text(
-    facturado
-        ? 'Facturación: FACTURADO'
-        : 'Facturación: NO FACTURADO',
-  ),
-  const SizedBox(height: 4),
-  Text(
-    'Entrega: ${resultadoEntrega.toUpperCase()}',
-  ),
-],
-                              if (_observacion != null && _observacion!.trim().isNotEmpty) ...[
-  const SizedBox(height: 12),
-  const Divider(),
-  const SizedBox(height: 8),
-  const Text(
-    'OBSERVACIONES',
-    style: TextStyle(
-      fontWeight: FontWeight.bold,
-    ),
-  ),
-  const SizedBox(height: 4),
-  Text(
-    _observacion!,
-  ),
-],
-                            ],
-                          ),
-                        ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('ELIMINAR'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirmar != true) return;
+                try {
+                  await Supabase.instance.client.rpc(
+                    'eliminar_pedido_pendiente',
+                    params: {'p_pedido_id': widget.pedido['id']},
+                  );
+
+                  if (!context.mounted) return;
+
+                  Navigator.of(context).pop(true);
+                } catch (e) {
+                  if (!context.mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('No se pudo eliminar el pedido: $e'),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Eliminar pedido',
+            ),
+          if (_esAdministrador &&
+              (resultadoEntrega == 'entregado' ||
+                  resultadoEntrega == 'parcial' ||
+                  resultadoEntrega == 'no_entregado'))
+            IconButton(
+              onPressed: _detalles.isEmpty
+                  ? null
+                  : () async {
+                      final actualizado = await Navigator.of(context)
+                          .push<bool>(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  CorrectOperationPage(pedido: widget.pedido),
+                            ),
+                          );
+
+                      if (actualizado == true) {
+                        await _cargarDetalles();
+                      }
+                    },
+              icon: const Icon(Icons.build_outlined),
+              tooltip: 'Corregir operación',
+            ),
+          IconButton(
+            onPressed: _detalles.isEmpty ? null : _compartirPedidoConfirmado,
+            icon: const Icon(Icons.share_outlined),
+            tooltip: 'Compartir pedido',
+          ),
+        ],
+      ),
+      body: _cargando
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 60),
+                    const SizedBox(height: 16),
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Expanded(
-                      child: _detalles.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'El pedido no tiene productos.',
-                              ),
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: _detalles.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                final detalle = _detalles[index];
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: _cargarDetalles,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            nombreCliente,
+                            style: const TextStyle(
+                              fontSize: 21,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (direccion.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(direccion),
+                          ],
+                          const SizedBox(height: 12),
+                          Text(_formatearFecha(widget.pedido['created_at'])),
+                          const SizedBox(height: 4),
+                          if (tipoOperacion == 'venta_directa') ...[
+                            const Text(
+                              'VENTA DIRECTA',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Text('Entrega: ${resultadoEntrega.toUpperCase()}'),
+                          ] else ...[
+                            Text(
+                              facturado
+                                  ? 'Facturación: FACTURADO'
+                                  : 'Facturación: NO FACTURADO',
+                            ),
+                            const SizedBox(height: 4),
+                            Text('Entrega: ${resultadoEntrega.toUpperCase()}'),
+                          ],
+                          if (_observacion != null &&
+                              _observacion!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            const Divider(),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'OBSERVACIONES',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(_observacion!),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _detalles.isEmpty
+                      ? const Center(
+                          child: Text('El pedido no tiene productos.'),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _detalles.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final detalle = _detalles[index];
 
-                                final producto =
-                                    detalle['productos']
-                                        as Map<String, dynamic>?;
+                            final producto =
+                                detalle['productos'] as Map<String, dynamic>?;
 
-                                final nombreProducto =
-                                    producto?['nombre']?.toString() ??
-                                        'Producto sin nombre';
+                            final nombreProducto =
+                                producto?['nombre']?.toString() ??
+                                'Producto sin nombre';
 
-                                final codigo =
-                                    producto?['codigo']?.toString() ?? '';
+                            final codigo =
+                                producto?['codigo']?.toString() ?? '';
 
-                                final cantidad =
-    detalle['cantidad']?.toString() ?? '0';
+                            final cantidad =
+                                detalle['cantidad']?.toString() ?? '0';
 
-final cantidadEntregada =
-    detalle['cantidad_entregada']?.toString() ?? '0';
+                            final cantidadEntregada =
+                                detalle['cantidad_entregada']?.toString() ??
+                                '0';
 
-final cantidadNoEntregada =
-    detalle['cantidad_no_entregada']?.toString() ?? '0';
+                            final cantidadNoEntregada =
+                                detalle['cantidad_no_entregada']?.toString() ??
+                                '0';
 
-final precio = _formatearPrecio(
-  detalle['precio_unitario'],
-);
+                            final precio = _formatearPrecio(
+                              detalle['precio_unitario'],
+                            );
 
-final subtotal = _formatearPrecio(
-  detalle['subtotal'],
-);
-final esAgregado =
-    detalle['agregado_en_entrega'] == true;
-
-final cantidadParaMostrar =
-    esAgregado ? cantidadEntregada : cantidad;
-
-final subtotalParaMostrar = esAgregado
-    ? _formatearPrecio(
-        (double.tryParse(
-                  cantidadEntregada.toString(),
-                ) ??
-                0) *
-            (double.tryParse(
-                  detalle['precio_unitario']?.toString() ?? '',
-                ) ??
-                0),
-      )
-    : subtotal;
-
-                                final lista = _nombreLista(
-                                  detalle['tipo_precio'],
+                            final subtotal = _formatearPrecio(
+                              detalle['subtotal'],
+                            );
+                            final esAgregado =
+                                detalle['agregado_en_entrega'] == true;
+                            final esAgregadoEnCorreccion =
+                                _detalleIdsAgregadosEnCorreccion.contains(
+                                  detalle['id']?.toString(),
                                 );
 
-                                return Card(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(14),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          nombreProducto,
-                                          style: const TextStyle(
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.bold,
+                            final cantidadParaMostrar = esAgregado
+                                ? cantidadEntregada
+                                : cantidad;
+
+                            final subtotalParaMostrar = esAgregado
+                                ? _formatearPrecio(
+                                    (double.tryParse(
+                                              cantidadEntregada.toString(),
+                                            ) ??
+                                            0) *
+                                        (double.tryParse(
+                                              detalle['precio_unitario']
+                                                      ?.toString() ??
+                                                  '',
+                                            ) ??
+                                            0),
+                                  )
+                                : subtotal;
+
+                            final lista = _nombreLista(detalle['tipo_precio']);
+
+                            return Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      nombreProducto,
+                                      style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    if (esAgregado) ...[
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.add_circle_outline,
+                                            size: 16,
+                                            color: Colors.orange,
                                           ),
-                                        ),
-                                        if (esAgregado) ...[
-  const SizedBox(height: 4),
-  const Row(
-    children: [
-      Icon(
-        Icons.add_circle_outline,
-        size: 16,
-        color: Colors.orange,
-      ),
-      SizedBox(width: 6),
-      Text(
-        'Agregado durante la entrega',
-        style: TextStyle(
-          color: Colors.orange,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ],
-  ),
-],
-                                        if (codigo.isNotEmpty) ...[
-                                          const SizedBox(height: 4),
+                                          const SizedBox(width: 6),
                                           Text(
-                                            'Código: $codigo',
+                                            esAgregadoEnCorreccion
+                                                ? 'Agregado durante una corrección'
+                                                : 'Agregado durante la entrega',
                                             style: const TextStyle(
-                                              color: Colors.grey,
+                                              color: Colors.orange,
+                                              fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                         ],
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Text(
-  '$cantidadParaMostrar × $precio',
-),
-
-const Spacer(),
-
-Text(
-  subtotalParaMostrar,
-  style: const TextStyle(
-    fontWeight: FontWeight.bold,
-  ),
-),
-                                          ],
+                                      ),
+                                    ],
+                                    if (codigo.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Código: $codigo',
+                                        style: const TextStyle(
+                                          color: Colors.grey,
                                         ),
-                                        if (cantidadEntregada != '0' || cantidadNoEntregada != '0') ...[
-  const SizedBox(height: 4),
-  Text('Entregado: $cantidadEntregada'),
-  const SizedBox(height: 2),
-  Text('No entregado: $cantidadNoEntregada'),
-],
-                                        const SizedBox(height: 6),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Text('$cantidadParaMostrar × $precio'),
+
+                                        const Spacer(),
+
                                         Text(
-                                          'Lista usada: $lista',
+                                          subtotalParaMostrar,
                                           style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey,
+                                            fontWeight: FontWeight.bold,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                    SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          16,
-                          8,
-                          16,
-                          16,
+                                    if (cantidadEntregada != '0' ||
+                                        cantidadNoEntregada != '0') ...[
+                                      const SizedBox(height: 4),
+                                      Text('Entregado: $cantidadEntregada'),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'No entregado: $cantidadNoEntregada',
+                                      ),
+                                    ],
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Lista usada: $lista',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                        child: Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-  children: [
-    Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'TOTAL DEL PEDIDO',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          _formatearPrecio(
-            widget.pedido['total'],
-          ),
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    ),
-    const SizedBox(height: 12),
-    Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'TOTAL ENTREGADO',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          _formatearPrecio(totalEntregado),
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    ),
-    const SizedBox(height: 12),
-Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [
-    const Text(
-      'PAGADO',
-      style: TextStyle(
-        fontWeight: FontWeight.bold,
-      ),
-    ),
-    Text(
-      _formatearPrecio(totalPagado),
-      style: const TextStyle(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-      ),
-    ),
-  ],
-),
-const SizedBox(height: 12),
-Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [
-    const Text(
-      'SALDO',
-      style: TextStyle(
-        fontWeight: FontWeight.bold,
-      ),
-    ),
-    Text(
-      _formatearPrecio(
-        (totalEntregado - totalPagado) > 0
-            ? totalEntregado - totalPagado
-            : 0,
-      ),
-      style: const TextStyle(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-      ),
-    ),
-  ],
-),
-  ],
-),
-                          ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'TOTAL DEL PEDIDO',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  _formatearPrecio(widget.pedido['total']),
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'TOTAL ENTREGADO',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  _formatearPrecio(totalEntregado),
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'PAGADO',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  _formatearPrecio(totalPagado),
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'SALDO',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  _formatearPrecio(
+                                    (totalEntregado - totalPagado) > 0
+                                        ? totalEntregado - totalPagado
+                                        : 0,
+                                  ),
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
+              ],
+            ),
     );
   }
 }
