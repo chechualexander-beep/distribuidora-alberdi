@@ -1,4 +1,6 @@
+import '../../core/desktop_records.dart';
 import 'package:flutter/material.dart';
+import 'visit_day_field.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -20,6 +22,7 @@ class _NewClientPageState extends State<NewClientPage> {
   final _zonaController = TextEditingController();
   final _observacionesController = TextEditingController();
 
+  int? _diaVisita;
   bool _guardando = false;
   double? _latitud;
   double? _longitud;
@@ -90,6 +93,7 @@ class _NewClientPageState extends State<NewClientPage> {
             'telefono': _textoOpcional(_telefonoController),
             'localidad': _textoOpcional(_localidadController),
             'zona': _textoOpcional(_zonaController),
+            'dia_visita': _diaVisita,
             'observaciones': _textoOpcional(_observacionesController),
             'latitud': _latitud,
             'longitud': _longitud,
@@ -157,7 +161,7 @@ class _NewClientPageState extends State<NewClientPage> {
       body: SafeArea(
         child: Form(
           key: _formKey,
-          child: ListView(
+          child: DesktopFormList(
             padding: const EdgeInsets.all(20),
             children: [
               const Text(
@@ -283,6 +287,13 @@ class _NewClientPageState extends State<NewClientPage> {
 
               const SizedBox(height: 16),
 
+              VisitDayField(
+                value: _diaVisita,
+                onChanged: _guardando
+                    ? null
+                    : (dia) => setState(() => _diaVisita = dia),
+              ),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _observacionesController,
                 maxLines: 3,

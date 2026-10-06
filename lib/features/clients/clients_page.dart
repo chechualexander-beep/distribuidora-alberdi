@@ -1,12 +1,15 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../core/argentina_date_utils.dart';
 import 'client_detail_page.dart';
 import 'new_client_page.dart';
+import 'client_filters.dart';
+import 'client_multi_filter.dart';
 
 class ClientsPage extends StatefulWidget {
   const ClientsPage({super.key});
-
   @override
   State<ClientsPage> createState() => _ClientsPageState();
 }
@@ -14,9 +17,15 @@ class ClientsPage extends StatefulWidget {
 class _ClientsPageState extends State<ClientsPage> {
   bool _cargando = true;
   String? _error;
-
   List<Map<String, dynamic>> _clientes = [];
-  String _busqueda = '';
+  final _busqueda = TextEditingController();
+  Set<String> _localidades = {};
+  String? _zona;
+  Set<int> _dias = {};
+  bool _visitasHoy = false;
+  bool _esAdministrador = false;
+  Set<int> get _diasEfectivos =>
+      _visitasHoy ? {ArgentinaDateUtils.ahoraArgentina().weekday} : _dias;
 
   @override
   void initState() {
@@ -24,48 +33,48 @@ class _ClientsPageState extends State<ClientsPage> {
     _cargarClientes();
   }
 
+  @override
+  void dispose() {
+    _busqueda.dispose();
+    super.dispose();
+  }
+
   Future<void> _cargarClientes() async {
     setState(() {
       _cargando = true;
       _error = null;
     });
-
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
-
-      if (user == null) {
-        throw Exception('No hay usuario autenticado');
-      }
-
-      // Obtener el rol del usuario actual
+      if (user == null) throw Exception('No hay usuario autenticado');
       final usuario = await supabase
           .from('usuarios')
           .select('rol')
           .eq('id', user.id)
           .single();
-
-      final String rol = usuario['rol']?.toString() ?? '';
-
-      dynamic consulta = supabase.from('clientes').select().eq('activo', true);
-
-      // Los preventistas solamente ven sus propios clientes.
-      // El administrador puede ver todos.
-      if (rol != 'administrador') {
-        consulta = consulta.eq('preventista_id', user.id);
+      final esAdministrador = usuario['rol'] == 'administrador';
+      final clientes = <Map<String, dynamic>>[];
+      // Paginar evita que el límite de respuesta oculte clientes a los filtros.
+      const tamanio = 500;
+      for (var desde = 0; ; desde += tamanio) {
+        var consulta = supabase.from('clientes').select().eq('activo', true);
+        if (!esAdministrador) consulta = consulta.eq('preventista_id', user.id);
+        final pagina = await consulta
+            .order('nombre_comercio')
+            .order('id')
+            .range(desde, desde + tamanio - 1);
+        clientes.addAll(List<Map<String, dynamic>>.from(pagina));
+        if (pagina.length < tamanio) break;
       }
-
-      final respuesta = await consulta.order('nombre_comercio');
-
       if (!mounted) return;
-
       setState(() {
-        _clientes = List<Map<String, dynamic>>.from(respuesta);
+        _clientes = clientes;
+        _esAdministrador = esAdministrador;
         _cargando = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-
       setState(() {
         _error = 'No se pudieron cargar los clientes.';
         _cargando = false;
@@ -73,163 +82,330 @@ class _ClientsPageState extends State<ClientsPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Clientes')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final clienteCreado = await Navigator.of(context)
-              .push<Map<String, dynamic>>(
-                MaterialPageRoute(builder: (_) => const NewClientPage()),
-              );
+  void _limpiar() => setState(() {
+    _busqueda.clear();
+    _localidades = {};
+    _zona = null;
+    _dias = {};
+    _visitasHoy = false;
+  });
 
-          if (clienteCreado != null) {
-            await _cargarClientes();
-          }
+  Future<void> _abrirFiltros() async {
+    final seleccionLocalidades = Set<String>.from(_localidades);
+    var zona = _zona;
+    final seleccionDias = Set<int>.from(_diasEfectivos);
+    final localidades = opcionesClientes(_clientes, 'localidad');
+    final zonas = opcionesClientes(_clientes, 'zona');
+    // Conservar una selección aunque el último cliente haya cambiado de zona.
+    for (final localidad in seleccionLocalidades) {
+      if (localidad.isNotEmpty) {
+        localidades.putIfAbsent(localidad, () => localidad);
+      }
+    }
+    if (zona != null && zona.isNotEmpty) zonas.putIfAbsent(zona, () => zona!);
+    final aplicar = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, cambiar) {
+          Widget selector(
+            String titulo,
+            String? valor,
+            Map<String, String> opciones,
+            ValueChanged<String?> onChanged,
+          ) => DropdownButtonFormField<String>(
+            initialValue: valor ?? '__todos__',
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: titulo,
+              border: const OutlineInputBorder(),
+            ),
+            items: [
+              const DropdownMenuItem(value: '__todos__', child: Text('Todas')),
+              const DropdownMenuItem(value: '', child: Text('Sin asignar')),
+              for (final opcion in opciones.entries)
+                DropdownMenuItem(
+                  value: opcion.key,
+                  child: Text(opcion.value, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: (v) => onChanged(v == '__todos__' ? null : v),
+          );
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Filtrar clientes',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 20),
+                  ClientMultiFilter<String>(
+                    title: 'Localidades',
+                    allLabel: 'Todas las localidades',
+                    options: {'': 'Sin asignar', ...localidades},
+                    selected: seleccionLocalidades,
+                    onChanged: (values) => cambiar(() {
+                      seleccionLocalidades
+                        ..clear()
+                        ..addAll(values);
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  selector('Zona', zona, zonas, (v) => cambiar(() => zona = v)),
+                  const SizedBox(height: 16),
+                  ClientMultiFilter<int>(
+                    title: 'Días de visita',
+                    allLabel: 'Todos los días',
+                    options: {0: 'Sin asignar', ...diasVisita},
+                    selected: seleccionDias,
+                    onChanged: (values) => cambiar(() {
+                      seleccionDias
+                        ..clear()
+                        ..addAll(values);
+                    }),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Aplicar filtros'),
+                  ),
+                ],
+              ),
+            ),
+          );
         },
-        icon: const Icon(Icons.person_add_alt_1),
-        label: const Text('Nuevo cliente'),
       ),
-      body: _construirContenido(),
     );
+    if (aplicar != true || !mounted) return;
+    setState(() {
+      _localidades = seleccionLocalidades;
+      _zona = zona;
+      if (seleccionDias.length != 1 ||
+          !seleccionDias.contains(
+            ArgentinaDateUtils.ahoraArgentina().weekday,
+          )) {
+        _visitasHoy = false;
+      }
+      _dias = seleccionDias;
+    });
   }
 
-  Widget _construirContenido() {
-    if (_cargando) {
-      return const Center(child: CircularProgressIndicator());
-    }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Clientes')),
+    floatingActionButton: FloatingActionButton.extended(
+      onPressed: () async {
+        final creado = await Navigator.of(context).push<Map<String, dynamic>>(
+          MaterialPageRoute(builder: (_) => const NewClientPage()),
+        );
+        if (creado != null && mounted) await _cargarClientes();
+      },
+      icon: const Icon(Icons.person_add_alt_1),
+      label: const Text('Nuevo cliente'),
+    ),
+    body: _contenido(),
+  );
 
+  Widget _contenido() {
+    if (_cargando) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 60),
-              const SizedBox(height: 16),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _cargarClientes,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reintentar'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_clientes.isEmpty) {
-      return const Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.people_outline, size: 80),
-            SizedBox(height: 20),
-            Text(
-              'Todavía no hay clientes cargados',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Presioná "Nuevo cliente" para agregar el primero.',
-              textAlign: TextAlign.center,
+            Text(_error!),
+            TextButton(
+              onPressed: _cargarClientes,
+              child: const Text('Reintentar'),
             ),
           ],
         ),
       );
     }
-
-    final texto = _busqueda.toLowerCase();
-
-    final clientesFiltrados = _clientes.where((cliente) {
-      final comercio =
-          cliente['nombre_comercio']?.toString().toLowerCase() ?? '';
-
-      final propietario =
-          cliente['propietario']?.toString().toLowerCase() ?? '';
-
-      final direccion = cliente['direccion']?.toString().toLowerCase() ?? '';
-
-      final telefono = cliente['telefono']?.toString().toLowerCase() ?? '';
-
-      return comercio.contains(texto) ||
-          propietario.contains(texto) ||
-          direccion.contains(texto) ||
-          telefono.contains(texto);
-    }).toList();
-
+    final filtrados = _clientes
+        .where(
+          (c) => coincideCliente(
+            c,
+            busqueda: _busqueda.text,
+            localidades: _localidades,
+            zona: _zona,
+            dias: _diasEfectivos,
+          ),
+        )
+        .toList();
+    final hayFiltros =
+        _busqueda.text.isNotEmpty ||
+        _localidades.isNotEmpty ||
+        _zona != null ||
+        _diasEfectivos.isNotEmpty;
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: TextField(
+            controller: _busqueda,
             decoration: const InputDecoration(
-              hintText: 'Buscar cliente...',
+              hintText: 'Buscar cliente, localidad o zona...',
               prefixIcon: Icon(Icons.search),
               border: OutlineInputBorder(),
             ),
-            onChanged: (valor) {
-              setState(() {
-                _busqueda = valor.trim();
-              });
-            },
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                FilterChip(
+                  avatar: const Icon(Icons.today_outlined, size: 18),
+                  label: Text(
+                    _esAdministrador ? 'Visitas de hoy' : 'Mis visitas de hoy',
+                  ),
+                  selected: _visitasHoy,
+                  onSelected: (v) => setState(() {
+                    _visitasHoy = v;
+                    _dias = {};
+                  }),
+                ),
+                ActionChip(
+                  avatar: const Icon(Icons.filter_list, size: 18),
+                  label: const Text('Filtros'),
+                  onPressed: _abrirFiltros,
+                ),
+                if (_localidades.isNotEmpty)
+                  InputChip(
+                    label: Text('Localidades: ${_localidades.length}'),
+                    onPressed: _abrirFiltros,
+                    onDeleted: () => setState(() => _localidades = {}),
+                  ),
+                if (_zona != null)
+                  InputChip(
+                    label: Text(
+                      'Zona: ${_zona!.isEmpty ? "Sin asignar" : _zona}',
+                    ),
+                    onDeleted: () => setState(() => _zona = null),
+                  ),
+                if (_diasEfectivos.isNotEmpty)
+                  InputChip(
+                    label: Text(
+                      _diasEfectivos.length == 1
+                          ? 'Visita: ${nombreDiaVisita(_diasEfectivos.single)}'
+                          : 'Días: ${_diasEfectivos.length}',
+                    ),
+                    onPressed: _abrirFiltros,
+                    onDeleted: () => setState(() {
+                      _dias = {};
+                      _visitasHoy = false;
+                    }),
+                  ),
+                if (hayFiltros)
+                  TextButton(onPressed: _limpiar, child: const Text('Limpiar')),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('${filtrados.length} de ${_clientes.length} clientes'),
           ),
         ),
         Expanded(
-          child: clientesFiltrados.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No se encontraron clientes',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _cargarClientes,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: clientesFiltrados.length,
+          child: RefreshIndicator(
+            onRefresh: _cargarClientes,
+            child: filtrados.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      Text(
+                        _clientes.isEmpty
+                            ? 'Todavía no hay clientes cargados. Presioná Nuevo cliente para agregar el primero.'
+                            : 'No hay clientes que coincidan con estos filtros.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  )
+                : useDesktopLayout(context)
+                ? DesktopRecords(
+                    records: filtrados,
+                    fields: [
+                      DesktopField(
+                        'Comercio',
+                        (r) => r['nombre_comercio'],
+                        width: 220,
+                      ),
+                      DesktopField('Propietario', (r) => r['propietario']),
+                      DesktopField(
+                        'Dirección',
+                        (r) => r['direccion'],
+                        width: 220,
+                      ),
+                      DesktopField('Localidad', (r) => r['localidad']),
+                      DesktopField('Zona', (r) => r['zona'], width: 110),
+                      DesktopField(
+                        'Visita',
+                        (r) => nombreDiaVisita(diaVisitaCliente(r)),
+                        width: 100,
+                      ),
+                    ],
+                    onOpen: (cliente) async {
+                      final actualizado = await Navigator.of(context)
+                          .push<bool>(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ClientDetailPage(cliente: cliente),
+                            ),
+                          );
+                      if (actualizado == true && mounted) {
+                        await _cargarClientes();
+                      }
+                    },
+                  )
+                : ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                    itemCount: filtrados.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
-                      final cliente = clientesFiltrados[index];
-
-                      final comercio =
-                          cliente['nombre_comercio']?.toString() ??
-                          'Sin nombre';
-
-                      final propietario = cliente['propietario']?.toString();
-
-                      final direccion = cliente['direccion']?.toString() ?? '';
-
-                      final localidad = cliente['localidad']?.toString();
-
+                      final cliente = filtrados[index];
                       return Card(
                         child: ListTile(
                           leading: const CircleAvatar(
                             child: Icon(Icons.storefront),
                           ),
                           title: Text(
-                            comercio,
+                            cliente['nombre_comercio']?.toString() ??
+                                'Sin nombre',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (propietario != null && propietario.isNotEmpty)
-                                Text(propietario),
-                              Text(direccion),
-                              if (localidad != null && localidad.isNotEmpty)
-                                Text(localidad),
+                              for (final campo in [
+                                'propietario',
+                                'direccion',
+                                'localidad',
+                              ])
+                                if (normalizarCliente(
+                                  cliente[campo],
+                                ).isNotEmpty)
+                                  Text(cliente[campo].toString()),
+                              if (normalizarCliente(cliente['zona']).isNotEmpty)
+                                Text('Zona: ${cliente["zona"]}'),
+                              Text(
+                                'Visita: ${nombreDiaVisita(diaVisitaCliente(cliente))}',
+                              ),
                             ],
                           ),
                           trailing: const Icon(Icons.chevron_right),
@@ -241,8 +417,7 @@ class _ClientsPageState extends State<ClientsPage> {
                                         ClientDetailPage(cliente: cliente),
                                   ),
                                 );
-
-                            if (actualizado == true) {
+                            if (actualizado == true && mounted) {
                               await _cargarClientes();
                             }
                           },
@@ -250,7 +425,7 @@ class _ClientsPageState extends State<ClientsPage> {
                       );
                     },
                   ),
-                ),
+          ),
         ),
       ],
     );

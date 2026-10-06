@@ -1,14 +1,14 @@
+import '../../core/desktop_records.dart';
 import 'package:flutter/material.dart';
+import 'visit_day_field.dart';
+import 'client_filters.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
 class EditClientPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
 
-  const EditClientPage({
-    super.key,
-    required this.cliente,
-  });
+  const EditClientPage({super.key, required this.cliente});
 
   @override
   State<EditClientPage> createState() => _EditClientPageState();
@@ -25,28 +25,26 @@ class _EditClientPageState extends State<EditClientPage> {
   late final TextEditingController _zonaController;
   late final TextEditingController _observacionesController;
 
+  int? _diaVisita;
   bool _guardando = false;
   double? _latitud;
-double? _longitud;
-DateTime? _ubicacionActualizadaAt;
-List<Map<String, dynamic>> _preventistas = [];
-String? _preventistaSeleccionadoId;
-bool _esAdministrador = false;
+  double? _longitud;
+  DateTime? _ubicacionActualizadaAt;
+  List<Map<String, dynamic>> _preventistas = [];
+  String? _preventistaSeleccionadoId;
+  bool _esAdministrador = false;
 
   @override
   void initState() {
     super.initState();
-    _latitud = double.tryParse(
-  widget.cliente['latitud']?.toString() ?? '',
-);
+    _diaVisita = diaVisitaCliente(widget.cliente);
+    _latitud = double.tryParse(widget.cliente['latitud']?.toString() ?? '');
 
-_longitud = double.tryParse(
-  widget.cliente['longitud']?.toString() ?? '',
-);
+    _longitud = double.tryParse(widget.cliente['longitud']?.toString() ?? '');
 
-_ubicacionActualizadaAt = DateTime.tryParse(
-  widget.cliente['ubicacion_actualizada_at']?.toString() ?? '',
-);
+    _ubicacionActualizadaAt = DateTime.tryParse(
+      widget.cliente['ubicacion_actualizada_at']?.toString() ?? '',
+    );
 
     _comercioController = TextEditingController(
       text: widget.cliente['nombre_comercio']?.toString() ?? '',
@@ -75,60 +73,57 @@ _ubicacionActualizadaAt = DateTime.tryParse(
     _observacionesController = TextEditingController(
       text: widget.cliente['observaciones']?.toString() ?? '',
     );
-    _preventistaSeleccionadoId =
-    widget.cliente['preventista_id']?.toString();
+    _preventistaSeleccionadoId = widget.cliente['preventista_id']?.toString();
 
-_cargarPreventistas();
+    _cargarPreventistas();
   }
+
   Future<void> _cargarPreventistas() async {
-  final usuarioId =
-      Supabase.instance.client.auth.currentUser?.id;
+    final usuarioId = Supabase.instance.client.auth.currentUser?.id;
 
-  if (usuarioId == null) return;
+    if (usuarioId == null) return;
 
-  try {
-    final usuario = await Supabase.instance.client
-        .from('usuarios')
-        .select('rol')
-        .eq('id', usuarioId)
-        .single();
+    try {
+      final usuario = await Supabase.instance.client
+          .from('usuarios')
+          .select('rol')
+          .eq('id', usuarioId)
+          .single();
 
-    final esAdministrador =
-        usuario['rol']?.toString() == 'administrador';
+      final esAdministrador = usuario['rol']?.toString() == 'administrador';
 
-    if (!esAdministrador) {
+      if (!esAdministrador) {
+        if (!mounted) return;
+
+        setState(() {
+          _esAdministrador = false;
+        });
+
+        return;
+      }
+
+      final respuesta = await Supabase.instance.client
+          .from('usuarios')
+          .select('id, nombre, apellido')
+          .eq('rol', 'preventista')
+          .eq('activo', true)
+          .order('nombre');
+
+      if (!mounted) return;
+
+      setState(() {
+        _esAdministrador = true;
+        _preventistas = List<Map<String, dynamic>>.from(respuesta);
+      });
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
         _esAdministrador = false;
+        _preventistas = [];
       });
-
-      return;
     }
-
-    final respuesta = await Supabase.instance.client
-        .from('usuarios')
-        .select('id, nombre, apellido')
-        .eq('rol', 'preventista')
-        .eq('activo', true)
-        .order('nombre');
-
-    if (!mounted) return;
-
-    setState(() {
-      _esAdministrador = true;
-      _preventistas =
-          List<Map<String, dynamic>>.from(respuesta);
-    });
-  } catch (_) {
-    if (!mounted) return;
-
-    setState(() {
-      _esAdministrador = false;
-      _preventistas = [];
-    });
   }
-}
 
   String? _textoOpcional(TextEditingController controller) {
     final texto = controller.text.trim();
@@ -150,32 +145,31 @@ _cargarPreventistas();
           .update({
             'nombre_comercio': _comercioController.text.trim(),
             'preventista_id': _esAdministrador
-    ? _preventistaSeleccionadoId
-    : widget.cliente['preventista_id'],
+                ? _preventistaSeleccionadoId
+                : widget.cliente['preventista_id'],
             'direccion': _direccionController.text.trim(),
             'propietario': _textoOpcional(_propietarioController),
             'telefono': _textoOpcional(_telefonoController),
             'localidad': _textoOpcional(_localidadController),
             'zona': _textoOpcional(_zonaController),
+            'dia_visita': _diaVisita,
             'observaciones': _textoOpcional(_observacionesController),
             'latitud': _latitud,
-'longitud': _longitud,
-'ubicacion_actualizada_at':
-    _ubicacionActualizadaAt?.toIso8601String(),
+            'longitud': _longitud,
+            'ubicacion_actualizada_at': _ubicacionActualizadaAt
+                ?.toIso8601String(),
           })
-          .eq('id', widget.cliente['id']);
+          .eq('id', widget.cliente['id'])
+          .select('id')
+          .single();
 
       if (!mounted) return;
 
       Navigator.of(context).pop(true);
     } on PostgrestException catch (error) {
-      _mostrarMensaje(
-        'No se pudo actualizar el cliente: ${error.message}',
-      );
+      _mostrarMensaje('No se pudo actualizar el cliente: ${error.message}');
     } catch (_) {
-      _mostrarMensaje(
-        'Ocurrió un error al actualizar el cliente.',
-      );
+      _mostrarMensaje('Ocurrió un error al actualizar el cliente.');
     } finally {
       if (mounted) {
         setState(() {
@@ -184,63 +178,61 @@ _cargarPreventistas();
       }
     }
   }
-Future<void> _obtenerUbicacionActual() async {
-  try {
-    bool servicioHabilitado = await Geolocator.isLocationServiceEnabled();
 
-    if (!servicioHabilitado) {
-      _mostrarMensaje('Activá la ubicación del dispositivo.');
-      return;
-    }
+  Future<void> _obtenerUbicacionActual() async {
+    try {
+      bool servicioHabilitado = await Geolocator.isLocationServiceEnabled();
 
-    LocationPermission permiso = await Geolocator.checkPermission();
-
-    if (permiso == LocationPermission.denied) {
-      permiso = await Geolocator.requestPermission();
-
-      if (permiso == LocationPermission.denied) {
-        _mostrarMensaje('No se concedió permiso de ubicación.');
+      if (!servicioHabilitado) {
+        _mostrarMensaje('Activá la ubicación del dispositivo.');
         return;
       }
-    }
 
-    if (permiso == LocationPermission.deniedForever) {
-      _mostrarMensaje(
-        'El permiso de ubicación está bloqueado. Habilitalo desde Ajustes.',
+      LocationPermission permiso = await Geolocator.checkPermission();
+
+      if (permiso == LocationPermission.denied) {
+        permiso = await Geolocator.requestPermission();
+
+        if (permiso == LocationPermission.denied) {
+          _mostrarMensaje('No se concedió permiso de ubicación.');
+          return;
+        }
+      }
+
+      if (permiso == LocationPermission.deniedForever) {
+        _mostrarMensaje(
+          'El permiso de ubicación está bloqueado. Habilitalo desde Ajustes.',
+        );
+        return;
+      }
+
+      final posicion = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
       );
-      return;
+
+      if (!mounted) return;
+
+      setState(() {
+        _latitud = posicion.latitude;
+        _longitud = posicion.longitude;
+        _ubicacionActualizadaAt = DateTime.now();
+      });
+
+      _mostrarMensaje('Ubicación actual obtenida correctamente.');
+    } catch (_) {
+      _mostrarMensaje('No se pudo obtener la ubicación. Intentá nuevamente.');
     }
-
-    final posicion = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 15),
-      ),
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _latitud = posicion.latitude;
-      _longitud = posicion.longitude;
-      _ubicacionActualizadaAt = DateTime.now();
-    });
-
-    _mostrarMensaje('Ubicación actual obtenida correctamente.');
-  } catch (_) {
-    _mostrarMensaje(
-      'No se pudo obtener la ubicación. Intentá nuevamente.',
-    );
   }
-}
+
   void _mostrarMensaje(String mensaje) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   @override
@@ -259,21 +251,16 @@ Future<void> _obtenerUbicacionActual() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Editar cliente'),
-      ),
+      appBar: AppBar(title: const Text('Editar cliente')),
       body: SafeArea(
         child: Form(
           key: _formKey,
-          child: ListView(
+          child: DesktopFormList(
             padding: const EdgeInsets.all(20),
             children: [
               const Text(
                 'Datos principales',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 20),
               TextFormField(
@@ -293,43 +280,42 @@ Future<void> _obtenerUbicacionActual() async {
                 },
               ),
               if (_esAdministrador) ...[
-  DropdownButtonFormField<String>(
-    initialValue: _preventistas.any(
-      (preventista) =>
-          preventista['id']?.toString() ==
-          _preventistaSeleccionadoId,
-    )
-        ? _preventistaSeleccionadoId
-        : null,
-    decoration: const InputDecoration(
-      labelText: 'Preventista asignado',
-      prefixIcon: Icon(Icons.person_outline),
-      border: OutlineInputBorder(),
-    ),
-    items: _preventistas.map((preventista) {
-      final nombre =
-          preventista['nombre']?.toString() ?? '';
-      final apellido =
-          preventista['apellido']?.toString() ?? '';
+                DropdownButtonFormField<String>(
+                  initialValue:
+                      _preventistas.any(
+                        (preventista) =>
+                            preventista['id']?.toString() ==
+                            _preventistaSeleccionadoId,
+                      )
+                      ? _preventistaSeleccionadoId
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Preventista asignado',
+                    prefixIcon: Icon(Icons.person_outline),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _preventistas.map((preventista) {
+                    final nombre = preventista['nombre']?.toString() ?? '';
+                    final apellido = preventista['apellido']?.toString() ?? '';
 
-      final nombreCompleto = [
-        nombre,
-        apellido,
-      ].where((texto) => texto.isNotEmpty).join(' ');
+                    final nombreCompleto = [
+                      nombre,
+                      apellido,
+                    ].where((texto) => texto.isNotEmpty).join(' ');
 
-      return DropdownMenuItem<String>(
-        value: preventista['id'].toString(),
-        child: Text(nombreCompleto),
-      );
-    }).toList(),
-    onChanged: (value) {
-      setState(() {
-        _preventistaSeleccionadoId = value;
-      });
-    },
-  ),
-  const SizedBox(height: 16),
-],
+                    return DropdownMenuItem<String>(
+                      value: preventista['id'].toString(),
+                      child: Text(nombreCompleto),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _preventistaSeleccionadoId = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
               const SizedBox(height: 16),
               TextFormField(
                 controller: _direccionController,
@@ -348,34 +334,30 @@ Future<void> _obtenerUbicacionActual() async {
                 },
               ),
               const SizedBox(height: 16),
-              
 
-OutlinedButton.icon(
-  onPressed: _obtenerUbicacionActual,
-  icon: const Icon(Icons.my_location),
-  label: Text(
-    _latitud == null || _longitud == null
-        ? 'USAR UBICACIÓN ACTUAL'
-        : 'ACTUALIZAR UBICACIÓN',
-  ),
-),
+              OutlinedButton.icon(
+                onPressed: _obtenerUbicacionActual,
+                icon: const Icon(Icons.my_location),
+                label: Text(
+                  _latitud == null || _longitud == null
+                      ? 'USAR UBICACIÓN ACTUAL'
+                      : 'ACTUALIZAR UBICACIÓN',
+                ),
+              ),
 
-if (_latitud != null && _longitud != null) ...[
-  const SizedBox(height: 8),
-  Text(
-    'Latitud: ${_latitud!.toStringAsFixed(6)}\n'
-    'Longitud: ${_longitud!.toStringAsFixed(6)}\n'
-    'Actualizada: ${_ubicacionActualizadaAt?.toLocal()}',
-    style: const TextStyle(fontSize: 13),
-  ),
-],
+              if (_latitud != null && _longitud != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Latitud: ${_latitud!.toStringAsFixed(6)}\n'
+                  'Longitud: ${_longitud!.toStringAsFixed(6)}\n'
+                  'Actualizada: ${_ubicacionActualizadaAt?.toLocal()}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ],
               const SizedBox(height: 28),
               const Text(
                 'Datos opcionales',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 20),
               TextFormField(
@@ -418,6 +400,13 @@ if (_latitud != null && _longitud != null) ...[
                 ),
               ),
               const SizedBox(height: 16),
+              VisitDayField(
+                value: _diaVisita,
+                onChanged: _guardando
+                    ? null
+                    : (dia) => setState(() => _diaVisita = dia),
+              ),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _observacionesController,
                 maxLines: 3,
@@ -437,16 +426,10 @@ if (_latitud != null && _longitud != null) ...[
                       ? const SizedBox(
                           width: 22,
                           height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.save_outlined),
-                  label: Text(
-                    _guardando
-                        ? 'Guardando...'
-                        : 'GUARDAR CAMBIOS',
-                  ),
+                  label: Text(_guardando ? 'Guardando...' : 'GUARDAR CAMBIOS'),
                 ),
               ),
             ],
