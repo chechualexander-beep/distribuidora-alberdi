@@ -1271,4 +1271,3 @@ create table if not exists public.correcciones_operacion (
   detalles_despues jsonb not null default '[]'::jsonb,
   created_at timestamp with time zone not null default now()
 );
-

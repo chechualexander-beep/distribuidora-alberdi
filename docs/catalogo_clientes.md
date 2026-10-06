@@ -118,4 +118,3 @@ release correcta. Windows instalado, 23 archivos verificados por SHA-256 y app
 reabierta. Respaldo: `build/windows_backups/antes_descripciones_listados_20261004/Release`.
 La visualización móvil queda preparada para la próxima actualización Android;
 el AAB 1.0.7 (15) existente no contiene estos cambios.
-
