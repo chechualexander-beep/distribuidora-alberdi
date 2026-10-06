@@ -43,3 +43,17 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Estado local del CLI y fotografía privada de producción
+/supabase/.temp/
+/supabase/produccion_public_actual.sql
+
+# Entorno privado; mantener plantillas sin valores reales
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Credenciales administrativas/de servicio si aparecen localmente
+**/service-account*.json
+**/firebase-adminsdk*.json
