@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://vmbncsqapqdyffscwfwo.supabase.co; img-src 'self' data: https://vmbncsqapqdyffscwfwo.supabase.co; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>Catálogo · Distribuidora Alberdi</title>
+  <link rel="stylesheet" href="catalogo.css">
+  <script src="catalogo-core.js" defer></script><script src="catalogo.js" defer></script>
+</head>
+<body>
+  <header><div class="header-inner"><strong>ALBERDI</strong><span>DISTRIBUIDORA · CATÁLOGO</span></div></header>
+  <main>
+    <section id="status" role="status" aria-live="polite">Cargando catálogo…</section>
+    <button id="retry" type="button" hidden>Volver a intentar</button>
+    <div id="shop" hidden>
+      <h1 id="greeting"></h1>
+      <p id="validity" class="detail"></p>
+      <section id="catalog">
+        <div class="search-area"><label for="search" class="sr-only">Buscar producto o código</label><input id="search" type="search" placeholder="Buscar producto o código…" autocomplete="off"><div id="categories" aria-label="Categorías"></div></div>
+        <p id="count" role="status" aria-live="polite"></p><div id="products"></div>
+      </section>
+      <section id="review" hidden>
+        <button id="back" type="button" class="secondary">← Volver al catálogo</button>
+        <h2>Tu pedido</h2><div id="cart-items"></div><p id="total" class="total"></p>
+        <label for="notes">Observaciones (opcional)</label><textarea id="notes" maxlength="1000" rows="3" placeholder="Detalles para preparar tu pedido"></textarea>
+        <p>El pedido queda pendiente de confirmación de disponibilidad y entrega.</p>
+        <button id="confirm" type="button" class="primary">Confirmar pedido</button>
+      </section>
+      <section id="success" hidden aria-live="polite"><h2>¡Recibimos tu pedido!</h2><p>Pendiente de confirmación.</p><p id="receipt"></p><button id="new-order" type="button" class="primary">Volver al catálogo</button></section>
+    </div>
+  </main>
+  <dialog id="photo-viewer" aria-labelledby="photo-title">
+    <div class="photo-toolbar"><h2 id="photo-title"></h2><button id="photo-close" type="button" aria-label="Cerrar foto" autofocus>✕ Cerrar</button></div>
+    <img id="photo-large" alt="">
+    <p id="photo-error" role="status" hidden>No se pudo cargar la foto. Cerrá e intentá nuevamente.</p>
+  </dialog>
+  <footer id="cart-bar" hidden><button id="open-cart" type="button" class="primary"><span id="cart-count">Ver mi pedido</span><span id="cart-total"></span></button></footer>
+</body>
+</html>

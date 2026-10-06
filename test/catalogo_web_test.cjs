@@ -1,0 +1,11 @@
+const assert = require('node:assert/strict');
+const core = require('../catalogo/catalogo-core.js');
+const products = [{id:'a',nombre:'Papas Facu',codigo:'123',descripcion:'Bolsa de 500 g',categoria:'Snacks',precio:3200.25},{id:'b',nombre:'Alimento balanceado',codigo:'456',categoria:'Balanceados',precio:18000}];
+assert.deepEqual(core.filter(products,'PÁPAS 500',''),[products[0]]);
+assert.deepEqual(core.filter(products,'123','Snacks'),[products[0]]);
+assert.deepEqual(core.filter(products,'papas','Balanceados'),[]);
+assert.deepEqual(core.reconcile(products,{a:2,b:-1,deleted:5}),{a:2});
+assert.deepEqual(core.reconcile(products,{a:Infinity,b:1.5}),{});
+assert.deepEqual(core.items(products,{a:2}),[{producto_id:'a',cantidad:2,precio_visto:3200.25}]);
+assert.match(core.money(3200.25),/3\.200,25/);
+console.log('Catálogo web: búsqueda por palabras, acentos y código, filtro, carrito y centavos OK.');
