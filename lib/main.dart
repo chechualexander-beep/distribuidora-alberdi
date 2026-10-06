@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
+import 'core/session_lock.dart';
+import 'core/desktop_table.dart';
+import 'features/desktop/desktop_home.dart';
 import 'dart:io';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,27 +15,31 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'features/admin/admin_page.dart';
+
+final _navigatorKey = GlobalKey<NavigatorState>();
+final _localAuthentication = LocalAuthentication();
+final _lockNavigation = SessionLockNavigation();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!Platform.isWindows) {
-  await Firebase.initializeApp();
-}
+    await Firebase.initializeApp();
+  }
 
   const bool useTesting = bool.fromEnvironment(
-  'USE_TESTING',
-  defaultValue: false,
-);
+    'USE_TESTING',
+    defaultValue: false,
+  );
 
-const String productionUrl = 'https://vmbncsqapqdyffscwfwo.supabase.co';
-const String productionKey = 'sb_publishable_w_nz47b753qQkzv2pr7lhA_Yl4eZsTB';
+  const String productionUrl = 'https://vmbncsqapqdyffscwfwo.supabase.co';
+  const String productionKey = 'sb_publishable_w_nz47b753qQkzv2pr7lhA_Yl4eZsTB';
 
-const String testingUrl = String.fromEnvironment('SUPABASE_TESTING_URL');
-const String testingKey = String.fromEnvironment('SUPABASE_TESTING_KEY');
+  const String testingUrl = String.fromEnvironment('SUPABASE_TESTING_URL');
+  const String testingKey = String.fromEnvironment('SUPABASE_TESTING_KEY');
 
-await Supabase.initialize(
-  url: useTesting ? testingUrl : productionUrl,
-  publishableKey: useTesting ? testingKey : productionKey,
-);
+  await Supabase.initialize(
+    url: useTesting ? testingUrl : productionUrl,
+    publishableKey: useTesting ? testingKey : productionKey,
+  );
 
   runApp(const DistribuidoraAlberdiApp());
 }
@@ -42,29 +50,68 @@ class DistribuidoraAlberdiApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
+      navigatorObservers: [_lockNavigation],
+      builder: (context, child) {
+        if (Platform.isWindows && MediaQuery.sizeOf(context).width >= 900) {
+          final theme = Theme.of(context);
+          return Theme(
+            data: theme.copyWith(
+              visualDensity: VisualDensity.compact,
+              iconTheme: theme.iconTheme.copyWith(size: 20),
+              listTileTheme: theme.listTileTheme.copyWith(dense: true),
+              inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+              ),
+            ),
+            child: child!,
+          );
+        }
+        if (!Platform.isAndroid) return child!;
+        final auth = Supabase.instance.client.auth;
+        return StreamBuilder<AuthState>(
+          stream: auth.onAuthStateChange,
+          builder: (context, snapshot) => SessionLock(
+            navigation: _lockNavigation,
+            userId: auth.currentUser?.id,
+            authenticate: () => _localAuthentication.authenticate(
+              localizedReason:
+                  'Verificá tu identidad para continuar en Alberdi',
+              persistAcrossBackgrounding: true,
+            ),
+            signOut: () async {
+              await auth.signOut();
+              _navigatorKey.currentState?.pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginPage()),
+                (_) => false,
+              );
+            },
+            child: child!,
+          ),
+        );
+      },
       debugShowCheckedModeBanner: false,
       title: 'Distribuidora Alberdi',
       locale: const Locale('es', 'AR'),
-supportedLocales: const [
-  Locale('es', 'AR'),
-],
-localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: ThemeData(
-  useMaterial3: true,
-  colorSchemeSeed: Colors.indigo,
-),
-darkTheme: ThemeData(
-  useMaterial3: true,
-  brightness: Brightness.dark,
-  colorSchemeSeed: Colors.indigo,
-),
-themeMode: Platform.isWindows ? ThemeMode.dark : ThemeMode.light,
-
+      supportedLocales: const [Locale('es', 'AR')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        colorSchemeSeed: Colors.indigo,
+      ),
+      themeMode: Platform.isWindows ? ThemeMode.dark : ThemeMode.light,
 
       home: const SplashPage(),
     );
   }
 }
+
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
 
@@ -84,13 +131,11 @@ class _SplashPageState extends State<SplashPage> {
 
     if (!mounted) return;
 
-    final tieneSesion =
-        Supabase.instance.client.auth.currentSession != null;
+    final tieneSesion = Supabase.instance.client.auth.currentSession != null;
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) =>
-            tieneSesion ? const HomePage() : const LoginPage(),
+        builder: (_) => tieneSesion ? const HomePage() : const LoginPage(),
       ),
     );
   }
@@ -140,27 +185,20 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final respuesta =
-          await Supabase.instance.client.auth.signInWithPassword(
+      final respuesta = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
       );
 
       if (respuesta.user != null && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => const HomePage(),
-          ),
-        );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
       }
     } on AuthException catch (error) {
-      _mostrarMensaje(
-        'No se pudo iniciar sesión: ${error.message}',
-      );
+      _mostrarMensaje('No se pudo iniciar sesión: ${error.message}');
     } catch (_) {
-      _mostrarMensaje(
-        'Ocurrió un error al iniciar sesión.',
-      );
+      _mostrarMensaje('Ocurrió un error al iniciar sesión.');
     } finally {
       if (mounted) {
         setState(() {
@@ -173,11 +211,9 @@ class _LoginPageState extends State<LoginPage> {
   void _mostrarMensaje(String mensaje) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   @override
@@ -195,42 +231,29 @@ class _LoginPageState extends State<LoginPage> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(28),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 420,
-              ),
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
                 children: [
-                  const Icon(
-                    Icons.inventory_2_outlined,
-                    size: 85,
-                  ),
+                  const Icon(Icons.inventory_2_outlined, size: 85),
                   const SizedBox(height: 24),
                   const Text(
                     'Distribuidora Alberdi',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   const Text(
                     'Sistema de ventas',
-                    style: TextStyle(
-                      fontSize: 17,
-                      color: Colors.grey,
-                    ),
+                    style: TextStyle(fontSize: 17, color: Colors.grey),
                   ),
                   const SizedBox(height: 40),
                   TextField(
                     controller: _emailController,
-                    keyboardType:
-                        TextInputType.emailAddress,
+                    keyboardType: TextInputType.emailAddress,
                     autocorrect: false,
                     decoration: const InputDecoration(
                       labelText: 'Correo electrónico',
-                      prefixIcon:
-                          Icon(Icons.email_outlined),
+                      prefixIcon: Icon(Icons.email_outlined),
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -238,26 +261,21 @@ class _LoginPageState extends State<LoginPage> {
                   TextField(
                     controller: _passwordController,
                     obscureText: _ocultarPassword,
-                    onSubmitted: (_) =>
-                        _iniciarSesion(),
+                    onSubmitted: (_) => _iniciarSesion(),
                     decoration: InputDecoration(
                       labelText: 'Contraseña',
-                      prefixIcon:
-                          const Icon(Icons.lock_outline),
-                      border:
-                          const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         onPressed: () {
                           setState(() {
-                            _ocultarPassword =
-                                !_ocultarPassword;
+                            _ocultarPassword = !_ocultarPassword;
                           });
                         },
                         icon: Icon(
                           _ocultarPassword
                               ? Icons.visibility_outlined
-                              : Icons
-                                  .visibility_off_outlined,
+                              : Icons.visibility_off_outlined,
                         ),
                       ),
                     ),
@@ -267,24 +285,16 @@ class _LoginPageState extends State<LoginPage> {
                     width: double.infinity,
                     height: 52,
                     child: FilledButton(
-                      onPressed: _cargando
-                          ? null
-                          : _iniciarSesion,
+                      onPressed: _cargando ? null : _iniciarSesion,
                       child: _cargando
                           ? const SizedBox(
                               width: 24,
                               height: 24,
-                              child:
-                                  CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Text(
                               'INICIAR SESIÓN',
-                              style: TextStyle(
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
+                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
                     ),
                   ),
@@ -302,12 +312,10 @@ class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() =>
-      _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  
   bool _cargandoPerfil = true;
 
   String? _nombre;
@@ -319,49 +327,45 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _cargarPerfil();
   }
+
   Future<void> _configurarNotificaciones() async {
-  if (!Platform.isAndroid) return;
+    if (!Platform.isAndroid) return;
 
-  final messaging = FirebaseMessaging.instance;
+    final messaging = FirebaseMessaging.instance;
 
-  final settings = await messaging.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
-
-  if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-      settings.authorizationStatus == AuthorizationStatus.provisional) {
-    final token = await messaging.getToken();
-
-    if (token == null) return;
-
-    final usuario =
-        Supabase.instance.client.auth.currentUser;
-
-    if (usuario == null) return;
-
-    await Supabase.instance.client
-        .from('dispositivos_notificaciones')
-        .upsert(
-      {
-        'usuario_id': usuario.id,
-        'token': token,
-        'plataforma': 'android',
-        'activo': true,
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      onConflict: 'token',
+    final settings = await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
     );
 
-    debugPrint('Token FCM del administrador registrado correctamente.');
+    if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional) {
+      final token = await messaging.getToken();
+
+      if (token == null) return;
+
+      final usuario = Supabase.instance.client.auth.currentUser;
+
+      if (usuario == null) return;
+
+      await Supabase.instance.client
+          .from('dispositivos_notificaciones')
+          .upsert({
+            'usuario_id': usuario.id,
+            'token': token,
+            'plataforma': 'android',
+            'activo': true,
+            'updated_at': DateTime.now().toIso8601String(),
+          }, onConflict: 'token');
+
+      debugPrint('Token FCM del administrador registrado correctamente.');
+    }
   }
-}
 
   Future<void> _cargarPerfil() async {
     try {
-      final usuarioAuth =
-          Supabase.instance.client.auth.currentUser;
+      final usuarioAuth = Supabase.instance.client.auth.currentUser;
 
       if (usuarioAuth == null) {
         if (!mounted) return;
@@ -376,30 +380,23 @@ class _HomePageState extends State<HomePage> {
 
       final perfil = await Supabase.instance.client
           .from('usuarios')
-          .select(
-            'nombre, apellido, rol, activo',
-          )
+          .select('nombre, apellido, rol, activo')
           .eq('id', usuarioAuth.id)
           .single();
 
-      final nombre =
-          perfil['nombre'] as String?;
+      final nombre = perfil['nombre'] as String?;
 
-      final apellido =
-          perfil['apellido'] as String?;
+      final apellido = perfil['apellido'] as String?;
 
-      final rol =
-          perfil['rol'] as String?;
+      final rol = perfil['rol'] as String?;
 
-      final activo =
-          perfil['activo'] as bool? ?? false;
+      final activo = perfil['activo'] as bool? ?? false;
 
       if (!mounted) return;
 
       if (!activo) {
         setState(() {
-          _error =
-              'Este usuario está desactivado.';
+          _error = 'Este usuario está desactivado.';
           _cargandoPerfil = false;
         });
 
@@ -408,26 +405,21 @@ class _HomePageState extends State<HomePage> {
 
       setState(() {
         _nombre = [
-          if (nombre != null &&
-              nombre.isNotEmpty)
-            nombre,
-          if (apellido != null &&
-              apellido.isNotEmpty)
-            apellido,
+          if (nombre != null && nombre.isNotEmpty) nombre,
+          if (apellido != null && apellido.isNotEmpty) apellido,
         ].join(' ');
 
         _rol = rol;
         _cargandoPerfil = false;
       });
       if (rol == 'administrador') {
-  await _configurarNotificaciones();
-}
+        await _configurarNotificaciones();
+      }
     } catch (_) {
       if (!mounted) return;
 
       setState(() {
-        _error =
-            'No se pudo cargar el perfil del usuario.';
+        _error = 'No se pudo cargar el perfil del usuario.';
         _cargandoPerfil = false;
       });
     }
@@ -439,9 +431,7 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
 
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => const LoginPage(),
-      ),
+      MaterialPageRoute(builder: (_) => const LoginPage()),
       (route) => false,
     );
   }
@@ -449,394 +439,339 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     if (_cargandoPerfil) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(
-          title:
-              const Text('Distribuidora Alberdi'),
-        ),
+        appBar: AppBar(title: const Text('Distribuidora Alberdi')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
               _error!,
               textAlign: TextAlign.center,
-              style:
-                  const TextStyle(fontSize: 18),
+              style: const TextStyle(fontSize: 18),
             ),
           ),
         ),
       );
     }
 
-    final esAdministrador =
-        _rol == 'administrador';
-        final bool esModoOscuro =
-    Theme.of(context).brightness == Brightness.dark;
+    final esAdministrador = _rol == 'administrador';
+    if (useDesktopLayout(context)) {
+      return DesktopHome(
+        name: _nombre ?? 'Usuario',
+        isAdmin: esAdministrador,
+        onSignOut: _cerrarSesion,
+      );
+    }
+    final bool esModoOscuro = Theme.of(context).brightness == Brightness.dark;
 
-final Color colorPrincipal =
-    esModoOscuro ? Colors.white : const Color(0xFF0B2854);
+    final Color colorPrincipal = esModoOscuro
+        ? Colors.white
+        : const Color(0xFF0B2854);
 
-final Color colorSecundario =
-    esModoOscuro ? Colors.white70 : Colors.black54;
+    final Color colorSecundario = esModoOscuro
+        ? Colors.white70
+        : Colors.black54;
 
     return Scaffold(
-  appBar: AppBar(
-    backgroundColor: const Color(0xFF062A5E),
-    foregroundColor: Colors.white,
-    elevation: 0,
-    toolbarHeight: 72,
-    title: const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'DISTRIBUIDORA',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 2.2,
-            color: Color(0xFFE5A72D),
-          ),
-        ),
-        Text(
-          'Alberdi',
-          style: TextStyle(
-            fontSize: 25,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-      ],
-    ),
-    actions: [
-      IconButton(
-        tooltip: 'Cerrar sesión',
-        onPressed: _cerrarSesion,
-        icon: const Icon(Icons.logout),
-      ),
-      const SizedBox(width: 8),
-    ],
-  ),
-      body: SingleChildScrollView(
-  child: Padding(
-    padding: const EdgeInsets.all(24),
-    child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.stretch,
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF062A5E),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        toolbarHeight: 72,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Hola, ${_nombre ?? 'Usuario'}',
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
+              'DISTRIBUIDORA',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 2.2,
+                color: Color(0xFFE5A72D),
               ),
             ),
-            const SizedBox(height: 6),
             Text(
-              esAdministrador
-                  ? 'Administrador'
-                  : 'Preventista',
-              style: const TextStyle(
-                fontSize: 17,
-                color: Colors.grey,
+              'Alberdi',
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
-            const SizedBox(height: 32),
-
-            // CLIENTES
-Card(
-  elevation: 2,
-  margin: const EdgeInsets.only(bottom: 10),
-  shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(16),
-  ),
-  child: ListTile(
-    contentPadding: const EdgeInsets.symmetric(
-      horizontal: 18,
-      vertical: 8,
-    ),
-    leading: Icon(
-      Icons.people_outline,
-      size: 32,
-      color: colorPrincipal,
-    ),
-    title: Text(
-      'Clientes',
-      style: TextStyle(
-        fontSize: 17,
-        fontWeight: FontWeight.bold,
-        color: colorPrincipal,
-      ),
-    ),
-    subtitle: Padding(
-      padding: EdgeInsets.only(top: 3),
-      child: Text(
-        'Gestión de clientes',
-        style: TextStyle(
-          fontSize: 13,
-          color: colorSecundario,
-        ),
-      ),
-    ),
-    trailing: Icon(
-      Icons.chevron_right,
-      color: colorPrincipal,
-    ),
-    onTap: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const ClientsPage(),
-        ),
-      );
-    },
-  ),
-),
-
-           // PRODUCTOS
-Card(
-  elevation: 2,
-  shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(14),
-  ),
-  child: ListTile(
-    contentPadding: const EdgeInsets.symmetric(
-      horizontal: 16,
-      vertical: 8,
-    ),
-    leading:  Icon(
-      Icons.inventory_2_outlined,
-      size: 30,
-      color: colorPrincipal,
-    ),
-    title:  Text(
-      'Productos',
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: colorPrincipal,
-      ),
-    ),
-    subtitle:  Padding(
-      padding: EdgeInsets.only(top: 3),
-      child: Text(
-        'Consultá precios y stock',
-        style: TextStyle(
-          fontSize: 13,
-          color: colorSecundario,
-        ),
-      ),
-    ),
-    trailing:  Icon(
-      Icons.chevron_right,
-      color: colorPrincipal,
-    ),
-    onTap: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const ProductsPage(),
-        ),
-      );
-    },
-  ),
-),
-
-            // NUEVO PEDIDO
-Card(
-  elevation: 2,
-  shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(14),
-  ),
-  color: const Color(0xFF1565C0),
-  child: ListTile(
-    contentPadding: const EdgeInsets.symmetric(
-      horizontal: 16,
-      vertical: 8,
-    ),
-    leading: const Icon(
-      Icons.shopping_cart_outlined,
-      size: 30,
-      color: Colors.white,
-    ),
-    title: const Text(
-      'Nuevo pedido',
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: Colors.white,
-      ),
-    ),
-    subtitle: const Padding(
-      padding: EdgeInsets.only(top: 3),
-      child: Text(
-        'Crear un nuevo pedido',
-        style: TextStyle(
-          fontSize: 13,
-          color: Colors.white70,
-        ),
-      ),
-    ),
-    trailing: const Icon(
-      Icons.chevron_right,
-      color: Colors.white,
-    ),
-    onTap: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const NewOrderPage(),
-        ),
-      );
-    },
-  ),
-),
-
-            // PEDIDOS
-Card(
-  elevation: 2,
-  shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(14),
-  ),
-  child: ListTile(
-    contentPadding: const EdgeInsets.symmetric(
-      horizontal: 16,
-      vertical: 8,
-    ),
-    leading: Icon(
-      Icons.receipt_long_outlined,
-      size: 30,
-      color: colorPrincipal,
-    ),
-    title: Text(
-      'Pedidos',
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: colorPrincipal,
-      ),
-    ),
-    subtitle:  Padding(
-      padding: EdgeInsets.only(top: 3),
-      child: Text(
-        'Ver pedidos realizados',
-        style: TextStyle(
-          fontSize: 13,
-          color: colorSecundario,
-        ),
-      ),
-    ),
-    trailing:  Icon(
-      Icons.chevron_right,
-      color: colorPrincipal,
-    ),
-    onTap: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const OrdersPage(),
-        ),
-      );
-    },
-  ),
-),
-Card(
-  shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(14),
-  ),
-  child: ListTile(
-    contentPadding: const EdgeInsets.symmetric(
-      horizontal: 16,
-      vertical: 8,
-    ),
-    leading: Icon(
-      Icons.payments_outlined,
-      color: colorPrincipal,
-    ),
-    title: Text(
-      'Mis comisiones',
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: colorPrincipal,
-      ),
-    ),
-    subtitle: Padding(
-      padding: const EdgeInsets.only(top: 3),
-      child: Text(
-        'Consultar mis ganancias',
-        style: TextStyle(
-          fontSize: 13,
-          color: colorSecundario,
-        ),
-      ),
-    ),
-    trailing: Icon(
-      Icons.chevron_right,
-      color: colorPrincipal,
-    ),
-    onTap: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => MyCommissionsPage(),
-        ),
-      );
-    },
-  ),
-),
-
-            // ADMINISTRACIÓN
-if (esAdministrador)
-  Card(
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(14),
-    ),
-    child: ListTile(
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 8,
-      ),
-      leading:  Icon(
-        Icons.admin_panel_settings_outlined,
-        color: colorPrincipal,
-        size: 28,
-      ),
-      title:  Text(
-        'Administración',
-        style: TextStyle(
-          fontWeight: FontWeight.w600,
-          color: colorPrincipal,
-        ),
-      ),
-      subtitle:  Padding(
-        padding: EdgeInsets.only(top: 3),
-        child: Text(
-          'Solo administrador',
-          style: TextStyle(
-            fontSize: 13,
-            color: colorSecundario,
-          ),
-        ),
-      ),
-      trailing:  Icon(
-        Icons.chevron_right,
-        color: colorPrincipal,
-      ),
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const AdminPage(),
-          ),
-        );
-      },
-    ),
-  ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Cerrar sesión',
+            onPressed: _cerrarSesion,
+            icon: const Icon(Icons.logout),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Hola, ${_nombre ?? 'Usuario'}',
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                esAdministrador ? 'Administrador' : 'Preventista',
+                style: const TextStyle(fontSize: 17, color: Colors.grey),
+              ),
+              const SizedBox(height: 32),
+
+              // CLIENTES
+              Card(
+                elevation: 2,
+                margin: const EdgeInsets.only(bottom: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 8,
+                  ),
+                  leading: Icon(
+                    Icons.people_outline,
+                    size: 32,
+                    color: colorPrincipal,
+                  ),
+                  title: Text(
+                    'Clientes',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: colorPrincipal,
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: EdgeInsets.only(top: 3),
+                    child: Text(
+                      'Gestión de clientes',
+                      style: TextStyle(fontSize: 13, color: colorSecundario),
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: colorPrincipal),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ClientsPage()),
+                    );
+                  },
+                ),
+              ),
+
+              // PRODUCTOS
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  leading: Icon(
+                    Icons.inventory_2_outlined,
+                    size: 30,
+                    color: colorPrincipal,
+                  ),
+                  title: Text(
+                    'Productos',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: colorPrincipal,
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: EdgeInsets.only(top: 3),
+                    child: Text(
+                      'Consultá precios y stock',
+                      style: TextStyle(fontSize: 13, color: colorSecundario),
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: colorPrincipal),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ProductsPage()),
+                    );
+                  },
+                ),
+              ),
+
+              // NUEVO PEDIDO
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                color: const Color(0xFF1565C0),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  leading: const Icon(
+                    Icons.shopping_cart_outlined,
+                    size: 30,
+                    color: Colors.white,
+                  ),
+                  title: const Text(
+                    'Nuevo pedido',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  subtitle: const Padding(
+                    padding: EdgeInsets.only(top: 3),
+                    child: Text(
+                      'Crear un nuevo pedido',
+                      style: TextStyle(fontSize: 13, color: Colors.white70),
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right,
+                    color: Colors.white,
+                  ),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const NewOrderPage()),
+                    );
+                  },
+                ),
+              ),
+
+              // PEDIDOS
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  leading: Icon(
+                    Icons.receipt_long_outlined,
+                    size: 30,
+                    color: colorPrincipal,
+                  ),
+                  title: Text(
+                    'Pedidos',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: colorPrincipal,
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: EdgeInsets.only(top: 3),
+                    child: Text(
+                      'Ver pedidos realizados',
+                      style: TextStyle(fontSize: 13, color: colorSecundario),
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: colorPrincipal),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const OrdersPage()),
+                    );
+                  },
+                ),
+              ),
+              Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  leading: Icon(Icons.payments_outlined, color: colorPrincipal),
+                  title: Text(
+                    'Mis comisiones',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: colorPrincipal,
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      'Consultar mis ganancias',
+                      style: TextStyle(fontSize: 13, color: colorSecundario),
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: colorPrincipal),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => MyCommissionsPage()),
+                    );
+                  },
+                ),
+              ),
+
+              // ADMINISTRACIÓN
+              if (esAdministrador)
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: Icon(
+                      Icons.admin_panel_settings_outlined,
+                      color: colorPrincipal,
+                      size: 28,
+                    ),
+                    title: Text(
+                      'Administración',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: colorPrincipal,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: EdgeInsets.only(top: 3),
+                      child: Text(
+                        'Solo administrador',
+                        style: TextStyle(fontSize: 13, color: colorSecundario),
+                      ),
+                    ),
+                    trailing: Icon(Icons.chevron_right, color: colorPrincipal),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AdminPage()),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

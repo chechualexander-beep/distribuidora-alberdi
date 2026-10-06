@@ -1,9 +1,13 @@
+import '../orders/order_observation_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'invoice_detail_page.dart';
+import '../../core/desktop_table.dart';
+import 'invoicing_desktop_table.dart';
 
 class InvoicingPage extends StatefulWidget {
-  const InvoicingPage({super.key});
+  const InvoicingPage({super.key, this.embedded = false});
+  final bool embedded;
 
   @override
   State<InvoicingPage> createState() => _InvoicingPageState();
@@ -33,6 +37,7 @@ class _InvoicingPageState extends State<InvoicingPage> {
           .select('''
             id,
             created_at,
+      observacion,
             total,
             tipo_precio,
             estado,
@@ -50,8 +55,8 @@ class _InvoicingPageState extends State<InvoicingPage> {
             )
           ''')
           .eq('facturado', false)
-.eq('tipo_operacion', 'pedido')
-.order('created_at', ascending: false);
+          .eq('tipo_operacion', 'pedido')
+          .order('created_at', ascending: false);
 
       if (!mounted) return;
 
@@ -107,19 +112,16 @@ class _InvoicingPageState extends State<InvoicingPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) return _construirContenido();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Facturación'),
-      ),
+      appBar: AppBar(title: const Text('Facturación')),
       body: _construirContenido(),
     );
   }
 
   Widget _construirContenido() {
     if (_cargando) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -139,6 +141,21 @@ class _InvoicingPageState extends State<InvoicingPage> {
       );
     }
 
+    if (useDesktopLayout(context)) {
+      return InvoicingDesktopTable(
+        orders: _pedidos,
+        onRefresh: _cargarPedidos,
+        onOpen: (pedido) async {
+          final result = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => InvoiceDetailPage(pedido: pedido),
+            ),
+          );
+          if (result == true && mounted) await _cargarPedidos();
+        },
+      );
+    }
+
     if (_pedidos.isEmpty) {
       return const Center(
         child: Text(
@@ -153,28 +170,22 @@ class _InvoicingPageState extends State<InvoicingPage> {
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _pedidos.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           final pedido = _pedidos[index];
 
-          final cliente =
-              pedido['clientes'] as Map<String, dynamic>?;
+          final cliente = pedido['clientes'] as Map<String, dynamic>?;
 
-          final usuario =
-              pedido['usuarios'] as Map<String, dynamic>?;
+          final usuario = pedido['usuarios'] as Map<String, dynamic>?;
 
           final clienteNombre =
-              cliente?['nombre_comercio']?.toString() ??
-              'Cliente sin nombre';
+              cliente?['nombre_comercio']?.toString() ?? 'Cliente sin nombre';
 
-          final direccion =
-              cliente?['direccion']?.toString() ?? '';
+          final direccion = cliente?['direccion']?.toString() ?? '';
 
-          final vendedorNombre =
-              usuario?['nombre']?.toString() ?? '';
+          final vendedorNombre = usuario?['nombre']?.toString() ?? '';
 
-          final vendedorApellido =
-              usuario?['apellido']?.toString() ?? '';
+          final vendedorApellido = usuario?['apellido']?.toString() ?? '';
 
           final vendedor = [
             vendedorNombre,
@@ -182,70 +193,66 @@ class _InvoicingPageState extends State<InvoicingPage> {
           ].where((texto) => texto.isNotEmpty).join(' ');
 
           return Card(
-  child: InkWell(
-      onTap: () async {
-  final resultado = await Navigator.of(context).push<bool>(
-    MaterialPageRoute(
-      builder: (_) => InvoiceDetailPage(
-        pedido: pedido,
-      ),
-    ),
-  );
+            child: InkWell(
+              onTap: () async {
+                final resultado = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => InvoiceDetailPage(pedido: pedido),
+                  ),
+                );
 
-  if (resultado == true) {
-    await _cargarPedidos();
-  }
-},
-    
-    child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.receipt_long_outlined,
-                    size: 32,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          clienteNombre,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
+                if (resultado == true) {
+                  await _cargarPedidos();
+                }
+              },
+
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    OrderObservationIndicator(
+                      observation: pedido['observacion'],
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            clienteNombre,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        if (direccion.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(direccion),
+                          if (direccion.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(direccion),
+                          ],
+                          const SizedBox(height: 6),
+                          Text(
+                            'Fecha: ${_formatearFecha(pedido['created_at'])}',
+                          ),
+                          if (vendedor.isNotEmpty)
+                            Text('Preventista: $vendedor'),
+                          Text(
+                            'Tipo de precio: ${pedido['tipo_precio']?.toString().toUpperCase() ?? ''}',
+                          ),
                         ],
-                        const SizedBox(height: 6),
-                        Text(
-                          'Fecha: ${_formatearFecha(pedido['created_at'])}',
-                        ),
-                        if (vendedor.isNotEmpty)
-                          Text('Preventista: $vendedor'),
-                        Text(
-                          'Tipo de precio: ${pedido['tipo_precio']?.toString().toUpperCase() ?? ''}',
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 20),
-                  Text(
-                    _formatearPrecio(pedido['total']),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                    const SizedBox(width: 20),
+                    Text(
+                      _formatearPrecio(pedido['total']),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-  ),
           );
         },
       ),
