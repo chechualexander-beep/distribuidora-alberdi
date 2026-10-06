@@ -1,3 +1,5 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -13,6 +15,8 @@ class ManageOrderPage extends StatefulWidget {
 class _ManageOrderPageState extends State<ManageOrderPage> {
   bool _cargando = true;
   bool _guardando = false;
+  bool _esCatalogo = false;
+  bool _catalogoConPreventista = false;
   String? _error;
 
   String _estado = 'pendiente';
@@ -41,6 +45,20 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
     });
 
     try {
+      try {
+        final origen = await Supabase.instance.client
+            .from('pedidos')
+            .select('origen,catalogo_preventista_id')
+            .eq('id', widget.pedido['id'])
+            .single();
+        // La asignación queda guardada en cada pedido, independiente del enlace actual.
+        _esCatalogo = origen['origen'] == 'catalogo';
+        _catalogoConPreventista = origen['catalogo_preventista_id'] != null;
+      } on PostgrestException catch (error) {
+        // Compatibilidad mientras todavía no se instaló la migración.
+        if (error.code != '42703' && error.code != 'PGRST204') rethrow;
+        _esCatalogo = false;
+      }
       final respuesta = await Supabase.instance.client
           .from('pedido_detalles')
           .select('''
@@ -152,6 +170,13 @@ cantidad_entregada,
   }
 
   double _porcentajeComision(Map<String, dynamic> detalle) {
+    if (_esCatalogo && !_catalogoConPreventista) return 0;
+    if (_esCatalogo && detalle['agregado_en_entrega_local'] != true) {
+      return double.tryParse(
+            detalle['porcentaje_comision']?.toString() ?? '',
+          ) ??
+          0;
+    }
     final producto = detalle['productos'] as Map<String, dynamic>?;
 
     final tipoPrecio = detalle['tipo_precio']?.toString() ?? 'normal';
@@ -203,7 +228,7 @@ cantidad_entregada,
   Future<void> _agregarProductoEnEntrega() async {
     try {
       final respuesta = await Supabase.instance.client
-          .from('productos')
+          .from('productos_administracion')
           .select('''
           id,
           nombre,
@@ -580,6 +605,35 @@ cantidad_entregada,
     final resultado = _resultadoEntrega();
 
     final totalEntregado = _totalEntregadoActual();
+    double creditoAplicable = 0;
+    double efectivoCompleto = totalEntregado;
+    if (resultado != 'no_entregado' && totalEntregado > 0) {
+      try {
+        final pedido = await Supabase.instance.client
+            .from('pedidos')
+            .select('cliente_id')
+            .eq('id', widget.pedido['id'])
+            .single();
+        final cuenta = await Supabase.instance.client
+            .from('saldos_pendientes_clientes')
+            .select('saldo_a_favor,saldo_pendiente')
+            .eq('cliente_id', pedido['cliente_id'])
+            .single();
+        final favor = double.tryParse(cuenta['saldo_a_favor'].toString()) ?? 0;
+        final deudaAnterior =
+            double.tryParse(cuenta['saldo_pendiente'].toString()) ?? 0;
+        creditoAplicable = (favor - deudaAnterior)
+            .clamp(0, totalEntregado)
+            .toDouble();
+        efectivoCompleto = totalEntregado - creditoAplicable;
+      } catch (_) {
+        _mostrarMensaje(
+          'No se pudo consultar el saldo a favor. Intentá nuevamente.',
+        );
+        return;
+      }
+      if (!mounted) return;
+    }
     String? medioPagoCompleto;
     double? importePagoParcial;
     String? medioPagoParcial;
@@ -592,8 +646,7 @@ cantidad_entregada,
           return AlertDialog(
             title: const Text('¿Cómo quedó el pago?'),
             content: Text(
-              'Mercadería entregada: ${_formatearPrecio(totalEntregado)}\n\n'
-              '¿Cómo pagó el cliente lo entregado?',
+              'Mercadería entregada: ${_formatearPrecio(totalEntregado)}\n\nSaldo a favor que se aplicará: ${_formatearPrecio(creditoAplicable)}\nImporte nuevo a cobrar: ${_formatearPrecio(efectivoCompleto)}\n¿Cómo pagó el cliente?',
             ),
             actions: [
               TextButton(
@@ -751,6 +804,7 @@ cantidad_entregada,
           medioPagoCompleto != null &&
           medioPagoCompleto != 'Parcial') {
         tipoPago = 'completo';
+        importePago = efectivoCompleto;
         medioPago = medioPagoCompleto;
       }
 
@@ -837,28 +891,32 @@ cantidad_entregada,
     if (_cargando) {
       return Scaffold(
         appBar: AppBar(title: const Text('Gestionar pedido')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: DesktopForm(
+          child: const Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
     if (_error != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Gestionar pedido')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 60),
-                const SizedBox(height: 16),
-                Text(_error!, textAlign: TextAlign.center),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: _cargarDetalles,
-                  child: const Text('Reintentar'),
-                ),
-              ],
+        body: DesktopForm(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 60),
+                  const SizedBox(height: 16),
+                  Text(_error!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: _cargarDetalles,
+                    child: const Text('Reintentar'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -880,355 +938,438 @@ cantidad_entregada,
 
     return Scaffold(
       appBar: AppBar(title: const Text('Gestionar pedido')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text('Cliente', style: TextStyle(color: Colors.grey)),
-                  const SizedBox(height: 4),
-                  Text(
-                    clienteNombre,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (widget.pedido['tipo_operacion']?.toString() ==
-                      'venta_directa') ...[
-                    const SizedBox(height: 8),
-                    const Text(
-                      'VENTA DIRECTA',
-                      style: TextStyle(
-                        fontSize: 14,
+      body: DesktopForm(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Cliente', style: TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 4),
+                    Text(
+                      clienteNombre,
+                      style: const TextStyle(
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 18),
-                  DropdownButtonFormField<String>(
-                    initialValue: _estado,
-                    decoration: const InputDecoration(
-                      labelText: 'Estado operativo',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'pendiente',
-                        child: Text('Pendiente'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'preparado',
-                        child: Text('Preparado'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'en_reparto',
-                        child: Text('En reparto'),
+                    if (widget.pedido['tipo_operacion']?.toString() ==
+                        'venta_directa') ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'VENTA DIRECTA',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
+                    const SizedBox(height: 18),
+                    DropdownButtonFormField<String>(
+                      initialValue: _estado,
+                      decoration: const InputDecoration(
+                        labelText: 'Estado operativo',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'pendiente',
+                          child: Text('Pendiente'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'preparado',
+                          child: Text('Preparado'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'en_reparto',
+                          child: Text('En reparto'),
+                        ),
+                      ],
+                      onChanged: (valor) {
+                        if (valor == null) return;
+
+                        setState(() {
+                          _estado = valor;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Mercadería entregada',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+
+            Card(
+              child: Column(
+                children: [
+                  RadioListTile<String>(
+                    value: 'completo',
+                    groupValue: _modoEntrega,
+                    title: const Text('TODO ENTREGADO'),
+                    subtitle: const Text('El cliente recibió todo el pedido'),
                     onChanged: (valor) {
                       if (valor == null) return;
 
                       setState(() {
-                        _estado = valor;
+                        _modoEntrega = valor;
+
+                        for (final detalle in _detalles) {
+                          final id = detalle['id'].toString();
+                          final cantidad = _cantidadPedida(detalle);
+
+                          _entregadosControllers[id]?.text = _numeroLimpio(
+                            cantidad,
+                          );
+                        }
+                      });
+                    },
+                  ),
+
+                  const Divider(height: 1),
+
+                  RadioListTile<String>(
+                    value: 'rechazado',
+                    groupValue: _modoEntrega,
+                    title: const Text('TODO NO ENTREGADO'),
+                    subtitle: const Text(
+                      'El cliente no recibió ningún producto',
+                    ),
+                    onChanged: (valor) {
+                      if (valor == null) return;
+
+                      setState(() {
+                        _modoEntrega = valor;
+
+                        for (final detalle in _detalles) {
+                          final id = detalle['id'].toString();
+                          _entregadosControllers[id]?.text = '0';
+                        }
+                      });
+                    },
+                  ),
+
+                  const Divider(height: 1),
+
+                  RadioListTile<String>(
+                    value: 'parcial',
+                    groupValue: _modoEntrega,
+                    title: const Text('ENTREGA PARCIAL'),
+                    subtitle: const Text(
+                      'Indicar cantidades producto por producto',
+                    ),
+                    onChanged: (valor) {
+                      if (valor == null) return;
+
+                      setState(() {
+                        _modoEntrega = valor;
+
+                        for (final detalle in _detalles) {
+                          if (_esAgregadoEnEntrega(detalle)) {
+                            continue;
+                          }
+
+                          final id = detalle['id'].toString();
+                          final cantidad = _cantidadPedida(detalle);
+
+                          _entregadosControllers[id]?.text = _numeroLimpio(
+                            cantidad,
+                          );
+                        }
                       });
                     },
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Mercadería entregada',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
 
-          Card(
-            child: Column(
-              children: [
-                RadioListTile<String>(
-                  value: 'completo',
-                  groupValue: _modoEntrega,
-                  title: const Text('TODO ENTREGADO'),
-                  subtitle: const Text('El cliente recibió todo el pedido'),
-                  onChanged: (valor) {
-                    if (valor == null) return;
+            const SizedBox(height: 16),
 
-                    setState(() {
-                      _modoEntrega = valor;
-
-                      for (final detalle in _detalles) {
-                        final id = detalle['id'].toString();
-                        final cantidad = _cantidadPedida(detalle);
-
-                        _entregadosControllers[id]?.text = _numeroLimpio(
-                          cantidad,
-                        );
-                      }
-                    });
-                  },
-                ),
-
-                const Divider(height: 1),
-
-                RadioListTile<String>(
-                  value: 'rechazado',
-                  groupValue: _modoEntrega,
-                  title: const Text('TODO NO ENTREGADO'),
-                  subtitle: const Text('El cliente no recibió ningún producto'),
-                  onChanged: (valor) {
-                    if (valor == null) return;
-
-                    setState(() {
-                      _modoEntrega = valor;
-
-                      for (final detalle in _detalles) {
-                        final id = detalle['id'].toString();
-                        _entregadosControllers[id]?.text = '0';
-                      }
-                    });
-                  },
-                ),
-
-                const Divider(height: 1),
-
-                RadioListTile<String>(
-                  value: 'parcial',
-                  groupValue: _modoEntrega,
-                  title: const Text('ENTREGA PARCIAL'),
-                  subtitle: const Text(
-                    'Indicar cantidades producto por producto',
+            if (_modoEntrega == 'parcial' && useDesktopLayout(context))
+              DesktopRecords(
+                embedded: true,
+                records: _detalles,
+                fields: [
+                  DesktopField(
+                    'Producto',
+                    (r) => (r['productos'] as Map?)?['nombre'],
+                    width: 240,
                   ),
-                  onChanged: (valor) {
-                    if (valor == null) return;
-
-                    setState(() {
-                      _modoEntrega = valor;
-
-                      for (final detalle in _detalles) {
-                        if (_esAgregadoEnEntrega(detalle)) {
-                          continue;
-                        }
-
-                        final id = detalle['id'].toString();
-                        final cantidad = _cantidadPedida(detalle);
-
-                        _entregadosControllers[id]?.text = _numeroLimpio(
-                          cantidad,
-                        );
-                      }
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          if (_modoEntrega == 'parcial')
-            ..._detalles.map((detalle) {
-              final producto = detalle['productos'] as Map<String, dynamic>?;
-
-              final nombre =
-                  producto?['nombre']?.toString() ?? 'Producto sin nombre';
-
-              final id = detalle['id'].toString();
-              final esAgregado = _esAgregadoEnEntrega(detalle);
-
-              final pedida = _cantidadPedida(detalle);
-              final noEntregada = _cantidadNoEntregada(detalle);
-
-              final porcentaje = _porcentajeComision(detalle);
-
-              final importe = _importeComision(detalle);
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              nombre,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          if (esAgregado)
-                            IconButton(
-                              tooltip: 'Quitar producto agregado',
-                              onPressed: () => _quitarProductoAgregado(detalle),
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.orange,
-                              ),
-                            ),
-                        ],
+                  DesktopField(
+                    'Pedida',
+                    _cantidadPedida,
+                    numeric: true,
+                    width: 80,
+                  ),
+                  DesktopField(
+                    'Entregada',
+                    (r) => SizedBox(
+                      width: 110,
+                      child: TextField(
+                        key: ValueKey('entregar-${r['id']}'),
+                        controller: _entregadosControllers[r['id'].toString()],
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          labelText: 'Cantidad',
+                          isDense: true,
+                        ),
                       ),
-                      if (esAgregado) ...[
-                        const SizedBox(height: 4),
-                        const Row(
+                    ),
+                    width: 110,
+                  ),
+                  DesktopField(
+                    'No entregada',
+                    _cantidadNoEntregada,
+                    numeric: true,
+                    width: 105,
+                  ),
+                  DesktopField(
+                    'Precio',
+                    (r) => desktopMoney(_precio(r)),
+                    numeric: true,
+                    width: 110,
+                  ),
+                  DesktopField(
+                    'Comisión %',
+                    _porcentajeComision,
+                    numeric: true,
+                    width: 90,
+                  ),
+                  DesktopField(
+                    'Comisión',
+                    (r) => desktopMoney(_importeComision(r)),
+                    numeric: true,
+                    width: 120,
+                  ),
+                  DesktopField(
+                    'Origen',
+                    (r) => _esAgregadoEnEntrega(r)
+                        ? 'Agregado en entrega'
+                        : 'Pedido',
+                    width: 145,
+                  ),
+                ],
+                actions: (r) => _esAgregadoEnEntrega(r)
+                    ? IconButton(
+                        tooltip: 'Quitar producto agregado',
+                        onPressed: () => _quitarProductoAgregado(r),
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            if (_modoEntrega == 'parcial' && !useDesktopLayout(context))
+              ..._detalles.map((detalle) {
+                final producto = detalle['productos'] as Map<String, dynamic>?;
+
+                final nombre =
+                    producto?['nombre']?.toString() ?? 'Producto sin nombre';
+
+                final id = detalle['id'].toString();
+                final esAgregado = _esAgregadoEnEntrega(detalle);
+
+                final pedida = _cantidadPedida(detalle);
+                final noEntregada = _cantidadNoEntregada(detalle);
+
+                final porcentaje = _porcentajeComision(detalle);
+
+                final importe = _importeComision(detalle);
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Icon(
-                              Icons.add_circle_outline,
-                              size: 17,
-                              color: Colors.orange,
+                            Expanded(
+                              child: Text(
+                                nombre,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
-                            SizedBox(width: 6),
-                            Text(
-                              'Agregado durante la entrega',
-                              style: TextStyle(
+                            if (esAgregado)
+                              IconButton(
+                                tooltip: 'Quitar producto agregado',
+                                onPressed: () =>
+                                    _quitarProductoAgregado(detalle),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (esAgregado) ...[
+                          const SizedBox(height: 4),
+                          const Row(
+                            children: [
+                              Icon(
+                                Icons.add_circle_outline,
+                                size: 17,
                                 color: Colors.orange,
-                                fontWeight: FontWeight.w600,
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'Agregado durante la entrega',
+                                style: TextStyle(
+                                  color: Colors.orange,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Text('Cantidad pedida: ${_numeroLimpio(pedida)}'),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _entregadosControllers[id],
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Cantidad entregada',
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (_) {
+                            setState(() {});
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        Text('No entregada: ${_numeroLimpio(noEntregada)}'),
+                        const SizedBox(height: 8),
+                        Text('Precio: ${_formatearPrecio(_precio(detalle))}'),
+                        const SizedBox(height: 4),
+                        Text('Comisión: ${_numeroLimpio(porcentaje)}%'),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Comisión generada: ${_formatearPrecio(importe)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            if (_modoEntrega == 'parcial')
+              Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 16),
+                child: OutlinedButton.icon(
+                  onPressed: _guardando ? null : _agregarProductoEnEntrega,
+                  icon: const Icon(Icons.add_shopping_cart_outlined),
+                  label: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('AGREGAR PRODUCTO'),
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 12),
+            if (_modoEntrega != null) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'TOTAL ACTUAL DE LA ENTREGA',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Se actualiza según la mercadería entregada',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey,
                               ),
                             ),
                           ],
                         ),
-                      ],
-                      const SizedBox(height: 8),
-                      Text('Cantidad pedida: ${_numeroLimpio(pedida)}'),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _entregadosControllers[id],
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Cantidad entregada',
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (_) {
-                          setState(() {});
-                        },
                       ),
-                      const SizedBox(height: 10),
-                      Text('No entregada: ${_numeroLimpio(noEntregada)}'),
-                      const SizedBox(height: 8),
-                      Text('Precio: ${_formatearPrecio(_precio(detalle))}'),
-                      const SizedBox(height: 4),
-                      Text('Comisión: ${_numeroLimpio(porcentaje)}%'),
-                      const SizedBox(height: 4),
                       Text(
-                        'Comisión generada: ${_formatearPrecio(importe)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        _formatearPrecio(totalEntregadoActual),
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              );
-            }),
-          if (_modoEntrega == 'parcial')
-            Padding(
-              padding: const EdgeInsets.only(top: 6, bottom: 16),
-              child: OutlinedButton.icon(
-                onPressed: _guardando ? null : _agregarProductoEnEntrega,
-                icon: const Icon(Icons.add_shopping_cart_outlined),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            Card(
+              child: ListTile(
+                title: const Text(
+                  'Resultado de entrega',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(_nombreResultado(resultado)),
+              ),
+            ),
+
+            if (resultado == 'parcial' || resultado == 'no_entregado') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _motivoController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Motivo de mercadería no entregada *',
+                  hintText: 'Ej.: cliente cerrado, rechazó parte del pedido...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+            if (puedeCancelarVentaDirecta) ...[
+              OutlinedButton.icon(
+                onPressed: _guardando ? null : _cancelarVentaDirecta,
+                icon: const Icon(Icons.cancel_outlined),
                 label: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('AGREGAR PRODUCTO'),
+                  child: Text('CANCELAR VENTA DIRECTA'),
                 ),
               ),
+              const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 20),
+
+            FilledButton.icon(
+              onPressed: _guardando ? null : _guardarGestion,
+              icon: _guardando
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: Text(_guardando ? 'GUARDANDO...' : 'GUARDAR GESTIÓN'),
             ),
 
-          const SizedBox(height: 12),
-          if (_modoEntrega != null) ...[
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'TOTAL ACTUAL DE LA ENTREGA',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Se actualiza según la mercadería entregada',
-                            style: TextStyle(fontSize: 13, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      _formatearPrecio(totalEntregadoActual),
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
           ],
-
-          Card(
-            child: ListTile(
-              title: const Text(
-                'Resultado de entrega',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(_nombreResultado(resultado)),
-            ),
-          ),
-
-          if (resultado == 'parcial' || resultado == 'no_entregado') ...[
-            const SizedBox(height: 12),
-            TextField(
-              controller: _motivoController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Motivo de mercadería no entregada *',
-                hintText: 'Ej.: cliente cerrado, rechazó parte del pedido...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-          if (puedeCancelarVentaDirecta) ...[
-            OutlinedButton.icon(
-              onPressed: _guardando ? null : _cancelarVentaDirecta,
-              icon: const Icon(Icons.cancel_outlined),
-              label: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('CANCELAR VENTA DIRECTA'),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          const SizedBox(height: 20),
-
-          FilledButton.icon(
-            onPressed: _guardando ? null : _guardarGestion,
-            icon: _guardando
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.save_outlined),
-            label: Text(_guardando ? 'GUARDANDO...' : 'GUARDAR GESTIÓN'),
-          ),
-
-          const SizedBox(height: 20),
-        ],
+        ),
       ),
     );
   }

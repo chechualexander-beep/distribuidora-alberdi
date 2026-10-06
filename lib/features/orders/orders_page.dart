@@ -1,3 +1,6 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
+import 'order_observation_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -16,10 +19,10 @@ class _OrdersPageState extends State<OrdersPage> {
 
   List<Map<String, dynamic>> _pedidos = [];
   String _filtroPreventista = '';
-bool _esAdministrador = false;
+  bool _esAdministrador = false;
   String _filtroCliente = '';
-DateTimeRange? _filtroFechas;
-bool _mostrarHistorial = false;
+  DateTimeRange? _filtroFechas;
+  bool _mostrarHistorial = false;
 
   @override
   void initState() {
@@ -48,18 +51,17 @@ bool _mostrarHistorial = false;
       }
 
       final datosUsuario = await Supabase.instance.client
-    .from('usuarios')
-    .select('rol')
-    .eq('id', usuario.id)
-    .single();
+          .from('usuarios')
+          .select('rol')
+          .eq('id', usuario.id)
+          .single();
 
-final String rol = datosUsuario['rol']?.toString() ?? '';
+      final String rol = datosUsuario['rol']?.toString() ?? '';
 
-dynamic consulta = Supabase.instance.client
-    .from('pedidos')
-    .select('''
+      dynamic consulta = Supabase.instance.client.from('pedidos').select('''
       id,
       created_at,
+      observacion,
       estado,
       resultado_entrega,
       motivo_no_entrega,
@@ -88,32 +90,36 @@ tipo_operacion,
 )
     ''');
 
-if (rol != 'administrador') {
-  consulta = consulta.eq('preventista_id', usuario.id);
-}
+      if (rol != 'administrador') {
+        consulta = consulta.eq('preventista_id', usuario.id);
+      }
 
-dynamic consultaFiltrada = consulta;
+      dynamic consultaFiltrada = consulta;
 
-if (_mostrarHistorial) {
-  consultaFiltrada = consultaFiltrada
-      .neq('resultado_entrega', 'pendiente');
-} else {
-  consultaFiltrada = consultaFiltrada
-      .eq('tipo_operacion', 'pedido')
-      .eq('facturado', false)
-      .eq('resultado_entrega', 'pendiente');
-}
+      if (_mostrarHistorial) {
+        consultaFiltrada = consultaFiltrada.neq(
+          'resultado_entrega',
+          'pendiente',
+        );
+      } else {
+        consultaFiltrada = consultaFiltrada
+            .eq('tipo_operacion', 'pedido')
+            .eq('facturado', false)
+            .eq('resultado_entrega', 'pendiente');
+      }
 
-final respuesta = await consultaFiltrada
-    .order('created_at', ascending: false);
+      final respuesta = await consultaFiltrada.order(
+        'created_at',
+        ascending: false,
+      );
 
       if (!mounted) return;
 
       setState(() {
-  _pedidos = List<Map<String, dynamic>>.from(respuesta);
-  _esAdministrador = rol == 'administrador';
-  _cargando = false;
-});
+        _pedidos = List<Map<String, dynamic>>.from(respuesta);
+        _esAdministrador = rol == 'administrador';
+        _cargando = false;
+      });
     } catch (_) {
       if (!mounted) return;
 
@@ -168,50 +174,44 @@ final respuesta = await consultaFiltrada
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pedidos'),
-      ),
+      appBar: AppBar(title: const Text('Pedidos')),
       body: Column(
-  children: [
-    Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: SegmentedButton<bool>(
-        segments: const [
-          ButtonSegment<bool>(
-            value: false,
-            icon: Icon(Icons.pending_actions_outlined),
-            label: Text('Activos'),
-          ),
-          ButtonSegment<bool>(
-            value: true,
-            icon: Icon(Icons.history),
-            label: Text('Historial'),
-          ),
-        ],
-        selected: {_mostrarHistorial},
-        onSelectionChanged: (seleccion) {
-  setState(() {
-    _mostrarHistorial = seleccion.first;
-  });
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment<bool>(
+                  value: false,
+                  icon: Icon(Icons.pending_actions_outlined),
+                  label: Text('Activos'),
+                ),
+                ButtonSegment<bool>(
+                  value: true,
+                  icon: Icon(Icons.history),
+                  label: Text('Historial'),
+                ),
+              ],
+              selected: {_mostrarHistorial},
+              onSelectionChanged: (seleccion) {
+                setState(() {
+                  _mostrarHistorial = seleccion.first;
+                });
 
-  _cargarPedidos();
-},
-        showSelectedIcon: false,
+                _cargarPedidos();
+              },
+              showSelectedIcon: false,
+            ),
+          ),
+          Expanded(child: _construirContenido()),
+        ],
       ),
-    ),
-    Expanded(
-      child: _construirContenido(),
-    ),
-  ],
-),
     );
   }
 
   Widget _construirContenido() {
     if (_cargando) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -221,10 +221,7 @@ final respuesta = await consultaFiltrada
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.error_outline,
-                size: 60,
-              ),
+              const Icon(Icons.error_outline, size: 60),
               const SizedBox(height: 16),
               Text(
                 _error!,
@@ -251,402 +248,401 @@ final respuesta = await consultaFiltrada
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.receipt_long_outlined,
-              size: 80,
-            ),
+            Icon(Icons.receipt_long_outlined, size: 80),
             SizedBox(height: 20),
             Text(
               'Todavía no hay pedidos',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
             ),
           ],
         ),
       );
     }
     final pedidosFiltrados = _pedidos.where((pedido) {
-  final cliente =
-      pedido['clientes'] as Map<String, dynamic>?;
+      final cliente = pedido['clientes'] as Map<String, dynamic>?;
 
-  final nombreCliente =
-      cliente?['nombre_comercio']?.toString().toLowerCase() ?? '';
+      final nombreCliente =
+          cliente?['nombre_comercio']?.toString().toLowerCase() ?? '';
 
-  final textoBuscado = _filtroCliente.trim().toLowerCase();
+      final textoBuscado = _filtroCliente.trim().toLowerCase();
 
-  final coincideCliente =
-      textoBuscado.isEmpty ||
-      nombreCliente.contains(textoBuscado);
+      final coincideCliente =
+          textoBuscado.isEmpty || nombreCliente.contains(textoBuscado);
 
-  bool coincideFecha = true;
+      bool coincideFecha = true;
 
-  if (_filtroFechas != null) {
-    final fechaPedido =
-        DateTime.tryParse(pedido['created_at']?.toString() ?? '');
+      if (_filtroFechas != null) {
+        final fechaPedido = DateTime.tryParse(
+          pedido['created_at']?.toString() ?? '',
+        );
 
-    if (fechaPedido != null) {
-      final fechaLocal = fechaPedido.toLocal();
+        if (fechaPedido != null) {
+          final fechaLocal = fechaPedido.toLocal();
 
-      final inicio = DateTime(
-        _filtroFechas!.start.year,
-        _filtroFechas!.start.month,
-        _filtroFechas!.start.day,
-      );
+          final inicio = DateTime(
+            _filtroFechas!.start.year,
+            _filtroFechas!.start.month,
+            _filtroFechas!.start.day,
+          );
 
-      final fin = DateTime(
-        _filtroFechas!.end.year,
-        _filtroFechas!.end.month,
-        _filtroFechas!.end.day,
-        23,
-        59,
-        59,
-        999,
-      );
+          final fin = DateTime(
+            _filtroFechas!.end.year,
+            _filtroFechas!.end.month,
+            _filtroFechas!.end.day,
+            23,
+            59,
+            59,
+            999,
+          );
 
-      coincideFecha =
-          !fechaLocal.isBefore(inicio) &&
-          !fechaLocal.isAfter(fin);
-    } else {
-      coincideFecha = false;
+          coincideFecha =
+              !fechaLocal.isBefore(inicio) && !fechaLocal.isAfter(fin);
+        } else {
+          coincideFecha = false;
+        }
+      }
+      final preventistaId = pedido['preventista_id']?.toString() ?? '';
+
+      final coincidePreventista =
+          _filtroPreventista.isEmpty || preventistaId == _filtroPreventista;
+      return coincideCliente && coincideFecha && coincidePreventista;
+    }).toList();
+    final resumenProductos = <String, double>{};
+
+    for (final pedido in pedidosFiltrados) {
+      final detalles = pedido['pedido_detalles'] as List<dynamic>? ?? [];
+
+      for (final detalle in detalles) {
+        final producto = detalle['productos'] as Map<String, dynamic>?;
+
+        final nombre = producto?['nombre']?.toString() ?? 'Producto sin nombre';
+
+        final cantidad =
+            double.tryParse(detalle['cantidad']?.toString() ?? '0') ?? 0;
+
+        resumenProductos[nombre] = (resumenProductos[nombre] ?? 0) + cantidad;
+      }
     }
-  }
-final preventistaId =
-    pedido['preventista_id']?.toString() ?? '';
+    final preventistasDisponibles = <String, String>{};
 
-final coincidePreventista =
-    _filtroPreventista.isEmpty ||
-    preventistaId == _filtroPreventista;
-  return coincideCliente && coincideFecha && coincidePreventista;
-}).toList();
-final resumenProductos = <String, double>{};
+    for (final pedido in _pedidos) {
+      final id = pedido['preventista_id']?.toString() ?? '';
+      final usuario = pedido['usuarios'] as Map<String, dynamic>?;
 
-for (final pedido in pedidosFiltrados) {
-  final detalles =
-      pedido['pedido_detalles'] as List<dynamic>? ?? [];
+      if (id.isEmpty || usuario == null) continue;
 
-  for (final detalle in detalles) {
-    final producto =
-        detalle['productos'] as Map<String, dynamic>?;
+      final nombre = usuario['nombre']?.toString() ?? '';
+      final apellido = usuario['apellido']?.toString() ?? '';
 
-    final nombre =
-        producto?['nombre']?.toString() ?? 'Producto sin nombre';
+      final nombreCompleto = '$nombre $apellido'.trim();
 
-    final cantidad =
-        double.tryParse(detalle['cantidad']?.toString() ?? '0') ?? 0;
-
-    resumenProductos[nombre] =
-        (resumenProductos[nombre] ?? 0) + cantidad;
-  }
-}
-final preventistasDisponibles = <String, String>{};
-
-for (final pedido in _pedidos) {
-  final id = pedido['preventista_id']?.toString() ?? '';
-  final usuario =
-      pedido['usuarios'] as Map<String, dynamic>?;
-
-  if (id.isEmpty || usuario == null) continue;
-
-  final nombre = usuario['nombre']?.toString() ?? '';
-  final apellido = usuario['apellido']?.toString() ?? '';
-
-  final nombreCompleto =
-      '$nombre $apellido'.trim();
-
-  preventistasDisponibles[id] =
-      nombreCompleto.isEmpty ? 'Preventista' : nombreCompleto;
-}
+      preventistasDisponibles[id] = nombreCompleto.isEmpty
+          ? 'Preventista'
+          : nombreCompleto;
+    }
 
     return RefreshIndicator(
-  onRefresh: _cargarPedidos,
-  child: Column(
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-        child: TextField(
-          decoration: InputDecoration(
-            hintText: 'Buscar cliente...',
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: _filtroCliente.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      setState(() {
-                        _filtroCliente = '';
-                      });
-                    },
-                  )
-                : null,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          onChanged: (valor) {
-            setState(() {
-              _filtroCliente = valor;
-            });
-          },
-        ),
-      ),
-              Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-  onPressed: () async {
-    final ahora = DateTime.now();
-
-    final rango = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(ahora.year + 2),
-      initialDateRange: _filtroFechas,
-    );
-
-    if (rango != null) {
-      setState(() {
-        _filtroFechas = rango;
-      });
-    }
-  },
-  child: Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      const Icon(
-        Icons.calendar_month_outlined,
-        size: 18,
-      ),
-      const SizedBox(width: 8),
-      Flexible(
-        child: Text(
-          _filtroFechas == null
-              ? 'Todas las fechas'
-              : '${_filtroFechas!.start.day.toString().padLeft(2, '0')}/'
-                  '${_filtroFechas!.start.month.toString().padLeft(2, '0')}/'
-                  '${_filtroFechas!.start.year}'
-                  ' - '
-                  '${_filtroFechas!.end.day.toString().padLeft(2, '0')}/'
-                  '${_filtroFechas!.end.month.toString().padLeft(2, '0')}/'
-                  '${_filtroFechas!.end.year}',
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-      if (_filtroFechas != null) ...[
-        const SizedBox(width: 6),
-        InkWell(
-          onTap: () {
-            setState(() {
-              _filtroFechas = null;
-            });
-          },
-          child: const Padding(
-            padding: EdgeInsets.all(4),
-            child: Icon(
-              Icons.close,
-              size: 18,
-            ),
-          ),
-        ),
-      ],
-    ],
-  ),
-),
-          ),
-        ),
-        if (_esAdministrador)
-  Padding(
-    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-    child: DropdownButtonFormField<String>(
-      initialValue: _filtroPreventista,
-      decoration: InputDecoration(
-        prefixIcon: const Icon(Icons.person_outline),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      items: [
-        const DropdownMenuItem<String>(
-          value: '',
-          child: Text('Todos los preventistas'),
-        ),
-        ...preventistasDisponibles.entries.map(
-          (entrada) => DropdownMenuItem<String>(
-            value: entrada.key,
-            child: Text(entrada.value),
-          ),
-        ),
-      ],
-      onChanged: (valor) {
-        setState(() {
-          _filtroPreventista = valor ?? '';
-        });
-      },
-    ),
-  ),
-  Card(
-  margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-  child: ExpansionTile(
-    leading: const Icon(Icons.inventory_2_outlined),
-    title: const Text(
-      'RESUMEN DE PRODUCTOS',
-      style: TextStyle(
-        fontWeight: FontWeight.bold,
-      ),
-    ),
-    subtitle: Text(
-      '${resumenProductos.length} productos distintos',
-    ),
-    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-    children: [
-  SizedBox(
-    height: 250,
-    child: ListView(
-      children: resumenProductos.entries.map((entry) {
-        final cantidad = entry.value;
-
-        final cantidadTexto = cantidad % 1 == 0
-            ? cantidad.toInt().toString()
-            : cantidad.toString();
-
-        return Padding(
-  padding: const EdgeInsets.symmetric(vertical: 3),
-  child: Text(
-    '$cantidadTexto × ${entry.key}',
-    style: const TextStyle(
-      fontWeight: FontWeight.bold,
-    ),
-  ),
-);
-      }).toList(),
-    ),
-  ),
-],
-),
-),
-      Expanded(
-        child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: pedidosFiltrados.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 8),
-        itemBuilder: (context, index) {
-          final pedido = pedidosFiltrados[index];
-
-          final cliente =
-              pedido['clientes'] as Map<String, dynamic>?;
-
-          final nombreCliente =
-              cliente?['nombre_comercio']?.toString() ??
-                  'Cliente sin nombre';
-
-          final direccion =
-              cliente?['direccion']?.toString() ?? '';
-
-          final estado =
-              pedido['estado']?.toString() ?? 'pendiente';
-              final resultadoEntrega =
-    pedido['resultado_entrega']?.toString() ?? 'pendiente';
-
-final motivoNoEntrega =
-    pedido['motivo_no_entrega']?.toString() ?? '';
-final detalles =
-    pedido['pedido_detalles'] as List<dynamic>? ?? [];
-
-final renglones = detalles.length;
-
-final unidades = detalles.fold<int>(
-  0,
-  (total, detalle) {
-    final cantidad = double.tryParse(
-          detalle['cantidad']?.toString() ?? '0',
-        )?.round() ??
-    0;
-
-    return total + cantidad;
-  },
-);
-
-final idPedido = pedido['id']?.toString() ?? '';
-
-final numeroPedido = idPedido.length >= 8
-    ? idPedido.substring(0, 8).toUpperCase()
-    : idPedido.toUpperCase();
-          return Card(
-            child: ListTile(
-              leading: const CircleAvatar(
-                child: Icon(Icons.receipt_long),
-              ),
-              title: Text(
-                nombreCliente,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
+      onRefresh: _cargarPedidos,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Buscar cliente...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _filtroCliente.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          setState(() {
+                            _filtroCliente = '';
+                          });
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (direccion.isNotEmpty)
-                    Text(direccion),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatearFecha(pedido['created_at']),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Estado: ${estado.toUpperCase()}',
-                  ),
-                  const SizedBox(height: 4),
-Text(
-  'Entrega: ${resultadoEntrega.toUpperCase()}',
-),
-if (resultadoEntrega == 'no_entregado' &&
-    motivoNoEntrega.isNotEmpty) ...[
-  const SizedBox(height: 4),
-  Text(
-    'Motivo: $motivoNoEntrega',
-  ),
-],
-                  const SizedBox(height: 4),
-Text('Pedido: #$numeroPedido'),
-const SizedBox(height: 4),
-Text('$renglones renglones • $unidades unidades'),
-                ],
+              onChanged: (valor) {
+                setState(() {
+                  _filtroCliente = valor;
+                });
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () async {
+                  final ahora = DateTime.now();
+
+                  final rango = await showDateRangePicker(
+                    context: context,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(ahora.year + 2),
+                    initialDateRange: _filtroFechas,
+                  );
+
+                  if (rango != null) {
+                    setState(() {
+                      _filtroFechas = rango;
+                    });
+                  }
+                },
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.calendar_month_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        _filtroFechas == null
+                            ? 'Todas las fechas'
+                            : '${_filtroFechas!.start.day.toString().padLeft(2, '0')}/'
+                                  '${_filtroFechas!.start.month.toString().padLeft(2, '0')}/'
+                                  '${_filtroFechas!.start.year}'
+                                  ' - '
+                                  '${_filtroFechas!.end.day.toString().padLeft(2, '0')}/'
+                                  '${_filtroFechas!.end.month.toString().padLeft(2, '0')}/'
+                                  '${_filtroFechas!.end.year}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (_filtroFechas != null) ...[
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _filtroFechas = null;
+                          });
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.close, size: 18),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    _formatearPrecio(pedido['total']),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (_esAdministrador)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: DropdownButtonFormField<String>(
+                initialValue: _filtroPreventista,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.person_outline),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: '',
+                    child: Text('Todos los preventistas'),
+                  ),
+                  ...preventistasDisponibles.entries.map(
+                    (entrada) => DropdownMenuItem<String>(
+                      value: entrada.key,
+                      child: Text(entrada.value),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  const Icon(Icons.chevron_right),
                 ],
+                onChanged: (valor) {
+                  setState(() {
+                    _filtroPreventista = valor ?? '';
+                  });
+                },
               ),
-              onTap: () async {
-  final eliminado = await Navigator.of(context).push<bool>(
-    MaterialPageRoute(
-      builder: (_) => OrderDetailPage(
-        pedido: pedido,
-      ),
-    ),
-  );
-
-  if (eliminado == true) {
-    await _cargarPedidos();
-  }
-},
             ),
-          );
-        },
+          Card(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: ExpansionTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: const Text(
+                'RESUMEN DE PRODUCTOS',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text('${resumenProductos.length} productos distintos'),
+              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              children: [
+                SizedBox(
+                  height: 250,
+                  child: ListView(
+                    children: resumenProductos.entries.map((entry) {
+                      final cantidad = entry.value;
+
+                      final cantidadTexto = cantidad % 1 == 0
+                          ? cantidad.toInt().toString()
+                          : cantidad.toString();
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Text(
+                          '$cantidadTexto × ${entry.key}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: useDesktopLayout(context)
+                ? DesktopRecords(
+                    records: pedidosFiltrados,
+                    fields: [
+                      DesktopField('Cliente', recordClient, width: 220),
+                      DesktopField(
+                        'Fecha',
+                        (r) => _formatearFecha(r['created_at']),
+                        width: 110,
+                      ),
+                      DesktopField('Estado', (r) => r['estado'], width: 110),
+                      DesktopField(
+                        'Entrega',
+                        (r) => r['resultado_entrega'],
+                        width: 120,
+                      ),
+                      DesktopField(
+                        'Total',
+                        (r) => desktopMoney(r['total']),
+                        numeric: true,
+                        width: 120,
+                      ),
+                      DesktopField(
+                        'Observación',
+                        recordObservation,
+                        width: 200,
+                      ),
+                    ],
+                    onOpen: (pedido) async {
+                      final result = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => OrderDetailPage(pedido: pedido),
+                        ),
+                      );
+                      if (result == true && mounted) await _cargarPedidos();
+                    },
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: pedidosFiltrados.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final pedido = pedidosFiltrados[index];
+
+                      final cliente =
+                          pedido['clientes'] as Map<String, dynamic>?;
+
+                      final nombreCliente =
+                          cliente?['nombre_comercio']?.toString() ??
+                          'Cliente sin nombre';
+
+                      final direccion = cliente?['direccion']?.toString() ?? '';
+
+                      final estado =
+                          pedido['estado']?.toString() ?? 'pendiente';
+                      final resultadoEntrega =
+                          pedido['resultado_entrega']?.toString() ??
+                          'pendiente';
+
+                      final motivoNoEntrega =
+                          pedido['motivo_no_entrega']?.toString() ?? '';
+                      final detalles =
+                          pedido['pedido_detalles'] as List<dynamic>? ?? [];
+
+                      final renglones = detalles.length;
+
+                      final unidades = detalles.fold<int>(0, (total, detalle) {
+                        final cantidad =
+                            double.tryParse(
+                              detalle['cantidad']?.toString() ?? '0',
+                            )?.round() ??
+                            0;
+
+                        return total + cantidad;
+                      });
+
+                      final idPedido = pedido['id']?.toString() ?? '';
+
+                      final numeroPedido = idPedido.length >= 8
+                          ? idPedido.substring(0, 8).toUpperCase()
+                          : idPedido.toUpperCase();
+                      return Card(
+                        child: ListTile(
+                          leading: OrderObservationIndicator(
+                            observation: pedido['observacion'],
+                          ),
+                          title: Text(
+                            nombreCliente,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (direccion.isNotEmpty) Text(direccion),
+                              const SizedBox(height: 4),
+                              Text(_formatearFecha(pedido['created_at'])),
+                              const SizedBox(height: 4),
+                              Text('Estado: ${estado.toUpperCase()}'),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Entrega: ${resultadoEntrega.toUpperCase()}',
+                              ),
+                              if (resultadoEntrega == 'no_entregado' &&
+                                  motivoNoEntrega.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text('Motivo: $motivoNoEntrega'),
+                              ],
+                              const SizedBox(height: 4),
+                              Text('Pedido: #$numeroPedido'),
+                              const SizedBox(height: 4),
+                              Text('$renglones renglones • $unidades unidades'),
+                            ],
+                          ),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                _formatearPrecio(pedido['total']),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
+                          onTap: () async {
+                            final eliminado = await Navigator.of(context)
+                                .push<bool>(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        OrderDetailPage(pedido: pedido),
+                                  ),
+                                );
+
+                            if (eliminado == true) {
+                              await _cargarPedidos();
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
-      ),
-],
-),
     );
   }
 }

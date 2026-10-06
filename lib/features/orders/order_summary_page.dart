@@ -1,3 +1,6 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -32,15 +35,30 @@ class OrderSummaryPage extends StatefulWidget {
 
 class _OrderSummaryPageState extends State<OrderSummaryPage> {
   bool _guardando = false;
+  // Reintentar tras una desconexión no duplica el pedido.
+  late final String _solicitudId = _nuevoId();
+  String _nuevoId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    final h = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return [
+      h.substring(0, 8),
+      h.substring(8, 12),
+      h.substring(12, 16),
+      h.substring(16, 20),
+      h.substring(20),
+    ].join('-');
+  }
 
-  final TextEditingController _observacionController =
-    TextEditingController();
+  final TextEditingController _observacionController = TextEditingController();
 
-    @override
-void dispose() {
-  _observacionController.dispose();
-  super.dispose();
-}
+  @override
+  void dispose() {
+    _observacionController.dispose();
+    super.dispose();
+  }
 
   List<Map<String, dynamic>> get _productosSeleccionados {
     return widget.productos.where((producto) {
@@ -127,40 +145,37 @@ void dispose() {
 
     return '\$${buffer.toString().split('').reversed.join()}';
   }
+
   Future<void> _compartirPedido() async {
-  final buffer = StringBuffer();
+    final buffer = StringBuffer();
 
-  final nombreCliente =
-      widget.cliente['nombre_comercio']?.toString() ?? 'Cliente';
+    final nombreCliente =
+        widget.cliente['nombre_comercio']?.toString() ?? 'Cliente';
 
-  buffer.writeln('DISTRIBUIDORA ALBERDI');
-  buffer.writeln();
-  buffer.writeln('Cliente: $nombreCliente');
-  buffer.writeln();
-  buffer.writeln('PEDIDO');
-  buffer.writeln();
+    buffer.writeln('DISTRIBUIDORA ALBERDI');
+    buffer.writeln();
+    buffer.writeln('Cliente: $nombreCliente');
+    buffer.writeln();
+    buffer.writeln('PEDIDO');
+    buffer.writeln();
 
-  for (final producto in _productosSeleccionados) {
-    final id = producto['id'].toString();
-    final cantidad = widget.cantidades[id] ?? 0;
-    final precio = _precioProducto(producto);
-    final subtotal = precio * cantidad;
-    final nombre = producto['nombre']?.toString() ?? 'Producto';
+    for (final producto in _productosSeleccionados) {
+      final id = producto['id'].toString();
+      final cantidad = widget.cantidades[id] ?? 0;
+      final precio = _precioProducto(producto);
+      final subtotal = precio * cantidad;
+      final nombre = producto['nombre']?.toString() ?? 'Producto';
 
-    buffer.writeln(
-      '$cantidad x $nombre - ${_formatearPrecio(subtotal)}',
-    );
+      buffer.writeln('$cantidad x $nombre - ${_formatearPrecio(subtotal)}');
+    }
+
+    buffer.writeln();
+    buffer.writeln('TOTAL: ${_formatearPrecio(_totalPedido)}');
+    buffer.writeln();
+    buffer.writeln('Gracias por su compra.');
+
+    await SharePlus.instance.share(ShareParams(text: buffer.toString()));
   }
-
-  buffer.writeln();
-  buffer.writeln('TOTAL: ${_formatearPrecio(_totalPedido)}');
-  buffer.writeln();
-  buffer.writeln('Gracias por su compra.');
-
-  await SharePlus.instance.share(
-    ShareParams(text: buffer.toString()),
-  );
-}
 
   Future<void> _confirmarPedido() async {
     if (_guardando) return;
@@ -182,69 +197,54 @@ void dispose() {
     });
 
     try {
-  final detalles = _productosSeleccionados.map((producto) {
-    final productoId = producto['id'].toString();
-    final cantidad = widget.cantidades[productoId] ?? 0;
-    final precio = _precioProducto(producto);
-    final subtotal = precio * cantidad;
+      final detalles = _productosSeleccionados.map((producto) {
+        final productoId = producto['id'].toString();
+        final cantidad = widget.cantidades[productoId] ?? 0;
+        final precio = _precioProducto(producto);
+        final subtotal = precio * cantidad;
 
-    return {
-      'producto_id': producto['id'],
-      'cantidad': cantidad,
-      'precio_unitario': precio,
-      'subtotal': subtotal,
-      'tipo_precio': _tipoPrecioProducto(producto),
-      'costo_unitario':
-          double.tryParse(producto['costo']?.toString() ?? '') ?? 0,
-    };
-  }).toList();
+        return {
+          'producto_id': producto['id'],
+          'cantidad': cantidad,
+          'precio_unitario': precio,
+          'subtotal': subtotal,
+          'tipo_precio': _tipoPrecioProducto(producto),
+        };
+      }).toList();
 
-  if (widget.pedidoId != null) {
-    await Supabase.instance.client.rpc(
-      'actualizar_pedido_activo',
-      params: {
-        'p_pedido_id': widget.pedidoId,
-        'p_total': _totalPedido,
-        'p_tipo_precio': widget.tipoPrecio,
-        'p_tipo_operacion': widget.tipoOperacion,
-        'p_observacion': _observacionController.text.trim(),
-        'p_fecha_entrega':
-            widget.fechaEntrega.toIso8601String().split('T').first,
-        'p_detalles': detalles,
-      },
-    );
-  } else {
-    final pedido = await Supabase.instance.client
-        .from('pedidos')
-        .insert({
-          'cliente_id': widget.cliente['id'],
-          'preventista_id': usuario.id,
-          'tipo_precio': widget.tipoPrecio,
-          'tipo_operacion': widget.tipoOperacion,
-          'estado': 'pendiente',
-          'total': _totalPedido,
-          'observacion': _observacionController.text.trim().isEmpty
-              ? null
-              : _observacionController.text.trim(),
-          'fecha_entrega':
-              widget.fechaEntrega.toIso8601String().split('T').first,
-        })
-        .select('id')
-        .single();
-
-    final pedidoId = pedido['id'];
-
-    final detallesNuevos = detalles.map((detalle) {
-      return {
-        ...detalle,
-        'pedido_id': pedidoId,
-      };
-    }).toList();
-
-    await Supabase.instance.client
-        .from('pedido_detalles')
-        .insert(detallesNuevos);
-  }
+      if (widget.pedidoId != null) {
+        await Supabase.instance.client.rpc(
+          'actualizar_pedido_activo',
+          params: {
+            'p_pedido_id': widget.pedidoId,
+            'p_total': _totalPedido,
+            'p_tipo_precio': widget.tipoPrecio,
+            'p_tipo_operacion': widget.tipoOperacion,
+            'p_observacion': _observacionController.text.trim(),
+            'p_fecha_entrega': widget.fechaEntrega
+                .toIso8601String()
+                .split('T')
+                .first,
+            'p_detalles': detalles,
+          },
+        );
+      } else {
+        await Supabase.instance.client.rpc(
+          'crear_pedido_interno',
+          params: {
+            'p_id': _solicitudId,
+            'p_cliente_id': widget.cliente['id'],
+            'p_tipo_precio': widget.tipoPrecio,
+            'p_tipo_operacion': widget.tipoOperacion,
+            'p_observacion': _observacionController.text.trim(),
+            'p_fecha_entrega': widget.fechaEntrega
+                .toIso8601String()
+                .split('T')
+                .first,
+            'p_detalles': detalles,
+          },
+        );
+      }
 
       if (!mounted) return;
 
@@ -253,10 +253,7 @@ void dispose() {
         barrierDismissible: false,
         builder: (context) {
           return AlertDialog(
-            icon: const Icon(
-              Icons.check_circle_outline,
-              size: 48,
-            ),
+            icon: const Icon(Icons.check_circle_outline, size: 48),
             title: const Text('Pedido guardado'),
             content: Text(
               'El pedido fue registrado correctamente.\n\n'
@@ -276,17 +273,11 @@ void dispose() {
 
       if (!mounted) return;
 
-      Navigator.of(context).popUntil(
-        (route) => route.isFirst,
-      );
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } on PostgrestException catch (error) {
-      _mostrarMensaje(
-        'No se pudo guardar el pedido: ${error.message}',
-      );
+      _mostrarMensaje('No se pudo guardar el pedido: ${error.message}');
     } catch (_) {
-      _mostrarMensaje(
-        'Ocurrió un error al guardar el pedido.',
-      );
+      _mostrarMensaje('Ocurrió un error al guardar el pedido.');
     } finally {
       if (mounted) {
         setState(() {
@@ -299,19 +290,15 @@ void dispose() {
   void _mostrarMensaje(String mensaje) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Resumen del pedido'),
-      ),
+      appBar: AppBar(title: const Text('Resumen del pedido')),
       body: Column(
         children: [
           Padding(
@@ -322,12 +309,7 @@ void dispose() {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      'Cliente',
-                      style: TextStyle(
-                        color: Colors.grey,
-                      ),
-                    ),
+                    const Text('Cliente', style: TextStyle(color: Colors.grey)),
                     const SizedBox(height: 4),
                     Text(
                       widget.cliente['nombre_comercio']?.toString() ??
@@ -340,10 +322,7 @@ void dispose() {
                     const SizedBox(height: 10),
                     const Text(
                       'Cada producto conserva el precio con el que fue agregado.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -351,63 +330,90 @@ void dispose() {
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: _productosSeleccionados.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final producto = _productosSeleccionados[index];
-
-                final id = producto['id'].toString();
-                final cantidad = widget.cantidades[id] ?? 0;
-                final precio = _precioProducto(producto);
-                final subtotal = precio * cantidad;
-                final lista = _nombreListaProducto(producto);
-
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          producto['nombre']?.toString() ??
-                              'Sin nombre',
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                          ),
+            child: useDesktopLayout(context)
+                ? DesktopRecords(
+                    records: _productosSeleccionados,
+                    fields: [
+                      DesktopField('Producto', (r) => r['nombre'], width: 280),
+                      DesktopField(
+                        'Cantidad',
+                        (r) => widget.cantidades[r['id'].toString()] ?? 0,
+                        numeric: true,
+                        width: 90,
+                      ),
+                      DesktopField(
+                        'Precio',
+                        (r) => desktopMoney(_precioProducto(r)),
+                        numeric: true,
+                        width: 110,
+                      ),
+                      DesktopField('Lista', _nombreListaProducto, width: 90),
+                      DesktopField(
+                        'Subtotal',
+                        (r) => desktopMoney(
+                          _precioProducto(r) *
+                              (widget.cantidades[r['id'].toString()] ?? 0),
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Text(
-                              '$cantidad × ${_formatearPrecio(precio)}',
-                            ),
-                            const Spacer(),
-                            Text(
-                              _formatearPrecio(subtotal),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
+                        numeric: true,
+                        width: 130,
+                      ),
+                    ],
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _productosSeleccionados.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final producto = _productosSeleccionados[index];
+
+                      final id = producto['id'].toString();
+                      final cantidad = widget.cantidades[id] ?? 0;
+                      final precio = _precioProducto(producto);
+                      final subtotal = precio * cantidad;
+                      final lista = _nombreListaProducto(producto);
+
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                producto['nombre']?.toString() ?? 'Sin nombre',
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Lista usada: $lista',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Text(
+                                    '$cantidad × ${_formatearPrecio(precio)}',
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    _formatearPrecio(subtotal),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Lista usada: $lista',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
           SafeArea(
             top: false,
@@ -420,14 +426,11 @@ void dispose() {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
                             '$_totalUnidades unidades',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           Text(
                             _formatearPrecio(_totalPedido),
@@ -442,19 +445,19 @@ void dispose() {
                   ),
                   const SizedBox(height: 10),
                   TextField(
-  controller: _observacionController,
-  enabled: !_guardando,
-  minLines: 2,
-  maxLines: 3,
-  decoration: const InputDecoration(
-    labelText: 'Observaciones (opcional)',
-    hintText:
-        'Detalles del pedido o mercadería que no figure en la lista',
-    border: OutlineInputBorder(),
-  ),
-),
+                    controller: _observacionController,
+                    enabled: !_guardando,
+                    minLines: 2,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Observaciones (opcional)',
+                      hintText:
+                          'Detalles del pedido o mercadería que no figure en la lista',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
 
-const SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   OutlinedButton.icon(
                     onPressed: _guardando
                         ? null
@@ -466,31 +469,24 @@ const SizedBox(height: 10),
                   ),
                   const SizedBox(height: 10),
 
-OutlinedButton.icon(
-  onPressed: _guardando ? null : _compartirPedido,
-  icon: const Icon(Icons.share),
-  label: const Text('COMPARTIR PEDIDO'),
-),
+                  OutlinedButton.icon(
+                    onPressed: _guardando ? null : _compartirPedido,
+                    icon: const Icon(Icons.share),
+                    label: const Text('COMPARTIR PEDIDO'),
+                  ),
 
-const SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   FilledButton.icon(
-                    onPressed:
-                        _guardando ? null : _confirmarPedido,
+                    onPressed: _guardando ? null : _confirmarPedido,
                     icon: _guardando
                         ? const SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(
-                            Icons.check_circle_outline,
-                          ),
+                        : const Icon(Icons.check_circle_outline),
                     label: Text(
-                      _guardando
-                          ? 'GUARDANDO...'
-                          : 'CONFIRMAR PEDIDO',
+                      _guardando ? 'GUARDANDO...' : 'CONFIRMAR PEDIDO',
                     ),
                   ),
                 ],

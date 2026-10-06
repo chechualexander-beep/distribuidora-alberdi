@@ -1,3 +1,6 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
+import '../products/product_photo.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -42,31 +45,30 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   final Map<String, String> _tiposPrecioFijados = {};
 
   @override
-void initState() {
-  super.initState();
+  void initState() {
+    super.initState();
 
-  final tipoHabitual =
-      widget.cliente['tipo_precio_habitual']?.toString();
+    final tipoHabitual = widget.cliente['tipo_precio_habitual']?.toString();
 
-  if (tipoHabitual == 'normal' ||
-      tipoHabitual == 'promo' ||
-      tipoHabitual == 'interior') {
-    _tipoPrecio = tipoHabitual!;
+    if (tipoHabitual == 'normal' ||
+        tipoHabitual == 'promo' ||
+        tipoHabitual == 'interior') {
+      _tipoPrecio = tipoHabitual!;
+    }
+    if (widget.cantidadesIniciales != null) {
+      _cantidades.addAll(widget.cantidadesIniciales!);
+    }
+
+    if (widget.preciosIniciales != null) {
+      _preciosFijados.addAll(widget.preciosIniciales!);
+    }
+
+    if (widget.tiposPrecioIniciales != null) {
+      _tiposPrecioFijados.addAll(widget.tiposPrecioIniciales!);
+    }
+
+    _cargarProductos();
   }
-  if (widget.cantidadesIniciales != null) {
-  _cantidades.addAll(widget.cantidadesIniciales!);
-}
-
-if (widget.preciosIniciales != null) {
-  _preciosFijados.addAll(widget.preciosIniciales!);
-}
-
-if (widget.tiposPrecioIniciales != null) {
-  _tiposPrecioFijados.addAll(widget.tiposPrecioIniciales!);
-}
-
-  _cargarProductos();
-}
 
   Future<void> _cargarProductos() async {
     setState(() {
@@ -78,9 +80,10 @@ if (widget.tiposPrecioIniciales != null) {
       final respuesta = await Supabase.instance.client
           .from('productos')
           .select(
-  'id, codigo, nombre, precio_normal, precio_promo, precio_interior, costo',
-)
+            'id, codigo, nombre, descripcion, precio_normal, precio_promo, precio_interior, foto_path',
+          )
           .eq('activo', true)
+          .eq('visible_preventistas', true)
           .order('nombre');
 
       if (!mounted) return;
@@ -164,10 +167,7 @@ if (widget.tiposPrecioIniciales != null) {
   }
 
   int get _totalUnidades {
-    return _cantidades.values.fold(
-      0,
-      (total, cantidad) => total + cantidad,
-    );
+    return _cantidades.values.fold(0, (total, cantidad) => total + cantidad);
   }
 
   double get _totalPedido {
@@ -204,42 +204,38 @@ if (widget.tiposPrecioIniciales != null) {
   }
 
   void _verPedido() {
+    final fechaEntrega = widget.fechaEntrega;
 
-  final fechaEntrega = widget.fechaEntrega;
+    if (fechaEntrega == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Seleccioná una fecha de entrega antes de continuar.'),
+        ),
+      );
+      return;
+    }
 
-  if (fechaEntrega == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Seleccioná una fecha de entrega antes de continuar.'),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => OrderSummaryPage(
+          fechaEntrega: fechaEntrega,
+          cliente: widget.cliente,
+          tipoOperacion: widget.tipoOperacion,
+          productos: _productos,
+          cantidades: Map<String, int>.from(_cantidades),
+          tipoPrecio: _tipoPrecio,
+          preciosFijados: Map<String, double>.from(_preciosFijados),
+          tiposPrecioFijados: Map<String, String>.from(_tiposPrecioFijados),
+          pedidoId: widget.pedidoId,
+        ),
       ),
     );
-    return;
   }
-
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => OrderSummaryPage(
-        fechaEntrega: fechaEntrega,
-        cliente: widget.cliente,
-        tipoOperacion: widget.tipoOperacion,
-        productos: _productos,
-        cantidades: Map<String, int>.from(_cantidades),
-        tipoPrecio: _tipoPrecio,
-        preciosFijados: Map<String, double>.from(_preciosFijados),
-        tiposPrecioFijados:
-            Map<String, String>.from(_tiposPrecioFijados),
-            pedidoId: widget.pedidoId,
-      ),
-    ),
-  );
-}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Productos del pedido'),
-      ),
+      appBar: AppBar(title: const Text('Productos del pedido')),
       body: _construirContenido(),
       bottomNavigationBar: _totalUnidades > 0
           ? SafeArea(
@@ -254,23 +250,17 @@ if (widget.tiposPrecioIniciales != null) {
                         Expanded(
                           child: Text(
                             '$_totalUnidades unidades',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
                         Text(
                           _formatearPrecio(_totalPedido),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(width: 16),
                         const Text(
                           'VER PEDIDO',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -284,9 +274,7 @@ if (widget.tiposPrecioIniciales != null) {
 
   Widget _construirContenido() {
     if (_cargando) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -296,10 +284,7 @@ if (widget.tiposPrecioIniciales != null) {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.error_outline,
-                size: 60,
-              ),
+              const Icon(Icons.error_outline, size: 60),
               const SizedBox(height: 16),
               Text(
                 _error!,
@@ -321,26 +306,23 @@ if (widget.tiposPrecioIniciales != null) {
       );
     }
     String normalizarTexto(String texto) {
-  return texto
-      .toLowerCase()
-      .replaceAll('á', 'a')
-      .replaceAll('é', 'e')
-      .replaceAll('í', 'i')
-      .replaceAll('ó', 'o')
-      .replaceAll('ú', 'u')
-      .replaceAll('ü', 'u')
-      .replaceAll('ñ', 'n');
-}
+      return texto
+          .toLowerCase()
+          .replaceAll('á', 'a')
+          .replaceAll('é', 'e')
+          .replaceAll('í', 'i')
+          .replaceAll('ó', 'o')
+          .replaceAll('ú', 'u')
+          .replaceAll('ü', 'u')
+          .replaceAll('ñ', 'n');
+    }
 
     final texto = normalizarTexto(_busqueda.trim());
 
     final productosFiltrados = _productos.where((producto) {
-      final nombre = normalizarTexto(
-  producto['nombre']?.toString() ?? '',
-);
+      final nombre = normalizarTexto(producto['nombre']?.toString() ?? '');
 
-      final codigo =
-          producto['codigo']?.toString().toLowerCase() ?? '';
+      final codigo = producto['codigo']?.toString().toLowerCase() ?? '';
 
       return nombre.contains(texto) || codigo.contains(texto);
     }).toList();
@@ -355,12 +337,7 @@ if (widget.tiposPrecioIniciales != null) {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Cliente',
-                    style: TextStyle(
-                      color: Colors.grey,
-                    ),
-                  ),
+                  const Text('Cliente', style: TextStyle(color: Colors.grey)),
                   const SizedBox(height: 4),
                   Text(
                     widget.cliente['nombre_comercio']?.toString() ??
@@ -373,38 +350,36 @@ if (widget.tiposPrecioIniciales != null) {
                   const SizedBox(height: 14),
                   const Text(
                     'Tipo de precio para nuevos productos',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   SegmentedButton<String>(
                     style: ButtonStyle(
-  backgroundColor: WidgetStateProperty.resolveWith<Color?>(
-    (states) {
-      if (!states.contains(WidgetState.selected)) {
-        return null;
-      }
+                      backgroundColor: WidgetStateProperty.resolveWith<Color?>((
+                        states,
+                      ) {
+                        if (!states.contains(WidgetState.selected)) {
+                          return null;
+                        }
 
-      switch (_tipoPrecio) {
-        case 'promo':
-          return Colors.orange;
-        case 'interior':
-          return Colors.green;
-        default:
-          return Colors.blue;
-      }
-    },
-  ),
-  foregroundColor: WidgetStateProperty.resolveWith<Color?>(
-    (states) {
-      if (states.contains(WidgetState.selected)) {
-        return Colors.white;
-      }
-      return null;
-    },
-  ),
-),
+                        switch (_tipoPrecio) {
+                          case 'promo':
+                            return Colors.orange;
+                          case 'interior':
+                            return Colors.green;
+                          default:
+                            return Colors.blue;
+                        }
+                      }),
+                      foregroundColor: WidgetStateProperty.resolveWith<Color?>((
+                        states,
+                      ) {
+                        if (states.contains(WidgetState.selected)) {
+                          return Colors.white;
+                        }
+                        return null;
+                      }),
+                    ),
                     segments: const [
                       ButtonSegment<String>(
                         value: 'normal',
@@ -432,31 +407,31 @@ if (widget.tiposPrecioIniciales != null) {
           ),
         ),
         Container(
-  width: double.infinity,
-  margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-  padding: const EdgeInsets.symmetric(vertical: 10),
-  decoration: BoxDecoration(
-    color: _tipoPrecio == 'promo'
-        ? Colors.orange
-        : _tipoPrecio == 'interior'
-            ? Colors.green
-            : Colors.blue,
-    borderRadius: BorderRadius.circular(8),
-  ),
-  child: Text(
-    _tipoPrecio == 'promo'
-        ? 'LISTA PROMO'
-        : _tipoPrecio == 'interior'
-            ? 'LISTA INTERIOR'
-            : 'LISTA NORMAL',
-    textAlign: TextAlign.center,
-    style: const TextStyle(
-      color: Colors.white,
-      fontWeight: FontWeight.bold,
-      fontSize: 16,
-    ),
-  ),
-),
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: _tipoPrecio == 'promo'
+                ? Colors.orange
+                : _tipoPrecio == 'interior'
+                ? Colors.green
+                : Colors.blue,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            _tipoPrecio == 'promo'
+                ? 'LISTA PROMO'
+                : _tipoPrecio == 'interior'
+                ? 'LISTA INTERIOR'
+                : 'LISTA NORMAL',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: TextField(
@@ -474,22 +449,85 @@ if (widget.tiposPrecioIniciales != null) {
         ),
         Expanded(
           child: productosFiltrados.isEmpty
-              ? const Center(
-                  child: Text('No se encontraron productos'),
+              ? const Center(child: Text('No se encontraron productos'))
+              : useDesktopLayout(context)
+              ? DesktopRecords(
+                  records: productosFiltrados,
+                  fields: [
+                    DesktopField(
+                      'Producto',
+                      (r) => Row(
+                        children: [
+                          ProductPhoto(
+                            path: r['foto_path']?.toString(),
+                            size: 30,
+                          ),
+                          const SizedBox(width: 8),
+                          desktopText(
+                            r['nombre']?.toString() ?? 'Producto',
+                            width: 220,
+                          ),
+                        ],
+                      ),
+                      width: 260,
+                    ),
+                    DesktopField('Código', (r) => r['codigo'], width: 80),
+                    if (productosFiltrados.any(
+                      (r) => (r['descripcion']?.toString().trim() ?? '')
+                          .isNotEmpty,
+                    ))
+                      DesktopField(
+                        'Descripción',
+                        (r) => r['descripcion']?.toString().trim() ?? '',
+                        width: 260,
+                      ),
+                    DesktopField(
+                      'Precio',
+                      (r) => desktopMoney(_precioUsado(r)),
+                      numeric: true,
+                      width: 120,
+                    ),
+                    DesktopField(
+                      'Lista fijada',
+                      (r) => _tiposPrecioFijados[r['id'].toString()] ?? '—',
+                      width: 100,
+                    ),
+                    DesktopField(
+                      'Cantidad',
+                      (r) => _cantidadProducto(r),
+                      numeric: true,
+                      width: 80,
+                    ),
+                  ],
+                  actions: (p) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Quitar una unidad',
+                        onPressed: _cantidadProducto(p) > 0
+                            ? () => _restarProducto(p)
+                            : null,
+                        icon: const Icon(Icons.remove_circle_outline, size: 20),
+                      ),
+                      IconButton(
+                        tooltip: 'Agregar una unidad',
+                        onPressed: () => _sumarProducto(p),
+                        icon: const Icon(Icons.add_circle_outline, size: 20),
+                      ),
+                    ],
+                  ),
                 )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   itemCount: productosFiltrados.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     final producto = productosFiltrados[index];
 
                     final nombre =
                         producto['nombre']?.toString() ?? 'Sin nombre';
 
-                    final codigo =
-                        producto['codigo']?.toString() ?? '';
+                    final codigo = producto['codigo']?.toString() ?? '';
 
                     final precio = _precioUsado(producto);
                     final cantidad = _cantidadProducto(producto);
@@ -501,10 +539,14 @@ if (widget.tiposPrecioIniciales != null) {
                         padding: const EdgeInsets.all(14),
                         child: Row(
                           children: [
+                            ProductPhoto(
+                              path: producto['foto_path']?.toString(),
+                              size: 48,
+                            ),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     nombre,
@@ -513,6 +555,21 @@ if (widget.tiposPrecioIniciales != null) {
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
+                                  if ((producto['descripcion']
+                                              ?.toString()
+                                              .trim() ??
+                                          '')
+                                      .isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      producto['descripcion'].toString().trim(),
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
                                   if (codigo.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     Text(
@@ -530,8 +587,7 @@ if (widget.tiposPrecioIniciales != null) {
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  if (cantidad > 0 &&
-                                      listaFijada != null) ...[
+                                  if (cantidad > 0 && listaFijada != null) ...[
                                     const SizedBox(height: 4),
                                     Text(
                                       'Precio fijado: ${_nombreLista(listaFijada)}',
@@ -550,9 +606,7 @@ if (widget.tiposPrecioIniciales != null) {
                                   onPressed: cantidad > 0
                                       ? () => _restarProducto(producto)
                                       : null,
-                                  icon: const Icon(
-                                    Icons.remove_circle_outline,
-                                  ),
+                                  icon: const Icon(Icons.remove_circle_outline),
                                 ),
                                 SizedBox(
                                   width: 32,
@@ -566,11 +620,8 @@ if (widget.tiposPrecioIniciales != null) {
                                   ),
                                 ),
                                 IconButton(
-                                  onPressed: () =>
-                                      _sumarProducto(producto),
-                                  icon: const Icon(
-                                    Icons.add_circle,
-                                  ),
+                                  onPressed: () => _sumarProducto(producto),
+                                  icon: const Icon(Icons.add_circle),
                                 ),
                               ],
                             ),

@@ -1,8 +1,11 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'order_products_page.dart';
 import 'correct_operation_page.dart';
+import 'credit_notes_page.dart';
 
 class OrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -20,6 +23,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   String? _resultadoEntregaActual;
 
   List<Map<String, dynamic>> _detalles = [];
+  Map<String, dynamic>? _saldoNeto;
   String? _observacion;
   String? _fechaEntrega;
   List<Map<String, dynamic>> _pagos = [];
@@ -88,6 +92,11 @@ productos (
       observacion
       ''')
           .eq('pedido_id', widget.pedido['id']);
+      final saldoNeto = await Supabase.instance.client
+          .from('saldos_pendientes_pedidos')
+          .select()
+          .eq('pedido_id', widget.pedido['id'])
+          .maybeSingle();
       final idsAgregadosEnCorreccion = <String>{};
 
       if (esAdministrador) {
@@ -132,6 +141,7 @@ productos (
       setState(() {
         _detalles = List<Map<String, dynamic>>.from(respuesta);
         _pagos = List<Map<String, dynamic>>.from(pagosRespuesta);
+        _saldoNeto = saldoNeto;
         _observacion = pedidoRespuesta['observacion']?.toString();
         _fechaEntrega = pedidoRespuesta['fecha_entrega']?.toString();
         _resultadoEntregaActual = pedidoRespuesta['resultado_entrega']
@@ -295,7 +305,35 @@ productos (
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detalle del pedido'),
+        bottom: ncNumber(_saldoNeto?['total_notas_credito']) > 0
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(52),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(
+                    'Notas de crédito: ${ncMoney(_saldoNeto?['total_notas_credito'])} · Neto: ${ncMoney(_saldoNeto?['total_neto'])}',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            : null,
         actions: [
+          if (resultadoEntrega == 'entregado' || resultadoEntrega == 'parcial')
+            IconButton(
+              icon: const Icon(Icons.assignment_return_outlined),
+              tooltip: 'Notas de crédito internas',
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CreditNotesPage(
+                      pedidoId: widget.pedido['id'].toString(),
+                      esAdministrador: _esAdministrador,
+                    ),
+                  ),
+                );
+                if (mounted) await _cargarDetalles();
+              },
+            ),
           if (!facturado && resultadoEntrega == 'pendiente')
             IconButton(
               onPressed: () {
@@ -534,6 +572,80 @@ productos (
                       ? const Center(
                           child: Text('El pedido no tiene productos.'),
                         )
+                      : useDesktopLayout(context)
+                      ? DesktopRecords(
+                          records: _detalles,
+                          fields: [
+                            DesktopField(
+                              'Producto',
+                              (r) => (r['productos'] as Map?)?['nombre'],
+                              width: 240,
+                            ),
+                            DesktopField(
+                              'Cantidad',
+                              (r) => r['agregado_en_entrega'] == true
+                                  ? r['cantidad_entregada']
+                                  : r['cantidad'],
+                              numeric: true,
+                              width: 80,
+                            ),
+                            DesktopField(
+                              'Entregada',
+                              (r) => r['cantidad_entregada'],
+                              numeric: true,
+                              width: 90,
+                            ),
+                            DesktopField(
+                              'No entregada',
+                              (r) => r['cantidad_no_entregada'],
+                              numeric: true,
+                              width: 100,
+                            ),
+                            DesktopField(
+                              'Precio',
+                              (r) => desktopMoney(r['precio_unitario']),
+                              numeric: true,
+                              width: 110,
+                            ),
+                            DesktopField(
+                              'Lista',
+                              (r) => _nombreLista(r['tipo_precio']),
+                              width: 90,
+                            ),
+                            DesktopField(
+                              'Subtotal',
+                              (r) => desktopMoney(
+                                r['agregado_en_entrega'] == true
+                                    ? (double.tryParse(
+                                                r['cantidad_entregada']
+                                                        ?.toString() ??
+                                                    '',
+                                              ) ??
+                                              0) *
+                                          (double.tryParse(
+                                                r['precio_unitario']
+                                                        ?.toString() ??
+                                                    '',
+                                              ) ??
+                                              0)
+                                    : r['subtotal'],
+                              ),
+                              numeric: true,
+                              width: 120,
+                            ),
+                            DesktopField(
+                              'Origen',
+                              (r) => r['agregado_en_entrega'] == true
+                                  ? (_detalleIdsAgregadosEnCorreccion.contains(
+                                          r['id']?.toString(),
+                                        )
+                                        ? 'Corrección'
+                                        : 'Entrega')
+                                  : 'Pedido',
+                              width: 100,
+                            ),
+                          ],
+                        )
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: _detalles.length,
@@ -749,9 +861,7 @@ productos (
                                 ),
                                 Text(
                                   _formatearPrecio(
-                                    (totalEntregado - totalPagado) > 0
-                                        ? totalEntregado - totalPagado
-                                        : 0,
+                                    ncNumber(_saldoNeto?['saldo_pendiente']),
                                   ),
                                   style: const TextStyle(
                                     fontSize: 22,

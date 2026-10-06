@@ -1,3 +1,5 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -670,6 +672,28 @@ class _NewOrderPageState extends State<NewOrderPage> {
                     'No se encontraron clientes',
                     style: TextStyle(fontSize: 16),
                   ),
+                )
+              : useDesktopLayout(context)
+              ? DesktopRecords(
+                  records: clientesFiltrados,
+                  fields: [
+                    DesktopField(
+                      'Comercio',
+                      (r) => r['nombre_comercio'],
+                      width: 250,
+                    ),
+                    DesktopField(
+                      'Dirección',
+                      (r) => r['direccion'],
+                      width: 250,
+                    ),
+                    DesktopField('Localidad', (r) => r['localidad']),
+                  ],
+                  onOpen: (cliente) {
+                    setState(() => _clienteSeleccionado = cliente);
+                    _cargarSaldoCliente(cliente);
+                    _cargarUltimosPedidos(cliente);
+                  },
                 )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

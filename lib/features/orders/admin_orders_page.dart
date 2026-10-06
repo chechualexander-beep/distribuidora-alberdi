@@ -1,3 +1,5 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -35,11 +37,9 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     });
 
     try {
-    
       var consulta = Supabase.instance.client
-    .from('pedidos')
-    .select(
-      '''
+          .from('pedidos')
+          .select('''
       id,
       cliente_id,
       created_at,
@@ -59,44 +59,40 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
         nombre,
         apellido
       )
-      ''',
-    )
-    .eq('resultado_entrega', 'pendiente');
+      ''')
+          .eq('resultado_entrega', 'pendiente');
 
-if (_mostrarVentaDirecta) {
-  consulta = consulta.eq('tipo_operacion', 'venta_directa');
-} else {
-  consulta = consulta
-      .eq('tipo_operacion', 'pedido')
-      .eq('facturado', true);
-}
+      if (_mostrarVentaDirecta) {
+        consulta = consulta.eq('tipo_operacion', 'venta_directa');
+      } else {
+        consulta = consulta
+            .eq('tipo_operacion', 'pedido')
+            .eq('facturado', true);
+      }
 
-if (_filtrarPorFecha && !_mostrarVentaDirecta) {
-  final fechaFiltro =
-      '${_fechaSeleccionada.year.toString().padLeft(4, '0')}-'
-      '${_fechaSeleccionada.month.toString().padLeft(2, '0')}-'
-      '${_fechaSeleccionada.day.toString().padLeft(2, '0')}';
+      if (_filtrarPorFecha && !_mostrarVentaDirecta) {
+        final fechaFiltro =
+            '${_fechaSeleccionada.year.toString().padLeft(4, '0')}-'
+            '${_fechaSeleccionada.month.toString().padLeft(2, '0')}-'
+            '${_fechaSeleccionada.day.toString().padLeft(2, '0')}';
 
-  consulta = consulta.eq('fecha_entrega', fechaFiltro);
-}
+        consulta = consulta.eq('fecha_entrega', fechaFiltro);
+      }
 
-final respuesta =
-    await consulta.order('fecha_entrega', ascending: true);
-final pedidosCargados =
-    List<Map<String, dynamic>>.from(respuesta);
+      final respuesta = await consulta.order('fecha_entrega', ascending: true);
+      final pedidosCargados = List<Map<String, dynamic>>.from(respuesta);
 
-final idsPedidos = pedidosCargados
-    .map((pedido) => pedido['id'])
-    .where((id) => id != null)
-    .toList();
+      final idsPedidos = pedidosCargados
+          .map((pedido) => pedido['id'])
+          .where((id) => id != null)
+          .toList();
 
-final Map<String, Map<String, dynamic>> productosAgrupados = {};
+      final Map<String, Map<String, dynamic>> productosAgrupados = {};
 
-if (idsPedidos.isNotEmpty) {
-  final detallesRespuesta = await Supabase.instance.client
-      .from('pedido_detalles')
-      .select(
-        '''
+      if (idsPedidos.isNotEmpty) {
+        final detallesRespuesta = await Supabase.instance.client
+            .from('pedido_detalles')
+            .select('''
         pedido_id,
 producto_id,
 cantidad,
@@ -106,58 +102,53 @@ productos (
           nombre,
           codigo
         )
-        ''',
-      )
-      .inFilter('pedido_id', idsPedidos);
-      _detallesPedidos =
-    List<Map<String, dynamic>>.from(detallesRespuesta);
+        ''')
+            .inFilter('pedido_id', idsPedidos);
+        _detallesPedidos = List<Map<String, dynamic>>.from(detallesRespuesta);
 
-  for (final detalle in detallesRespuesta) {
-    final productoId = detalle['producto_id']?.toString();
+        for (final detalle in detallesRespuesta) {
+          final productoId = detalle['producto_id']?.toString();
 
-    if (productoId == null) continue;
+          if (productoId == null) continue;
 
-    final producto =
-        detalle['productos'] as Map<String, dynamic>?;
+          final producto = detalle['productos'] as Map<String, dynamic>?;
 
-    final cantidadFacturada = detalle['cantidad_facturada'];
+          final cantidadFacturada = detalle['cantidad_facturada'];
 
-final cantidad = cantidadFacturada != null
-    ? double.tryParse(cantidadFacturada.toString()) ?? 0
-    : double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+          final cantidad = cantidadFacturada != null
+              ? double.tryParse(cantidadFacturada.toString()) ?? 0
+              : double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
 
-    if (cantidad <= 0) continue;
+          if (cantidad <= 0) continue;
 
-    if (!productosAgrupados.containsKey(productoId)) {
-      productosAgrupados[productoId] = {
-        'producto_id': productoId,
-        'nombre':
-            producto?['nombre']?.toString() ?? 'Producto sin nombre',
-        'codigo': producto?['codigo']?.toString() ?? '',
-        'cantidad': 0.0,
-      };
-    }
+          if (!productosAgrupados.containsKey(productoId)) {
+            productosAgrupados[productoId] = {
+              'producto_id': productoId,
+              'nombre':
+                  producto?['nombre']?.toString() ?? 'Producto sin nombre',
+              'codigo': producto?['codigo']?.toString() ?? '',
+              'cantidad': 0.0,
+            };
+          }
 
-    productosAgrupados[productoId]!['cantidad'] =
-        (productosAgrupados[productoId]!['cantidad'] as double) +
-            cantidad;
-  }
-}
+          productosAgrupados[productoId]!['cantidad'] =
+              (productosAgrupados[productoId]!['cantidad'] as double) +
+              cantidad;
+        }
+      }
 
-final resumenProductos = productosAgrupados.values.toList();
+      final resumenProductos = productosAgrupados.values.toList();
 
-resumenProductos.sort(
-  (a, b) => a['nombre']
-      .toString()
-      .compareTo(b['nombre'].toString()),
-);
+      resumenProductos.sort(
+        (a, b) => a['nombre'].toString().compareTo(b['nombre'].toString()),
+      );
       if (!mounted) return;
 
       setState(() {
-  _pedidos = pedidosCargados;
-  _resumenProductos = resumenProductos;
-  _cargando = false;
-});
+        _pedidos = pedidosCargados;
+        _resumenProductos = resumenProductos;
+        _cargando = false;
+      });
     } catch (_) {
       if (!mounted) return;
 
@@ -208,217 +199,205 @@ resumenProductos.sort(
 
     return '$dia/$mes/$anio $hora:$minuto';
   }
+
   double _totalPedidoParaReparto(Map<String, dynamic> pedido) {
-  final facturado = pedido['facturado'] == true;
+    final facturado = pedido['facturado'] == true;
 
-  if (!facturado) {
-    return double.tryParse(
-          pedido['total']?.toString() ?? '',
-        ) ??
-        0;
-  }
-
-  final pedidoId = pedido['id']?.toString();
-
-  if (pedidoId == null) return 0;
-
-  double total = 0;
-
-  for (final detalle in _detallesPedidos) {
-    if (detalle['pedido_id']?.toString() != pedidoId) {
-      continue;
+    if (!facturado) {
+      return double.tryParse(pedido['total']?.toString() ?? '') ?? 0;
     }
 
-    final cantidadFacturada = detalle['cantidad_facturada'];
+    final pedidoId = pedido['id']?.toString();
 
-    final cantidad = cantidadFacturada != null
-        ? double.tryParse(cantidadFacturada.toString()) ?? 0
-        : double.tryParse(
-              detalle['cantidad']?.toString() ?? '',
-            ) ??
-            0;
+    if (pedidoId == null) return 0;
 
-    final precio = double.tryParse(
-          detalle['precio_unitario']?.toString() ?? '',
-        ) ??
-        0;
+    double total = 0;
 
-    total += cantidad * precio;
+    for (final detalle in _detallesPedidos) {
+      if (detalle['pedido_id']?.toString() != pedidoId) {
+        continue;
+      }
+
+      final cantidadFacturada = detalle['cantidad_facturada'];
+
+      final cantidad = cantidadFacturada != null
+          ? double.tryParse(cantidadFacturada.toString()) ?? 0
+          : double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+
+      final precio =
+          double.tryParse(detalle['precio_unitario']?.toString() ?? '') ?? 0;
+
+      total += cantidad * precio;
+    }
+
+    return total;
   }
 
-  return total;
-}
   int get _cantidadPedidos {
-  return _pedidos.length;
-}
-
-double get _ventaTotal {
-  return _pedidos.fold<double>(
-    0,
-    (total, pedido) {
-      return total + _totalPedidoParaReparto(pedido);
-    },
-  );
-}
-String _nombreDia(DateTime fecha) {
-  const dias = [
-    'LUNES',
-    'MARTES',
-    'MIÉRCOLES',
-    'JUEVES',
-    'VIERNES',
-    'SÁBADO',
-    'DOMINGO',
-  ];
-
-  return dias[fecha.weekday - 1];
-}
-Future<void> _elegirFecha() async {
-  final fecha = await showDatePicker(
-    context: context,
-    initialDate: _fechaSeleccionada,
-    firstDate: DateTime(2025),
-    lastDate: DateTime(2030),
-  );
-
-  if (!mounted || fecha == null) return;
-
-  setState(() {
-    _fechaSeleccionada = fecha;
-    _filtrarPorFecha = true;
-  });
-
-  await _cargarPedidos();
-}
-Future<void> _verTodosLosPendientes() async {
-  setState(() {
-    _filtrarPorFecha = false;
-  });
-
-  await _cargarPedidos();
-}
-void _recalcularResumenSeleccionados() {
-  final Map<String, Map<String, dynamic>> productosAgrupados = {};
-
-  final detallesFiltrados = _detallesPedidos.where((detalle) {
-    final pedidoId = detalle['pedido_id']?.toString();
-    return pedidoId != null &&
-        _pedidosSeleccionados.contains(pedidoId);
-  });
-
-  for (final detalle in detallesFiltrados) {
-    final productoId = detalle['producto_id']?.toString();
-
-    if (productoId == null) continue;
-
-    final producto =
-        detalle['productos'] as Map<String, dynamic>?;
-
-    final cantidadFacturada = detalle['cantidad_facturada'];
-
-final cantidad = cantidadFacturada != null
-    ? double.tryParse(cantidadFacturada.toString()) ?? 0
-    : double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
-    if (cantidad <= 0) continue;
-
-    if (!productosAgrupados.containsKey(productoId)) {
-      productosAgrupados[productoId] = {
-        'producto_id': productoId,
-        'nombre':
-            producto?['nombre']?.toString() ?? 'Producto sin nombre',
-        'codigo': producto?['codigo']?.toString() ?? '',
-        'cantidad': 0.0,
-      };
-    }
-
-    productosAgrupados[productoId]!['cantidad'] =
-        (productosAgrupados[productoId]!['cantidad'] as double) +
-            cantidad;
+    return _pedidos.length;
   }
 
-  final resumen = productosAgrupados.values.toList();
+  double get _ventaTotal {
+    return _pedidos.fold<double>(0, (total, pedido) {
+      return total + _totalPedidoParaReparto(pedido);
+    });
+  }
 
-  resumen.sort(
-    (a, b) => a['nombre']
-        .toString()
-        .compareTo(b['nombre'].toString()),
-  );
+  String _nombreDia(DateTime fecha) {
+    const dias = [
+      'LUNES',
+      'MARTES',
+      'MIÉRCOLES',
+      'JUEVES',
+      'VIERNES',
+      'SÁBADO',
+      'DOMINGO',
+    ];
 
-  setState(() {
-    _resumenProductos = resumen;
-  });
-}
-void _seleccionarTodos() {
-  setState(() {
-    _pedidosSeleccionados
-      ..clear()
-      ..addAll(
-        _pedidos
-            .map((pedido) => pedido['id']?.toString())
-            .whereType<String>(),
-      );
-  });
+    return dias[fecha.weekday - 1];
+  }
 
-  _recalcularResumenSeleccionados();
-}
+  Future<void> _elegirFecha() async {
+    final fecha = await showDatePicker(
+      context: context,
+      initialDate: _fechaSeleccionada,
+      firstDate: DateTime(2025),
+      lastDate: DateTime(2030),
+    );
 
-void _limpiarSeleccion() {
-  setState(() {
-    _pedidosSeleccionados.clear();
-  });
+    if (!mounted || fecha == null) return;
 
-  _recalcularResumenSeleccionados();
-}
+    setState(() {
+      _fechaSeleccionada = fecha;
+      _filtrarPorFecha = true;
+    });
+
+    await _cargarPedidos();
+  }
+
+  Future<void> _verTodosLosPendientes() async {
+    setState(() {
+      _filtrarPorFecha = false;
+    });
+
+    await _cargarPedidos();
+  }
+
+  void _recalcularResumenSeleccionados() {
+    final Map<String, Map<String, dynamic>> productosAgrupados = {};
+
+    final detallesFiltrados = _detallesPedidos.where((detalle) {
+      final pedidoId = detalle['pedido_id']?.toString();
+      return pedidoId != null && _pedidosSeleccionados.contains(pedidoId);
+    });
+
+    for (final detalle in detallesFiltrados) {
+      final productoId = detalle['producto_id']?.toString();
+
+      if (productoId == null) continue;
+
+      final producto = detalle['productos'] as Map<String, dynamic>?;
+
+      final cantidadFacturada = detalle['cantidad_facturada'];
+
+      final cantidad = cantidadFacturada != null
+          ? double.tryParse(cantidadFacturada.toString()) ?? 0
+          : double.tryParse(detalle['cantidad']?.toString() ?? '') ?? 0;
+      if (cantidad <= 0) continue;
+
+      if (!productosAgrupados.containsKey(productoId)) {
+        productosAgrupados[productoId] = {
+          'producto_id': productoId,
+          'nombre': producto?['nombre']?.toString() ?? 'Producto sin nombre',
+          'codigo': producto?['codigo']?.toString() ?? '',
+          'cantidad': 0.0,
+        };
+      }
+
+      productosAgrupados[productoId]!['cantidad'] =
+          (productosAgrupados[productoId]!['cantidad'] as double) + cantidad;
+    }
+
+    final resumen = productosAgrupados.values.toList();
+
+    resumen.sort(
+      (a, b) => a['nombre'].toString().compareTo(b['nombre'].toString()),
+    );
+
+    setState(() {
+      _resumenProductos = resumen;
+    });
+  }
+
+  void _seleccionarTodos() {
+    setState(() {
+      _pedidosSeleccionados
+        ..clear()
+        ..addAll(
+          _pedidos
+              .map((pedido) => pedido['id']?.toString())
+              .whereType<String>(),
+        );
+    });
+
+    _recalcularResumenSeleccionados();
+  }
+
+  void _limpiarSeleccion() {
+    setState(() {
+      _pedidosSeleccionados.clear();
+    });
+
+    _recalcularResumenSeleccionados();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-  title: const Text('Gestión de reparto'),
-  bottom: PreferredSize(
-    preferredSize: const Size.fromHeight(56),
-    child: Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SegmentedButton<bool>(
-        segments: const [
-          ButtonSegment<bool>(
-            value: false,
-            icon: Icon(Icons.local_shipping_outlined),
-            label: Text('PREVENTAS'),
+        title: const Text('Gestión de reparto'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment<bool>(
+                  value: false,
+                  icon: Icon(Icons.local_shipping_outlined),
+                  label: Text('PREVENTAS'),
+                ),
+                ButtonSegment<bool>(
+                  value: true,
+                  icon: Icon(Icons.point_of_sale_outlined),
+                  label: Text('VENTA DIRECTA'),
+                ),
+              ],
+              selected: {_mostrarVentaDirecta},
+              onSelectionChanged: (seleccion) async {
+                setState(() {
+                  _mostrarVentaDirecta = seleccion.first;
+
+                  if (_mostrarVentaDirecta) {
+                    _filtrarPorFecha = false;
+                  }
+
+                  _pedidosSeleccionados.clear();
+                });
+
+                await _cargarPedidos();
+              },
+            ),
           ),
-          ButtonSegment<bool>(
-            value: true,
-            icon: Icon(Icons.point_of_sale_outlined),
-            label: Text('VENTA DIRECTA'),
-          ),
-        ],
-        selected: {_mostrarVentaDirecta},
-        onSelectionChanged: (seleccion) async {
-          setState(() {
-            _mostrarVentaDirecta = seleccion.first;
-
-            if (_mostrarVentaDirecta) {
-              _filtrarPorFecha = false;
-            }
-
-            _pedidosSeleccionados.clear();
-          });
-
-          await _cargarPedidos();
-        },
+        ),
       ),
-    ),
-  ),
-),
       body: _construirContenido(),
     );
   }
 
   Widget _construirContenido() {
     if (_cargando) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -428,10 +407,7 @@ void _limpiarSeleccion() {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.error_outline,
-                size: 60,
-              ),
+              const Icon(Icons.error_outline, size: 60),
               const SizedBox(height: 16),
               Text(
                 _error!,
@@ -454,57 +430,195 @@ void _limpiarSeleccion() {
     }
 
     if (_pedidos.isEmpty) {
-  return Column(
-    children: [
-      Card(
-        margin: const EdgeInsets.all(16),
-        child: ListTile(
-  contentPadding: EdgeInsets.zero,
-  leading: const Icon(Icons.pending_actions_outlined),
-  title: Text(
-  _mostrarVentaDirecta
-      ? 'Ventas directas pendientes'
-      : _filtrarPorFecha
-          ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
-              '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
-              '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
-              '${_fechaSeleccionada.year.toString().substring(2)}'
-          : 'Preventas pendientes',
-),
-subtitle: Text(
-  _mostrarVentaDirecta
-      ? 'Operaciones de venta directa todavía no finalizadas'
-      : _filtrarPorFecha
-          ? 'Pendientes de entrega para esta fecha'
-          : 'Preventas cuya entrega todavía no fue gestionada',
-),
-  trailing: _mostrarVentaDirecta
-    ? null
-    : const Row(
-        mainAxisSize: MainAxisSize.min,
+      return Column(
         children: [
-          Icon(Icons.calendar_month_outlined, size: 20),
-          SizedBox(width: 8),
-          Text('Filtrar por fecha'),
-          SizedBox(width: 4),
-          Icon(Icons.chevron_right),
-        ],
-      ),
-onTap: _mostrarVentaDirecta ? null : _elegirFecha,
-),
-      ),
-      const Expanded(
-        child: Center(
-          child: Text(
-            'No hay pedidos registrados para esta fecha.',
-            style: TextStyle(fontSize: 18),
+          Card(
+            margin: const EdgeInsets.all(16),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.pending_actions_outlined),
+              title: Text(
+                _mostrarVentaDirecta
+                    ? 'Ventas directas pendientes'
+                    : _filtrarPorFecha
+                    ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
+                          '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
+                          '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
+                          '${_fechaSeleccionada.year.toString().substring(2)}'
+                    : 'Preventas pendientes',
+              ),
+              subtitle: Text(
+                _mostrarVentaDirecta
+                    ? 'Operaciones de venta directa todavía no finalizadas'
+                    : _filtrarPorFecha
+                    ? 'Pendientes de entrega para esta fecha'
+                    : 'Preventas cuya entrega todavía no fue gestionada',
+              ),
+              trailing: _mostrarVentaDirecta
+                  ? null
+                  : const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.calendar_month_outlined, size: 20),
+                        SizedBox(width: 8),
+                        Text('Filtrar por fecha'),
+                        SizedBox(width: 4),
+                        Icon(Icons.chevron_right),
+                      ],
+                    ),
+              onTap: _mostrarVentaDirecta ? null : _elegirFecha,
+            ),
           ),
-        ),
-      ),
-    ],
-  );
-}
+          const Expanded(
+            child: Center(
+              child: Text(
+                'No hay pedidos registrados para esta fecha.',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
+    if (useDesktopLayout(context)) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  _mostrarVentaDirecta
+                      ? 'Ventas directas pendientes'
+                      : _filtrarPorFecha
+                      ? 'Entregas: ${_formatearFecha(
+                              _fechaSeleccionada.toIso8601String(),
+                            )}'
+                      : 'Preventas pendientes',
+                ),
+                if (!_mostrarVentaDirecta)
+                  OutlinedButton.icon(
+                    onPressed: _filtrarPorFecha
+                        ? _verTodosLosPendientes
+                        : _elegirFecha,
+                    icon: const Icon(Icons.calendar_month, size: 18),
+                    label: Text(
+                      _filtrarPorFecha ? 'Ver todos' : 'Elegir fecha',
+                    ),
+                  ),
+                IconButton(
+                  tooltip: 'Actualizar pedidos',
+                  onPressed: _cargarPedidos,
+                  icon: const Icon(Icons.refresh),
+                ),
+                Text(
+                  '$_cantidadPedidos pedidos · ${_formatearPrecio(_ventaTotal)}',
+                ),
+                OutlinedButton(
+                  onPressed: _seleccionarTodos,
+                  child: const Text('Seleccionar todos'),
+                ),
+                TextButton(
+                  onPressed: _limpiarSeleccion,
+                  child: const Text('Limpiar selección'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text(
+                        'Productos de ${_pedidosSeleccionados.length} pedidos',
+                      ),
+                      content: SizedBox(
+                        width: 650,
+                        height: 400,
+                        child: ListView(
+                          children: _resumenProductos
+                              .map(
+                                (p) => ListTile(
+                                  dense: true,
+                                  title: Text(
+                                    p['nombre']?.toString() ?? 'Producto',
+                                  ),
+                                  trailing: Text(p['cantidad'].toString()),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cerrar'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                  label: const Text('Resumen de productos'),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: DesktopRecords(
+              records: _pedidos,
+              leading: (p) => Checkbox(
+                value: _pedidosSeleccionados.contains(p['id'].toString()),
+                onChanged: (v) {
+                  setState(() {
+                    if (v == true) {
+                      _pedidosSeleccionados.add(p['id'].toString());
+                    } else {
+                      _pedidosSeleccionados.remove(p['id'].toString());
+                    }
+                  });
+                  _recalcularResumenSeleccionados();
+                },
+              ),
+              fields: [
+                DesktopField('Cliente', recordClient, width: 220),
+                DesktopField(
+                  'Dirección',
+                  (r) => (r['clientes'] as Map?)?['direccion'],
+                  width: 200,
+                ),
+                DesktopField('Preventista', recordSeller),
+                DesktopField(
+                  'Entrega',
+                  (r) => r['resultado_entrega'],
+                  width: 110,
+                ),
+                DesktopField(
+                  'Facturación',
+                  (r) => r['facturado'] == true ? 'Facturado' : 'Pendiente',
+                  width: 110,
+                ),
+                DesktopField(
+                  'Total',
+                  (r) => desktopMoney(_totalPedidoParaReparto(r)),
+                  numeric: true,
+                  width: 120,
+                ),
+                DesktopField('Observación', recordObservation, width: 180),
+              ],
+              onOpen: (pedido) async {
+                final result = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => ManageOrderPage(pedido: pedido),
+                  ),
+                );
+                if (result == true && mounted) await _cargarPedidos();
+              },
+            ),
+          ),
+        ],
+      );
+    }
     return RefreshIndicator(
       onRefresh: _cargarPedidos,
       child: ListView.separated(
@@ -512,209 +626,195 @@ onTap: _mostrarVentaDirecta ? null : _elegirFecha,
         itemCount: _pedidos.length + 2,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
-  if (index == 0) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-  children: [
-    ListTile(
-  contentPadding: EdgeInsets.zero,
-  leading: const Icon(Icons.pending_actions_outlined),
-  title: Text(
-  _mostrarVentaDirecta
-      ? 'Ventas directas pendientes'
-      : _filtrarPorFecha
-          ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
-              '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
-              '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
-              '${_fechaSeleccionada.year.toString().substring(2)}'
-          : 'Preventas pendientes',
-),
-subtitle: Text(
-  _mostrarVentaDirecta
-      ? 'Operaciones de venta directa todavía no finalizadas'
-      : _filtrarPorFecha
-          ? 'Pendientes de entrega para esta fecha'
-          : 'Preventas cuya entrega todavía no fue gestionada',
-),
-  trailing: _mostrarVentaDirecta
-    ? null
-    : Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            _filtrarPorFecha
-                ? Icons.list_alt_outlined
-                : Icons.calendar_month_outlined,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            _filtrarPorFecha
-                ? 'Ver todos los pendientes'
-                : 'Filtrar por fecha',
-          ),
-          const SizedBox(width: 4),
-          const Icon(Icons.chevron_right),
-        ],
-      ),
-onTap: _mostrarVentaDirecta
-    ? null
-    : _filtrarPorFecha
-        ? _verTodosLosPendientes
-        : _elegirFecha,
-),
-    const Divider(),
-    Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Pedidos',
-                  style: TextStyle(color: Colors.grey),
+          if (index == 0) {
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.pending_actions_outlined),
+                      title: Text(
+                        _mostrarVentaDirecta
+                            ? 'Ventas directas pendientes'
+                            : _filtrarPorFecha
+                            ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
+                                  '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
+                                  '${_fechaSeleccionada.month.toString().padLeft(2, '0')}/'
+                                  '${_fechaSeleccionada.year.toString().substring(2)}'
+                            : 'Preventas pendientes',
+                      ),
+                      subtitle: Text(
+                        _mostrarVentaDirecta
+                            ? 'Operaciones de venta directa todavía no finalizadas'
+                            : _filtrarPorFecha
+                            ? 'Pendientes de entrega para esta fecha'
+                            : 'Preventas cuya entrega todavía no fue gestionada',
+                      ),
+                      trailing: _mostrarVentaDirecta
+                          ? null
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _filtrarPorFecha
+                                      ? Icons.list_alt_outlined
+                                      : Icons.calendar_month_outlined,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _filtrarPorFecha
+                                      ? 'Ver todos los pendientes'
+                                      : 'Filtrar por fecha',
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.chevron_right),
+                              ],
+                            ),
+                      onTap: _mostrarVentaDirecta
+                          ? null
+                          : _filtrarPorFecha
+                          ? _verTodosLosPendientes
+                          : _elegirFecha,
+                    ),
+                    const Divider(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Pedidos',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$_cantidadPedidos',
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Text(
+                              'Venta total',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _formatearPrecio(_ventaTotal),
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '$_cantidadPedidos',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const Text(
-                  'Venta total',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatearPrecio(_ventaTotal),
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        ],
-),
-      ),
-    );
-  }
-  if (index == 1) {
-  return Card(
-    child: ExpansionTile(
-      leading: const Icon(Icons.inventory_2_outlined),
-      title: const Text(
-        'RESUMEN DE PRODUCTOS',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      subtitle: Text(
-        '${_pedidosSeleccionados.length} de ${_pedidos.length} pedidos seleccionados',
-      ),
-      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _seleccionarTodos,
-                child: const Text('SELECCIONAR TODOS'),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _limpiarSeleccion,
-                child: const Text('LIMPIAR'),
+            );
+          }
+          if (index == 1) {
+            return Card(
+              child: ExpansionTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: const Text(
+                  'RESUMEN DE PRODUCTOS',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  '${_pedidosSeleccionados.length} de ${_pedidos.length} pedidos seleccionados',
+                ),
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _seleccionarTodos,
+                          child: const Text('SELECCIONAR TODOS'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _limpiarSeleccion,
+                          child: const Text('LIMPIAR'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ..._resumenProductos.map((producto) {
+                    final cantidad = (producto['cantidad'] as num?) ?? 0;
+
+                    final cantidadTexto = cantidad.toDouble() % 1 == 0
+                        ? cantidad.toInt().toString()
+                        : cantidad.toString();
+
+                    final nombre =
+                        producto['nombre']?.toString() ?? 'Producto sin nombre';
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Text(
+                          '$cantidadTexto × $nombre',
+                          textAlign: TextAlign.left,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ..._resumenProductos.map(
-  (producto) {
-    final cantidad = (producto['cantidad'] as num?) ?? 0;
+            );
+          }
 
-    final cantidadTexto = cantidad.toDouble() % 1 == 0
-        ? cantidad.toInt().toString()
-        : cantidad.toString();
+          final pedido = _pedidos[index - 2];
 
-    final nombre =
-        producto['nombre']?.toString() ?? 'Producto sin nombre';
+          final cliente = pedido['clientes'] as Map<String, dynamic>?;
 
-    return Padding(
-  padding: const EdgeInsets.symmetric(vertical: 3),
-  child: SizedBox(
-    width: double.infinity,
-    child: Text(
-      '$cantidadTexto × $nombre',
-      textAlign: TextAlign.left,
-      style: const TextStyle(
-        fontWeight: FontWeight.bold,
-      ),
-    ),
-  ),
-);
-  },
-),
-      ],
-    ),
-  );
-}
-
-  final pedido = _pedidos[index - 2];
-
-          final cliente =
-              pedido['clientes'] as Map<String, dynamic>?;
-
-          final usuario =
-              pedido['usuarios'] as Map<String, dynamic>?;
+          final usuario = pedido['usuarios'] as Map<String, dynamic>?;
 
           final clienteNombre =
-              cliente?['nombre_comercio']?.toString() ??
-                  'Cliente sin nombre';
+              cliente?['nombre_comercio']?.toString() ?? 'Cliente sin nombre';
 
-          final direccion =
-              cliente?['direccion']?.toString() ?? '';
+          final direccion = cliente?['direccion']?.toString() ?? '';
 
-          final vendedorNombre =
-              usuario?['nombre']?.toString() ?? '';
+          final vendedorNombre = usuario?['nombre']?.toString() ?? '';
 
-          final vendedorApellido =
-              usuario?['apellido']?.toString() ?? '';
+          final vendedorApellido = usuario?['apellido']?.toString() ?? '';
 
           final vendedor = [
             vendedorNombre,
             vendedorApellido,
           ].where((texto) => texto.isNotEmpty).join(' ');
 
-          final estado =
-              pedido['estado']?.toString() ?? 'pendiente';
+          final estado = pedido['estado']?.toString() ?? 'pendiente';
 
           final resultado =
               pedido['resultado_entrega']?.toString() ?? 'pendiente';
 
-          final motivo =
-              pedido['motivo_no_entrega']?.toString() ?? '';
+          final motivo = pedido['motivo_no_entrega']?.toString() ?? '';
 
-final pedidoId = pedido['id'].toString();
-final seleccionado = _pedidosSeleccionados.contains(pedidoId);
-final facturado = pedido['facturado'] == true;
-final fechaFacturacion = pedido['fecha_facturacion'];
-final numeroComprobante =
-    pedido['numero_comprobante']?.toString() ?? '';
+          final pedidoId = pedido['id'].toString();
+          final seleccionado = _pedidosSeleccionados.contains(pedidoId);
+          final facturado = pedido['facturado'] == true;
+          final fechaFacturacion = pedido['fecha_facturacion'];
+          final numeroComprobante =
+              pedido['numero_comprobante']?.toString() ?? '';
           return Card(
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -724,19 +824,19 @@ final numeroComprobante =
                   Row(
                     children: [
                       Checkbox(
-  value: seleccionado,
-  onChanged: (valor) {
-    setState(() {
-      if (valor == true) {
-        _pedidosSeleccionados.add(pedidoId);
-      } else {
-        _pedidosSeleccionados.remove(pedidoId);
-      }
-    });
+                        value: seleccionado,
+                        onChanged: (valor) {
+                          setState(() {
+                            if (valor == true) {
+                              _pedidosSeleccionados.add(pedidoId);
+                            } else {
+                              _pedidosSeleccionados.remove(pedidoId);
+                            }
+                          });
 
-    _recalcularResumenSeleccionados();
-  },
-),
+                          _recalcularResumenSeleccionados();
+                        },
+                      ),
                       Expanded(
                         child: Text(
                           clienteNombre,
@@ -747,9 +847,7 @@ final numeroComprobante =
                         ),
                       ),
                       Text(
-                        _formatearPrecio(
-  _totalPedidoParaReparto(pedido),
-),
+                        _formatearPrecio(_totalPedidoParaReparto(pedido)),
                         style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
@@ -764,71 +862,59 @@ final numeroComprobante =
                   const SizedBox(height: 8),
                   Text(
                     _formatearFecha(pedido['created_at']),
-                    style: const TextStyle(
-                      color: Colors.grey,
-                    ),
+                    style: const TextStyle(color: Colors.grey),
                   ),
                   if (vendedor.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text('Preventista: $vendedor'),
                   ],
-                  if (pedido['tipo_operacion']?.toString() == 'venta_directa') ...[
-  const SizedBox(height: 4),
-  const Text(
-    'VENTA DIRECTA',
-    style: TextStyle(
-      fontWeight: FontWeight.bold,
-    ),
-  ),
-],
+                  if (pedido['tipo_operacion']?.toString() ==
+                      'venta_directa') ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      'VENTA DIRECTA',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
                   const SizedBox(height: 8),
-                  Text(
-                    'Estado: ${estado.toUpperCase()}',
-                  ),
+                  Text('Estado: ${estado.toUpperCase()}'),
+                  const SizedBox(height: 4),
+                  Text('Entrega: ${resultado.toUpperCase()}'),
                   const SizedBox(height: 4),
                   Text(
-                    'Entrega: ${resultado.toUpperCase()}',
+                    facturado
+                        ? 'Facturación: FACTURADO'
+                        : 'Facturación: NO FACTURADO',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: facturado ? Colors.green : Colors.orange,
+                    ),
                   ),
-                  const SizedBox(height: 4),
-Text(
-  facturado ? 'Facturación: FACTURADO' : 'Facturación: NO FACTURADO',
-  style: TextStyle(
-    fontWeight: FontWeight.bold,
-    color: facturado ? Colors.green : Colors.orange,
-  ),
-),
-if (facturado && fechaFacturacion != null) ...[
-  const SizedBox(height: 4),
-  Text(
-    'Fecha facturación: ${_formatearFecha(fechaFacturacion)}',
-  ),
-],
-if (facturado && numeroComprobante.isNotEmpty) ...[
-  const SizedBox(height: 4),
-  Text(
-    'Comprobante: $numeroComprobante',
-  ),
-],
-                  if (resultado == 'no_entregado' &&
-                      motivo.isNotEmpty) ...[
+                  if (facturado && fechaFacturacion != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Motivo: $motivo',
+                      'Fecha facturación: ${_formatearFecha(fechaFacturacion)}',
                     ),
+                  ],
+                  if (facturado && numeroComprobante.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text('Comprobante: $numeroComprobante'),
+                  ],
+                  if (resultado == 'no_entregado' && motivo.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text('Motivo: $motivo'),
                   ],
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        final actualizado =
-                            await Navigator.of(context).push<bool>(
-                          MaterialPageRoute(
-                            builder: (_) => ManageOrderPage(
-                              pedido: pedido,
-                            ),
-                          ),
-                        );
+                        final actualizado = await Navigator.of(context)
+                            .push<bool>(
+                              MaterialPageRoute(
+                                builder: (_) => ManageOrderPage(pedido: pedido),
+                              ),
+                            );
 
                         if (actualizado == true) {
                           await _cargarPedidos();

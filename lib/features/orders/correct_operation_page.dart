@@ -1,3 +1,5 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -38,7 +40,7 @@ class _CorrectOperationPageState extends State<CorrectOperationPage> {
 
     try {
       final respuesta = await Supabase.instance.client
-          .from('pedido_detalles')
+          .from('detalles_administracion')
           .select('''
             id,
             pedido_id,
@@ -218,7 +220,7 @@ class _CorrectOperationPageState extends State<CorrectOperationPage> {
   Future<void> _agregarProducto() async {
     try {
       final respuesta = await Supabase.instance.client
-          .from('productos')
+          .from('productos_administracion')
           .select('''
                 id,
                 nombre,
@@ -646,204 +648,279 @@ class _CorrectOperationPageState extends State<CorrectOperationPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Corregir operación')),
-      body: _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(_error!, textAlign: TextAlign.center),
-              ),
-            )
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Cliente',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          nombreCliente,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+      body: DesktopForm(
+        child: _cargando
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(_error!, textAlign: TextAlign.center),
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Mercadería entregada',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 10),
-                ..._detalles.map((detalle) {
-                  final producto =
-                      detalle['productos'] as Map<String, dynamic>?;
-
-                  final nombre =
-                      producto?['nombre']?.toString() ?? 'Producto sin nombre';
-
-                  final id = detalle['id'].toString();
-
-                  final agregado = _esAgregado(detalle);
-
-                  final nuevaLinea = _esNuevaLinea(detalle);
-
-                  final base = _cantidadBase(detalle);
-
-                  final entregada = _cantidadEntregada(detalle);
-
-                  final precio = _precio(detalle);
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 10),
+              )
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  nombre,
-                                  style: const TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              if (nuevaLinea)
-                                IconButton(
-                                  tooltip: 'Quitar producto nuevo',
-                                  onPressed: () =>
-                                      _quitarProductoNuevo(detalle),
-                                  icon: const Icon(Icons.delete_outline),
-                                ),
-                            ],
+                          const Text(
+                            'Cliente',
+                            style: TextStyle(color: Colors.grey),
                           ),
-                          if (agregado) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              nuevaLinea
-                                  ? 'Agregado en esta corrección'
-                                  : 'Agregado durante una entrega anterior',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                          if (!agregado) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              'Cantidad original/facturada: ${_numeroLimpio(base)}',
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _entregadosControllers[id],
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: const InputDecoration(
-                              labelText: 'Cantidad entregada corregida',
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: (_) {
-                              setState(() {});
-                            },
-                          ),
-                          const SizedBox(height: 10),
-                          Text('Precio: ${_formatearPrecio(precio)}'),
                           const SizedBox(height: 4),
                           Text(
-                            'Subtotal corregido: ${_formatearPrecio(entregada * precio)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            nombreCliente,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  );
-                }),
-                const SizedBox(height: 6),
-                OutlinedButton.icon(
-                  onPressed: _guardando ? null : _agregarProducto,
-                  icon: const Icon(Icons.add_shopping_cart_outlined),
-                  label: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('AGREGAR PRODUCTO'),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        _filaResumen('Total anterior', _totalAnterior),
-                        const SizedBox(height: 8),
-                        _filaResumen('Total corregido', totalCorregido),
-                        const SizedBox(height: 8),
-                        _filaResumen('Diferencia', diferencia),
-                        const Divider(height: 24),
-                        _filaResumen('Ya pagado', _totalPagado),
-                        const SizedBox(height: 8),
-                        _filaResumen('Nuevo saldo', saldoNuevo),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Mercadería entregada',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  if (useDesktopLayout(context))
+                    DesktopRecords(
+                      embedded: true,
+                      records: _detalles,
+                      fields: [
+                        DesktopField(
+                          'Producto',
+                          (r) => (r['productos'] as Map?)?['nombre'],
+                          width: 240,
+                        ),
+                        DesktopField(
+                          'Original',
+                          _cantidadBase,
+                          numeric: true,
+                          width: 85,
+                        ),
+                        DesktopField(
+                          'Corregida',
+                          (r) => SizedBox(
+                            width: 110,
+                            child: TextField(
+                              key: ValueKey('corregir-${r['id']}'),
+                              controller:
+                                  _entregadosControllers[r['id'].toString()],
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              onChanged: (_) => setState(() {}),
+                              decoration: const InputDecoration(
+                                labelText: 'Cantidad',
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                          width: 110,
+                        ),
+                        DesktopField(
+                          'Precio',
+                          (r) => desktopMoney(_precio(r)),
+                          numeric: true,
+                          width: 110,
+                        ),
+                        DesktopField(
+                          'Subtotal',
+                          (r) =>
+                              desktopMoney(_precio(r) * _cantidadEntregada(r)),
+                          numeric: true,
+                          width: 130,
+                        ),
+                        DesktopField(
+                          'Origen',
+                          (r) => _esNuevaLinea(r)
+                              ? 'Esta corrección'
+                              : _esAgregado(r)
+                              ? 'Entrega anterior'
+                              : 'Pedido',
+                          width: 140,
+                        ),
                       ],
+                      actions: (r) => _esNuevaLinea(r)
+                          ? IconButton(
+                              tooltip: 'Quitar producto nuevo',
+                              onPressed: () => _quitarProductoNuevo(r),
+                              icon: const Icon(Icons.delete_outline, size: 20),
+                            )
+                          : const SizedBox.shrink(),
+                    )
+                  else
+                    ..._detalles.map((detalle) {
+                      final producto =
+                          detalle['productos'] as Map<String, dynamic>?;
+
+                      final nombre =
+                          producto?['nombre']?.toString() ??
+                          'Producto sin nombre';
+
+                      final id = detalle['id'].toString();
+
+                      final agregado = _esAgregado(detalle);
+
+                      final nuevaLinea = _esNuevaLinea(detalle);
+
+                      final base = _cantidadBase(detalle);
+
+                      final entregada = _cantidadEntregada(detalle);
+
+                      final precio = _precio(detalle);
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      nombre,
+                                      style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  if (nuevaLinea)
+                                    IconButton(
+                                      tooltip: 'Quitar producto nuevo',
+                                      onPressed: () =>
+                                          _quitarProductoNuevo(detalle),
+                                      icon: const Icon(Icons.delete_outline),
+                                    ),
+                                ],
+                              ),
+                              if (agregado) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  nuevaLinea
+                                      ? 'Agregado en esta corrección'
+                                      : 'Agregado durante una entrega anterior',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                              if (!agregado) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Cantidad original/facturada: ${_numeroLimpio(base)}',
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _entregadosControllers[id],
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                decoration: const InputDecoration(
+                                  labelText: 'Cantidad entregada corregida',
+                                  border: OutlineInputBorder(),
+                                ),
+                                onChanged: (_) {
+                                  setState(() {});
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              Text('Precio: ${_formatearPrecio(precio)}'),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Subtotal corregido: ${_formatearPrecio(entregada * precio)}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  const SizedBox(height: 6),
+                  OutlinedButton.icon(
+                    onPressed: _guardando ? null : _agregarProducto,
+                    icon: const Icon(Icons.add_shopping_cart_outlined),
+                    label: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text('AGREGAR PRODUCTO'),
                     ),
                   ),
-                ),
-                if (totalCorregido < _totalPagado) ...[
-                  const SizedBox(height: 12),
-                  const Card(
+                  const SizedBox(height: 16),
+                  Card(
                     child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'El nuevo total es menor que lo ya pagado. '
-                        'Esta corrección no se puede guardar todavía '
-                        'porque requiere devolución o saldo a favor.',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          _filaResumen('Total anterior', _totalAnterior),
+                          const SizedBox(height: 8),
+                          _filaResumen('Total corregido', totalCorregido),
+                          const SizedBox(height: 8),
+                          _filaResumen('Diferencia', diferencia),
+                          const Divider(height: 24),
+                          _filaResumen('Ya pagado', _totalPagado),
+                          const SizedBox(height: 8),
+                          _filaResumen('Nuevo saldo', saldoNuevo),
+                        ],
                       ),
                     ),
                   ),
+                  if (totalCorregido < _totalPagado) ...[
+                    const SizedBox(height: 12),
+                    const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'El nuevo total es menor que lo ya pagado. '
+                          'Esta corrección no se puede guardar todavía '
+                          'porque requiere devolución o saldo a favor.',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _motivoController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Motivo de la corrección *',
+                      hintText: 'Ej.: cliente cambió Gato Mix por Gato Pescado',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: _guardando ? null : _guardarCorreccion,
+                    icon: _guardando
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.save_outlined),
+                    label: Text(
+                      _guardando ? 'GUARDANDO...' : 'CONFIRMAR CORRECCIÓN',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                 ],
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _motivoController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Motivo de la corrección *',
-                    hintText: 'Ej.: cliente cambió Gato Mix por Gato Pescado',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: _guardando ? null : _guardarCorreccion,
-                  icon: _guardando
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(
-                    _guardando ? 'GUARDANDO...' : 'CONFIRMAR CORRECCIÓN',
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
+              ),
+      ),
     );
   }
 

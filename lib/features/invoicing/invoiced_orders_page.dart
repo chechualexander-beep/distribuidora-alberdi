@@ -1,3 +1,5 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'invoice_detail_page.dart';
@@ -106,52 +108,49 @@ class _InvoicedOrdersPageState extends State<InvoicedOrdersPage> {
 
     return '$dia/$mes/$anio';
   }
+
   bool _esMismaFecha(dynamic valor, DateTime fechaSeleccionada) {
-  if (valor == null) return false;
+    if (valor == null) return false;
 
-  final fecha = DateTime.tryParse(valor.toString());
-  if (fecha == null) return false;
+    final fecha = DateTime.tryParse(valor.toString());
+    if (fecha == null) return false;
 
-  final local = fecha.toLocal();
+    final local = fecha.toLocal();
 
-  return local.year == fechaSeleccionada.year &&
-      local.month == fechaSeleccionada.month &&
-      local.day == fechaSeleccionada.day;
-}
+    return local.year == fechaSeleccionada.year &&
+        local.month == fechaSeleccionada.month &&
+        local.day == fechaSeleccionada.day;
+  }
 
-Future<void> _seleccionarFecha() async {
-  final ahora = DateTime.now();
+  Future<void> _seleccionarFecha() async {
+    final ahora = DateTime.now();
 
-  final fecha = await showDatePicker(
-    context: context,
-    initialDate: _fechaSeleccionada ?? ahora,
-    firstDate: DateTime(2020),
-    lastDate: DateTime(ahora.year + 1),
-    locale: const Locale('es', 'AR'),
-  );
+    final fecha = await showDatePicker(
+      context: context,
+      initialDate: _fechaSeleccionada ?? ahora,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(ahora.year + 1),
+      locale: const Locale('es', 'AR'),
+    );
 
-  if (fecha == null || !mounted) return;
+    if (fecha == null || !mounted) return;
 
-  setState(() {
-    _fechaSeleccionada = fecha;
-  });
-}
+    setState(() {
+      _fechaSeleccionada = fecha;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Facturas realizadas'),
-      ),
+      appBar: AppBar(title: const Text('Facturas realizadas')),
       body: _construirContenido(),
     );
   }
 
   Widget _construirContenido() {
     if (_cargando) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -181,267 +180,289 @@ Future<void> _seleccionarFecha() async {
     }
 
     final pedidosFiltrados = _pedidos.where((pedido) {
-  final cumpleFecha =
-      _fechaSeleccionada == null ||
-      _esMismaFecha(
-        pedido['fecha_facturacion'],
-        _fechaSeleccionada!,
-      );
+      final cumpleFecha =
+          _fechaSeleccionada == null ||
+          _esMismaFecha(pedido['fecha_facturacion'], _fechaSeleccionada!);
 
-  final cliente =
-      pedido['clientes'] as Map<String, dynamic>?;
+      final cliente = pedido['clientes'] as Map<String, dynamic>?;
 
-  final nombreCliente =
-      cliente?['nombre_comercio']
-              ?.toString()
-              .toLowerCase() ??
-          '';
+      final nombreCliente =
+          cliente?['nombre_comercio']?.toString().toLowerCase() ?? '';
 
-  final cumpleCliente =
-      _filtroCliente.isEmpty ||
-      nombreCliente.contains(
-        _filtroCliente.toLowerCase(),
-      );
+      final cumpleCliente =
+          _filtroCliente.isEmpty ||
+          nombreCliente.contains(_filtroCliente.toLowerCase());
 
-  final usuario =
-      pedido['usuarios'] as Map<String, dynamic>?;
+      final usuario = pedido['usuarios'] as Map<String, dynamic>?;
 
-  final nombrePreventista = [
-    usuario?['nombre']?.toString() ?? '',
-    usuario?['apellido']?.toString() ?? '',
-  ]
-      .where((texto) => texto.isNotEmpty)
-      .join(' ')
-      .toLowerCase();
+      final nombrePreventista = [
+        usuario?['nombre']?.toString() ?? '',
+        usuario?['apellido']?.toString() ?? '',
+      ].where((texto) => texto.isNotEmpty).join(' ').toLowerCase();
 
-  final cumplePreventista =
-      _filtroPreventista.isEmpty ||
-      nombrePreventista.contains(
-        _filtroPreventista.toLowerCase(),
-      );
+      final cumplePreventista =
+          _filtroPreventista.isEmpty ||
+          nombrePreventista.contains(_filtroPreventista.toLowerCase());
 
-  return cumpleFecha &&
-      cumpleCliente &&
-      cumplePreventista;
-}).toList();
+      return cumpleFecha && cumpleCliente && cumplePreventista;
+    }).toList();
 
-return Column(
-  children: [
-    Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Row(
-  children: [
-    OutlinedButton.icon(
-      onPressed: _seleccionarFecha,
-      icon: const Icon(Icons.calendar_month_outlined),
-      label: Text(
-        _fechaSeleccionada == null
-            ? 'Todas las fechas'
-            : _formatearFecha(_fechaSeleccionada),
-      ),
-    ),
-    if (_fechaSeleccionada != null) ...[
-      const SizedBox(width: 8),
-      IconButton(
-        tooltip: 'Quitar filtro de fecha',
-        onPressed: () {
-          setState(() {
-            _fechaSeleccionada = null;
-          });
-        },
-        icon: const Icon(Icons.close),
-      ),
-    ],
-    const SizedBox(width: 16),
-    Expanded(
-      child: TextField(
-        decoration: const InputDecoration(
-          hintText: 'Buscar cliente...',
-          prefixIcon: Icon(Icons.search),
-          border: OutlineInputBorder(),
-          isDense: true,
-        ),
-        onChanged: (valor) {
-          setState(() {
-            _filtroCliente = valor.trim();
-          });
-        },
-      ),
-    ),
-    const SizedBox(width: 12),
-Expanded(
-  child: TextField(
-    decoration: const InputDecoration(
-      hintText: 'Buscar preventista...',
-      prefixIcon: Icon(Icons.person_search_outlined),
-      border: OutlineInputBorder(),
-      isDense: true,
-    ),
-    onChanged: (valor) {
-      setState(() {
-        _filtroPreventista = valor.trim();
-      });
-    },
-  ),
-),
-  ],
-)
-    ),
-    Expanded(
-      child: RefreshIndicator(
-        onRefresh: _cargarFacturas,
-        child: pedidosFiltrados.isEmpty
-            ? ListView(
-                padding: const EdgeInsets.all(24),
-                children: const [
-                  Center(
-                    child: Text(
-                      'No hay facturas para la fecha seleccionada.',
-                      style: TextStyle(fontSize: 16),
-                    ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _seleccionarFecha,
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: Text(
+                  _fechaSeleccionada == null
+                      ? 'Todas las fechas'
+                      : _formatearFecha(_fechaSeleccionada),
+                ),
+              ),
+              if (_fechaSeleccionada != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Quitar filtro de fecha',
+                  onPressed: () {
+                    setState(() {
+                      _fechaSeleccionada = null;
+                    });
+                  },
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'Buscar cliente...',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                    isDense: true,
                   ),
-                ],
-              )
-            : ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: pedidosFiltrados.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final pedido = pedidosFiltrados[index];
-
-                  final cliente =
-                      pedido['clientes'] as Map<String, dynamic>?;
-
-                  final usuario =
-                      pedido['usuarios'] as Map<String, dynamic>?;
-
-                  final nombreCliente =
-                      cliente?['nombre_comercio']?.toString() ??
-                          'Cliente sin nombre';
-
-                  final direccion =
-                      cliente?['direccion']?.toString() ?? '';
-
-                  final nombre =
-                      usuario?['nombre']?.toString() ?? '';
-                  final apellido =
-                      usuario?['apellido']?.toString() ?? '';
-
-                  final preventista = [
-                    nombre,
-                    apellido,
-                  ].where((texto) => texto.isNotEmpty).join(' ');
-
-                  final comprobante =
-                      pedido['numero_comprobante']?.toString() ?? '';
-
-                  return Card(
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => InvoiceDetailPage(
-                              pedido: pedido,
-                              soloLectura: true,
-                            ),
+                  onChanged: (valor) {
+                    setState(() {
+                      _filtroCliente = valor.trim();
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'Buscar preventista...',
+                    prefixIcon: Icon(Icons.person_search_outlined),
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (valor) {
+                    setState(() {
+                      _filtroPreventista = valor.trim();
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _cargarFacturas,
+            child: pedidosFiltrados.isEmpty
+                ? ListView(
+                    padding: const EdgeInsets.all(24),
+                    children: const [
+                      Center(
+                        child: Text(
+                          'No hay facturas para la fecha seleccionada.',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ],
+                  )
+                : useDesktopLayout(context)
+                ? DesktopRecords(
+                    records: pedidosFiltrados,
+                    fields: [
+                      DesktopField(
+                        'Comprobante',
+                        (r) => r['numero_comprobante'],
+                        width: 140,
+                      ),
+                      DesktopField('Cliente', recordClient, width: 220),
+                      DesktopField(
+                        'Fecha',
+                        (r) => _formatearFecha(r['fecha_facturacion']),
+                        width: 110,
+                      ),
+                      DesktopField('Preventista', recordSeller),
+                      DesktopField('Lista', (r) => r['tipo_precio'], width: 85),
+                      DesktopField(
+                        'Facturado',
+                        (r) => desktopMoney(
+                          (r['pedido_detalles'] as List? ?? []).fold<double>(
+                            0,
+                            (sum, d) =>
+                                sum +
+                                (double.tryParse(
+                                          d['cantidad_facturada']?.toString() ??
+                                              '',
+                                        ) ??
+                                        double.tryParse(
+                                          d['cantidad']?.toString() ?? '',
+                                        ) ??
+                                        0) *
+                                    (double.tryParse(
+                                          d['precio_unitario']?.toString() ??
+                                              '',
+                                        ) ??
+                                        0),
                           ),
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.receipt_long_outlined,
-                              size: 32,
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    nombreCliente,
-                                    style: const TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  if (direccion.isNotEmpty) ...[
-                                    const SizedBox(height: 4),
-                                    Text(direccion),
-                                  ],
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Factura: ${_formatearFecha(pedido['fecha_facturacion'])}',
-                                  ),
-                                  if (comprobante.isNotEmpty)
-                                    Text(
-                                      'Comprobante: $comprobante',
-                                    ),
-                                  if (preventista.isNotEmpty)
-                                    Text(
-                                      'Preventista: $preventista',
-                                    ),
-                                  Text(
-                                    'Tipo de precio: ${pedido['tipo_precio']?.toString().toUpperCase() ?? ''}',
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Text(
-                              _formatearPrecio(
-                                (pedido['pedido_detalles']
-                                            as List<dynamic>? ??
-                                        [])
-                                    .fold<double>(
-                                  0,
-                                  (suma, detalle) {
-                                    final cantidad =
-                                        double.tryParse(
-                                              detalle[
-                                                          'cantidad_facturada']
-                                                      ?.toString() ??
-                                                  '',
-                                            ) ??
-                                            double.tryParse(
-                                              detalle['cantidad']
-                                                      ?.toString() ??
-                                                  '0',
-                                            ) ??
-                                            0;
-
-                                    final precio =
-                                        double.tryParse(
-                                              detalle['precio_unitario']
-                                                      ?.toString() ??
-                                                  '',
-                                            ) ??
-                                            0;
-
-                                    return suma +
-                                        (cantidad * precio);
-                                  },
-                                ),
-                              ),
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                        ),
+                        numeric: true,
+                        width: 120,
+                      ),
+                    ],
+                    onOpen: (pedido) => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => InvoiceDetailPage(
+                          pedido: pedido,
+                          soloLectura: true,
                         ),
                       ),
                     ),
-                  );
-                },
-              ),
-      ),
-    ),
-  ],
-);
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: pedidosFiltrados.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final pedido = pedidosFiltrados[index];
+
+                      final cliente =
+                          pedido['clientes'] as Map<String, dynamic>?;
+
+                      final usuario =
+                          pedido['usuarios'] as Map<String, dynamic>?;
+
+                      final nombreCliente =
+                          cliente?['nombre_comercio']?.toString() ??
+                          'Cliente sin nombre';
+
+                      final direccion = cliente?['direccion']?.toString() ?? '';
+
+                      final nombre = usuario?['nombre']?.toString() ?? '';
+                      final apellido = usuario?['apellido']?.toString() ?? '';
+
+                      final preventista = [
+                        nombre,
+                        apellido,
+                      ].where((texto) => texto.isNotEmpty).join(' ');
+
+                      final comprobante =
+                          pedido['numero_comprobante']?.toString() ?? '';
+
+                      return Card(
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => InvoiceDetailPage(
+                                  pedido: pedido,
+                                  soloLectura: true,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.receipt_long_outlined,
+                                  size: 32,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        nombreCliente,
+                                        style: const TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      if (direccion.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(direccion),
+                                      ],
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'Factura: ${_formatearFecha(pedido['fecha_facturacion'])}',
+                                      ),
+                                      if (comprobante.isNotEmpty)
+                                        Text('Comprobante: $comprobante'),
+                                      if (preventista.isNotEmpty)
+                                        Text('Preventista: $preventista'),
+                                      Text(
+                                        'Tipo de precio: ${pedido['tipo_precio']?.toString().toUpperCase() ?? ''}',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Text(
+                                  _formatearPrecio(
+                                    (pedido['pedido_detalles']
+                                                as List<dynamic>? ??
+                                            [])
+                                        .fold<double>(0, (suma, detalle) {
+                                          final cantidad =
+                                              double.tryParse(
+                                                detalle['cantidad_facturada']
+                                                        ?.toString() ??
+                                                    '',
+                                              ) ??
+                                              double.tryParse(
+                                                detalle['cantidad']
+                                                        ?.toString() ??
+                                                    '0',
+                                              ) ??
+                                              0;
+
+                                          final precio =
+                                              double.tryParse(
+                                                detalle['precio_unitario']
+                                                        ?.toString() ??
+                                                    '',
+                                              ) ??
+                                              0;
+
+                                          return suma + (cantidad * precio);
+                                        }),
+                                  ),
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
+    );
   }
 }

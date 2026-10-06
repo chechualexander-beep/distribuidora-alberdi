@@ -1,3 +1,6 @@
+import 'product_photo.dart';
+import '../../core/desktop_table.dart';
+import 'products_desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -30,7 +33,9 @@ class _ProductsPageState extends State<ProductsPage> {
     try {
       final respuesta = await Supabase.instance.client
           .from('productos')
-          .select()
+          .select(
+            'id,codigo,nombre,descripcion,categoria,precio_normal,precio_promo,precio_interior,foto_path',
+          )
           .eq('activo', true)
           .eq('visible_preventistas', true)
           .order('nombre');
@@ -64,6 +69,14 @@ class _ProductsPageState extends State<ProductsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Productos'),
+        actions: [
+          if (useDesktopLayout(context))
+            IconButton(
+              onPressed: _cargarProductos,
+              tooltip: 'Actualizar productos',
+              icon: const Icon(Icons.refresh),
+            ),
+        ],
       ),
       body: _construirContenido(),
     );
@@ -71,9 +84,7 @@ class _ProductsPageState extends State<ProductsPage> {
 
   Widget _construirContenido() {
     if (_cargando) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -83,10 +94,7 @@ class _ProductsPageState extends State<ProductsPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.error_outline,
-                size: 60,
-              ),
+              const Icon(Icons.error_outline, size: 60),
               const SizedBox(height: 16),
               Text(
                 _error!,
@@ -113,17 +121,11 @@ class _ProductsPageState extends State<ProductsPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.inventory_2_outlined,
-              size: 80,
-            ),
+            Icon(Icons.inventory_2_outlined, size: 80),
             SizedBox(height: 20),
             Text(
               'Todavía no hay productos cargados',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -133,11 +135,9 @@ class _ProductsPageState extends State<ProductsPage> {
     final texto = _busqueda.toLowerCase();
 
     final productosFiltrados = _productos.where((producto) {
-      final nombre =
-          producto['nombre']?.toString().toLowerCase() ?? '';
+      final nombre = producto['nombre']?.toString().toLowerCase() ?? '';
 
-      final codigo =
-          producto['codigo']?.toString().toLowerCase() ?? '';
+      final codigo = producto['codigo']?.toString().toLowerCase() ?? '';
 
       final descripcion =
           producto['descripcion']?.toString().toLowerCase() ?? '';
@@ -172,22 +172,24 @@ class _ProductsPageState extends State<ProductsPage> {
                     style: TextStyle(fontSize: 16),
                   ),
                 )
+              : useDesktopLayout(context)
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: ProductsDesktopTable(products: productosFiltrados),
+                )
               : RefreshIndicator(
                   onRefresh: _cargarProductos,
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: productosFiltrados.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final producto = productosFiltrados[index];
 
                       final nombre =
-                          producto['nombre']?.toString() ??
-                              'Sin nombre';
+                          producto['nombre']?.toString() ?? 'Sin nombre';
 
-                      final codigo =
-                          producto['codigo']?.toString() ?? '';
+                      final codigo = producto['codigo']?.toString() ?? '';
 
                       return Card(
                         child: Padding(
@@ -195,6 +197,11 @@ class _ProductsPageState extends State<ProductsPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              ProductPhoto(
+                                path: producto['foto_path']?.toString(),
+                                size: 88,
+                              ),
+                              const SizedBox(height: 8),
                               Text(
                                 nombre,
                                 style: const TextStyle(
@@ -203,13 +210,24 @@ class _ProductsPageState extends State<ProductsPage> {
                                 ),
                               ),
 
+                              if ((producto['descripcion']?.toString().trim() ??
+                                      '')
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  producto['descripcion'].toString().trim(),
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
                               if (codigo.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Text(
                                   'Código: $codigo',
-                                  style: const TextStyle(
-                                    color: Colors.grey,
-                                  ),
+                                  style: const TextStyle(color: Colors.grey),
                                 ),
                               ],
 
@@ -221,15 +239,11 @@ class _ProductsPageState extends State<ProductsPage> {
                                 children: [
                                   _PrecioChip(
                                     titulo: 'Normal',
-                                    precio: _precio(
-                                      producto['precio_normal'],
-                                    ),
+                                    precio: _precio(producto['precio_normal']),
                                   ),
                                   _PrecioChip(
                                     titulo: 'Promo',
-                                    precio: _precio(
-                                      producto['precio_promo'],
-                                    ),
+                                    precio: _precio(producto['precio_promo']),
                                   ),
                                   _PrecioChip(
                                     titulo: 'Interior',
@@ -256,17 +270,10 @@ class _PrecioChip extends StatelessWidget {
   final String titulo;
   final String precio;
 
-  const _PrecioChip({
-    required this.titulo,
-    required this.precio,
-  });
+  const _PrecioChip({required this.titulo, required this.precio});
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      label: Text(
-        '$titulo: $precio',
-      ),
-    );
+    return Chip(label: Text('$titulo: $precio'));
   }
 }
