@@ -35,7 +35,7 @@ class CommissionPdfService {
                 ),
               ),
               pw.Text(
-                'Liquidacion de comisiones',
+                'Detalle de comisiones brutas (antes de ajustes)',
                 style: pw.TextStyle(
                   fontSize: 14,
                   fontWeight: pw.FontWeight.bold,
@@ -122,7 +122,7 @@ class CommissionPdfService {
               _formatearPrecio(ventaNoEntregada),
             ),
             _filaResumen(
-              'COMISION A PAGAR',
+              'COMISION BRUTA - REVISAR AJUSTES',
               _formatearPrecio(comisionTotal),
               destacado: true,
             ),

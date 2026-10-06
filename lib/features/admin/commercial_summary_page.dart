@@ -2,875 +2,732 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/argentina_date_utils.dart';
+import 'widgets/commercial_summary_card.dart';
+
 class CommercialSummaryPage extends StatefulWidget {
   const CommercialSummaryPage({super.key});
 
   @override
-  State<CommercialSummaryPage> createState() =>
-      _CommercialSummaryPageState();
+  State<CommercialSummaryPage> createState() => _CommercialSummaryPageState();
 }
 
 class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
-    
   int _periodoSeleccionado = 0;
   DateTimeRange? _rangoPersonalizado;
 
-final _supabase = Supabase.instance.client;
+  final _supabase = Supabase.instance.client;
 
-bool _cargando = false;
-String? _error;
-double _ventaTotal = 0;
-double _mercaderiaEntregada = 0;
-double _recaudacion = 0;
-double _saldoPendiente = 0;
-List<Map<String, dynamic>> _saldosPendientesClientes = [];
-double _costoMercaderia = 0;
-double _comisiones = 0;
-double _ganancia = 0;
-Map<String, double> _comisionesPorPreventista = {};
-Map<String, String> _nombresPreventistas = {};
-bool _mostrarTodosLosSaldos = false;
+  bool _cargando = false;
+  String? _error;
+  Map<String, dynamic> _resumen = {};
 
-Future<void> _cargarResumen() async {
-  setState(() {
-    _cargando = true;
-    _error = null;
-  });
+  double _importe(String clave) =>
+      double.tryParse(_resumen[clave]?.toString() ?? '') ?? 0;
 
-  try {
-    final hoy = ArgentinaDateUtils.ahoraArgentina();
+  double _ventaTotal = 0;
+  double _mercaderiaEntregada = 0;
+  double _recaudacion = 0;
+  double _saldoPendiente = 0;
+  List<Map<String, dynamic>> _saldosPendientesClientes = [];
+  double _costoMercaderia = 0;
+  double _comisiones = 0;
+  double _ganancia = 0;
+  Map<String, double> _comisionesPorPreventista = {};
+  Map<String, String> _nombresPreventistas = {};
+  bool _mostrarTodosLosSaldos = false;
 
-late DateTime inicio;
-late DateTime fin;
+  Future<void> _cargarResumen() async {
+    setState(() {
+      _cargando = true;
+      _error = null;
+    });
 
-if (_periodoSeleccionado == 1) {
-  // SEMANA
-  final inicioHoy = DateTime(
-    hoy.year,
-    hoy.month,
-    hoy.day,
-  );
+    try {
+      final hoy = ArgentinaDateUtils.ahoraArgentina();
 
-  inicio = inicioHoy.subtract(
-    Duration(days: hoy.weekday - DateTime.monday),
-  );
+      late DateTime inicio;
+      late DateTime fin;
 
-  fin = inicio.add(const Duration(days: 7));
-} else if (_periodoSeleccionado == 2 &&
-    _rangoPersonalizado != null) {
-  // PERSONALIZADO
-  inicio = DateTime(
-    _rangoPersonalizado!.start.year,
-    _rangoPersonalizado!.start.month,
-    _rangoPersonalizado!.start.day,
-  );
+      if (_periodoSeleccionado == 1) {
+        // SEMANA
+        final inicioHoy = DateTime(hoy.year, hoy.month, hoy.day);
 
-  final ultimoDia = DateTime(
-    _rangoPersonalizado!.end.year,
-    _rangoPersonalizado!.end.month,
-    _rangoPersonalizado!.end.day,
-  );
+        inicio = inicioHoy.subtract(
+          Duration(days: hoy.weekday - DateTime.monday),
+        );
 
-  fin = ultimoDia.add(const Duration(days: 1));
-} else {
-  // HOY
-  inicio = DateTime(
-    hoy.year,
-    hoy.month,
-    hoy.day,
-  );
+        fin = inicio.add(const Duration(days: 7));
+      } else if (_periodoSeleccionado == 2 && _rangoPersonalizado != null) {
+        // PERSONALIZADO
+        inicio = DateTime(
+          _rangoPersonalizado!.start.year,
+          _rangoPersonalizado!.start.month,
+          _rangoPersonalizado!.start.day,
+        );
 
-  fin = inicio.add(const Duration(days: 1));
-}
-final inicioUtcArgentina =
-    ArgentinaDateUtils.inicioDiaUtc(inicio);
+        final ultimoDia = DateTime(
+          _rangoPersonalizado!.end.year,
+          _rangoPersonalizado!.end.month,
+          _rangoPersonalizado!.end.day,
+        );
 
-final finUtcArgentina =
-    ArgentinaDateUtils.inicioDiaUtc(fin);
+        fin = ultimoDia.add(const Duration(days: 1));
+      } else {
+        // HOY
+        inicio = DateTime(hoy.year, hoy.month, hoy.day);
 
-    final pedidos = await _supabase
-    .from('pedidos')
-    .select('''
-      id,
-      fecha_facturacion,
-      facturado,
-      tipo_operacion,
-      pedido_detalles (
-        cantidad_facturada,
-        precio_unitario
-      )
-    ''')
-    .eq('facturado', true)
-    .gte(
-  'fecha_facturacion',
-  inicioUtcArgentina.toIso8601String(),
-)
-.lt(
-  'fecha_facturacion',
-  finUtcArgentina.toIso8601String(),
-);
+        fin = inicio.add(const Duration(days: 1));
+      }
+      final inicioUtcArgentina = ArgentinaDateUtils.inicioDiaUtc(inicio);
 
-    double venta = 0;
+      final finUtcArgentina = ArgentinaDateUtils.inicioDiaUtc(fin);
 
-    for (final pedido in pedidos) {
-      final detalles = pedido['pedido_detalles'] as List<dynamic>? ?? [];
-
-      for (final detalle in detalles) {
-  final cantidadFacturada = double.tryParse(
-        detalle['cantidad_facturada']?.toString() ?? '',
-      ) ??
-      0;
-
-  final precioUnitario = double.tryParse(
-        detalle['precio_unitario']?.toString() ?? '',
-      ) ??
-      0;
-
-  venta += cantidadFacturada * precioUnitario;
-}
-    }
-    final pedidosEntregados = await _supabase
-    .from('pedidos')
-    .select('''
-      id,
-      preventista_id,
-      fecha_entrega,
-      resultado_entrega,
-        cliente_id,
-  clientes (
-    nombre_comercio
-  ),
-      pedido_detalles (
-  cantidad_entregada,
-  precio_unitario,
-  costo_unitario,
-  importe_comision
-)
-    ''')
-    .gte(
-      'fecha_entrega',
-      inicio.toIso8601String().split('T').first,
-    )
-    .lt(
-      'fecha_entrega',
-      fin.toIso8601String().split('T').first,
-    );
-    double mercaderiaEntregada = 0;
-double costoMercaderia = 0;
-double comisiones = 0;
-
-final Map<String, double> comisionesPorPreventista = {};
-
-for (final pedido in pedidosEntregados) {
-  final detalles =
-      pedido['pedido_detalles'] as List<dynamic>? ?? [];
-
-  final preventistaId =
-      pedido['preventista_id']?.toString();
-
-  for (final detalle in detalles) {
-    final cantidadEntregada = double.tryParse(
-          detalle['cantidad_entregada']?.toString() ?? '',
-        ) ??
-        0;
-
-    final precioUnitario = double.tryParse(
-          detalle['precio_unitario']?.toString() ?? '',
-        ) ??
-        0;
-
-    final costoUnitario = double.tryParse(
-          detalle['costo_unitario']?.toString() ?? '',
-        ) ??
-        0;
-
-    final importeComision = double.tryParse(
-          detalle['importe_comision']?.toString() ?? '',
-        ) ??
-        0;
-
-    mercaderiaEntregada +=
-        cantidadEntregada * precioUnitario;
-
-    costoMercaderia +=
-        cantidadEntregada * costoUnitario;
-
-    comisiones += importeComision;
-
-    if (preventistaId != null) {
-      comisionesPorPreventista[preventistaId] =
-          (comisionesPorPreventista[preventistaId] ?? 0) +
-              importeComision;
-    }
-  }
-}
-    var consultaSaldos = _supabase
-    .from('saldos_pendientes_pedidos')
-    .select('''
+      final resumen = Map<String, dynamic>.from(
+        await _supabase.rpc(
+              'resumen_comercial',
+              params: {
+                'p_inicio': inicioUtcArgentina.toIso8601String(),
+                'p_fin': finUtcArgentina.toIso8601String(),
+              },
+            )
+            as Map,
+      );
+      double importe(String clave) =>
+          double.tryParse(resumen[clave]?.toString() ?? '') ?? 0;
+      final comisionesPorPreventista =
+          Map<String, dynamic>.from(
+            resumen['comisiones_por_preventista'] as Map,
+          ).map(
+            (id, valor) => MapEntry(id, double.tryParse(valor.toString()) ?? 0),
+          );
+      var consultaSaldos = _supabase.from('saldos_pendientes_pedidos').select(
+        '''
       pedido_id,
       cliente_id,
       nombre_comercio,
       fecha_entrega,
       saldo_pendiente
-    ''');
-
-if (!_mostrarTodosLosSaldos) {
-  consultaSaldos = consultaSaldos
-      .gte(
-        'fecha_entrega',
-        inicio.toIso8601String().split('T').first,
-      )
-      .lt(
-        'fecha_entrega',
-        fin.toIso8601String().split('T').first,
+    ''',
       );
-}
 
-final saldosPedidos = await consultaSaldos
-    .gt('saldo_pendiente', 0);
+      if (!_mostrarTodosLosSaldos) {
+        consultaSaldos = consultaSaldos
+            .gte('fecha_entrega', inicio.toIso8601String().split('T').first)
+            .lt('fecha_entrega', fin.toIso8601String().split('T').first);
+      }
 
-double saldoPendiente = 0;
+      final saldosPedidos = await consultaSaldos.gt('saldo_pendiente', 0);
 
-final Map<String, Map<String, dynamic>> saldosPorCliente = {};
+      double saldoPendiente = 0;
 
-for (final pedido in saldosPedidos) {
-  final clienteId = pedido['cliente_id']?.toString();
+      final Map<String, Map<String, dynamic>> saldosPorCliente = {};
 
-  if (clienteId == null) continue;
+      for (final pedido in saldosPedidos) {
+        final clienteId = pedido['cliente_id']?.toString();
 
-  final pendientePedido = double.tryParse(
-        pedido['saldo_pendiente']?.toString() ?? '',
-      ) ??
-      0;
+        if (clienteId == null) continue;
 
-  if (pendientePedido <= 0) continue;
+        final pendientePedido =
+            double.tryParse(pedido['saldo_pendiente']?.toString() ?? '') ?? 0;
 
-  saldoPendiente += pendientePedido;
+        if (pendientePedido <= 0) continue;
 
-  final nombreCliente =
-      pedido['nombre_comercio']?.toString().trim();
+        saldoPendiente += pendientePedido;
 
-  final saldoCliente = saldosPorCliente[clienteId];
+        final nombreCliente = pedido['nombre_comercio']?.toString().trim();
 
-  if (saldoCliente == null) {
-    saldosPorCliente[clienteId] = {
-      'nombre': nombreCliente?.isNotEmpty == true
-          ? nombreCliente
-          : 'Cliente sin nombre',
-      'saldo': pendientePedido,
-    };
-  } else {
-    saldoCliente['saldo'] =
-        ((saldoCliente['saldo'] as num?) ?? 0).toDouble() +
-            pendientePedido;
+        final saldoCliente = saldosPorCliente[clienteId];
+
+        if (saldoCliente == null) {
+          saldosPorCliente[clienteId] = {
+            'nombre': nombreCliente?.isNotEmpty == true
+                ? nombreCliente
+                : 'Cliente sin nombre',
+            'saldo': pendientePedido,
+          };
+        } else {
+          saldoCliente['saldo'] =
+              ((saldoCliente['saldo'] as num?) ?? 0).toDouble() +
+              pendientePedido;
+        }
+      }
+
+      final usuariosRespuesta = await _supabase
+          .from('usuarios')
+          .select('id, nombre, apellido')
+          .eq('activo', true);
+
+      final Map<String, String> nombresPreventistas = {};
+
+      for (final usuario in usuariosRespuesta) {
+        final id = usuario['id']?.toString();
+        if (id == null) continue;
+
+        final nombre = usuario['nombre']?.toString().trim() ?? '';
+        final apellido = usuario['apellido']?.toString().trim() ?? '';
+
+        final nombreCompleto = '$nombre $apellido'.trim();
+
+        nombresPreventistas[id] = nombreCompleto.isEmpty
+            ? 'Preventista'
+            : nombreCompleto;
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _resumen = resumen;
+        _ventaTotal = importe('venta_total');
+        _mercaderiaEntregada = importe('entrega_total');
+        _recaudacion = importe('recaudacion_total');
+        _saldoPendiente = saldoPendiente;
+        _saldosPendientesClientes = saldosPorCliente.values.toList()
+          ..sort(
+            (a, b) => ((b['saldo'] as num?) ?? 0).compareTo(
+              (a['saldo'] as num?) ?? 0,
+            ),
+          );
+        _costoMercaderia = importe('costo_mercaderia');
+        _comisiones = importe('comisiones');
+        _comisionesPorPreventista = Map<String, double>.from(
+          comisionesPorPreventista,
+        );
+        _nombresPreventistas = Map<String, String>.from(nombresPreventistas);
+        _ganancia = importe('ganancia');
+        _cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = 'No se pudo cargar el resumen comercial.';
+        _cargando = false;
+      });
+    }
   }
-}
 
-
-final cobros = await _supabase
-    .from('cobros_cliente')
-    .select('importe, fecha_pago')
-    .gte('fecha_pago', inicioUtcArgentina.toIso8601String())
-    .lt('fecha_pago', finUtcArgentina.toIso8601String());
-
-double recaudacion = 0;
-
-for (final cobro in cobros) {
-  final importe = double.tryParse(
-        cobro['importe']?.toString() ?? '',
-      ) ??
-      0;
-
-  recaudacion += importe;
-}
-final ganancia =
-    mercaderiaEntregada - costoMercaderia - comisiones;
-    final usuariosRespuesta = await _supabase
-    .from('usuarios')
-    .select('id, nombre, apellido')
-    .eq('activo', true);
-
-final Map<String, String> nombresPreventistas = {};
-
-for (final usuario in usuariosRespuesta) {
-  final id = usuario['id']?.toString();
-  if (id == null) continue;
-
-  final nombre = usuario['nombre']?.toString().trim() ?? '';
-  final apellido = usuario['apellido']?.toString().trim() ?? '';
-
-  final nombreCompleto = '$nombre $apellido'.trim();
-
-  nombresPreventistas[id] =
-      nombreCompleto.isEmpty ? 'Preventista' : nombreCompleto;
-}
-
-    if (!mounted) return;
-
-    setState(() {
-      _ventaTotal = venta;
-      _mercaderiaEntregada = mercaderiaEntregada;
-      _recaudacion = recaudacion;
-      _saldoPendiente = saldoPendiente;
-      _saldosPendientesClientes = saldosPorCliente.values.toList()
-  ..sort(
-    (a, b) => ((b['saldo'] as num?) ?? 0)
-        .compareTo((a['saldo'] as num?) ?? 0),
-  );
-      _costoMercaderia = costoMercaderia;
-      _comisiones = comisiones;
-      _comisionesPorPreventista = Map<String, double>.from(
-  comisionesPorPreventista,
-);
-_nombresPreventistas = Map<String, String>.from(
-  nombresPreventistas,
-);
-      _ganancia = ganancia;
-      _cargando = false;
-    });
-  } catch (e) {
-    if (!mounted) return;
-
-    setState(() {
-      _error = 'No se pudo cargar el resumen comercial.';
-      _cargando = false;
-    });
+  @override
+  void initState() {
+    super.initState();
+    _cargarResumen();
   }
-}
-
-@override
-void initState() {
-  super.initState();
-  _cargarResumen();
-}
 
   @override
   Widget build(BuildContext context) {
     final esMovil = MediaQuery.of(context).size.width < 600;
     return Container(
-  color: Theme.of(context).scaffoldBackgroundColor,
-  padding: EdgeInsets.all(esMovil ? 12 : 24),
-  child: Column(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      padding: EdgeInsets.all(esMovil ? 12 : 24),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-  'Resumen comercial',
-  style: TextStyle(
-    fontSize: esMovil ? 22 : 26,
-    fontWeight: FontWeight.bold,
-  ),
-),
-const SizedBox(height: 4),
-Text(
-  'Ventas, recaudaciones, comisiones y rentabilidad',
-  style: TextStyle(
-    fontSize: esMovil ? 14 : null,
-    color: Theme.of(context).colorScheme.onSurfaceVariant,
-  ),
-),
+            'Resumen comercial',
+            style: TextStyle(
+              fontSize: esMovil ? 22 : 26,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Ventas, recaudaciones, comisiones y rentabilidad',
+            style: TextStyle(
+              fontSize: esMovil ? 14 : null,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
           const SizedBox(height: 24),
 
           SegmentedButton<int>(
-  segments: [
-    ButtonSegment<int>(
-      value: 0,
-      icon: esMovil ? null : const Icon(Icons.today_outlined),
-      label: const Text('Hoy'),
-    ),
-    ButtonSegment<int>(
-      value: 1,
-      icon: esMovil ? null : const Icon(Icons.date_range_outlined),
-      label: const Text('Semana'),
-    ),
-    ButtonSegment<int>(
-      value: 2,
-      icon: esMovil ? null : const Icon(Icons.calendar_month_outlined),
-      label: const Text('Personalizado'),
-    ),
-  ],
+            segments: [
+              ButtonSegment<int>(
+                value: 0,
+                icon: esMovil ? null : const Icon(Icons.today_outlined),
+                label: const Text('Hoy'),
+              ),
+              ButtonSegment<int>(
+                value: 1,
+                icon: esMovil ? null : const Icon(Icons.date_range_outlined),
+                label: const Text('Semana'),
+              ),
+              ButtonSegment<int>(
+                value: 2,
+                icon: esMovil
+                    ? null
+                    : const Icon(Icons.calendar_month_outlined),
+                label: const Text('Personalizado'),
+              ),
+            ],
             selected: {_periodoSeleccionado},
             onSelectionChanged: (seleccion) async {
-  final nuevoPeriodo = seleccion.first;
+              final nuevoPeriodo = seleccion.first;
 
-  if (nuevoPeriodo == 2) {
-    final rango = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      initialDateRange: _rangoPersonalizado,
-    );
+              if (nuevoPeriodo == 2) {
+                final rango = await showDateRangePicker(
+                  context: context,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now(),
+                  initialDateRange: _rangoPersonalizado,
+                );
 
-    if (rango == null) {
-      return;
-    }
+                if (rango == null) {
+                  return;
+                }
 
-    if (!mounted) return;
+                if (!mounted) return;
 
-    setState(() {
-      _periodoSeleccionado = 2;
-      _rangoPersonalizado = rango;
-    });
-    _cargarResumen();
+                setState(() {
+                  _periodoSeleccionado = 2;
+                  _rangoPersonalizado = rango;
+                });
+                _cargarResumen();
 
-    return;
-  }
+                return;
+              }
 
-  setState(() {
-    _periodoSeleccionado = nuevoPeriodo;
-  });
+              setState(() {
+                _periodoSeleccionado = nuevoPeriodo;
+              });
 
-  _cargarResumen();
-},
+              _cargarResumen();
+            },
           ),
 
           const SizedBox(height: 32),
 
           Expanded(
-  child: Center(
-    child: _cargando
-        ? const CircularProgressIndicator()
-        : _error != null
-            ? Text(_error!)
-            : SingleChildScrollView(
-    child: Wrap(
-  spacing: 16,
-  runSpacing: 16,
-  alignment: WrapAlignment.center,
-  children: [
-    SizedBox(
-      width: 280,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.receipt_long_outlined, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'VENTA TOTAL',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '\$${_ventaTotal.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-  _periodoSeleccionado == 0
-      ? 'Facturado hoy'
-      : _periodoSeleccionado == 1
-          ? 'Facturado en la semana'
-          : 'Facturado en el período',
-),
-            ],
-          ),
-        ),
-      ),
-    ),
-    SizedBox(
-      width: 280,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-  children: [
-    Icon(Icons.inventory_2_outlined, size: 20),
-    SizedBox(width: 8),
-    Expanded(
-      child: Text(
-        'MERCADERÍA ENTREGADA',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    ),
-  ],
-),
-              const SizedBox(height: 16),
-              Text(
-                '\$${_mercaderiaEntregada.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-  _periodoSeleccionado == 0
-      ? 'Valor entregado hoy'
-      : _periodoSeleccionado == 1
-          ? 'Valor entregado en la semana'
-          : 'Valor entregado en el período',
-),
-            ],
-          ),
-        ),
-      ),
-    ),
-    SizedBox(
-      width: 280,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.payments_outlined, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'RECAUDACIÓN',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '\$${_recaudacion.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-  _periodoSeleccionado == 0
-      ? 'Cobrado hoy'
-      : _periodoSeleccionado == 1
-          ? 'Cobrado en la semana'
-          : 'Cobrado en el período',
-),
-            ],
-          ),
-        ),
-      ),
-    ),
-   SizedBox(
-  width: 280,
-  child: Card(
-    child: ExpansionTile(
-      tilePadding: const EdgeInsets.all(20),
-      childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.account_balance_wallet_outlined, size: 20),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'SALDOS PENDIENTES',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '\$${_saldoPendiente.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _periodoSeleccionado == 0
-                ? 'Pendiente de cobro hoy'
-                : _periodoSeleccionado == 1
-                    ? 'Pendiente de cobro en la semana'
-                    : 'Pendiente de cobro en el período',
-          ),
-          const SizedBox(height: 8),
+            child: Center(
+              child: _cargando
+                  ? const CircularProgressIndicator()
+                  : _error != null
+                  ? Text(_error!)
+                  : SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          CommercialSummaryCard(
+                            title: 'DEVOLUCIONES Y NETO',
+                            icon: Icons.assignment_return_outlined,
+                            total: _importe('mercaderia_neta'),
+                            description:
+                                'Entregado neto de notas de crédito del período',
+                            breakdown: {
+                              'Entregado bruto': _mercaderiaEntregada,
+                              'Notas de crédito': -_importe('notas_credito'),
+                            },
+                            note:
+                                'Las notas se cuentan en su fecha. Pueden corresponder a entregas anteriores.',
+                          ),
+                          CommercialSummaryCard(
+                            title: 'CAJA NETA',
+                            icon: Icons.account_balance_wallet_outlined,
+                            total: _importe('recaudacion_neta'),
+                            description: 'Cobros menos reintegros de dinero',
+                            breakdown: {
+                              'Cobros': _recaudacion,
+                              'Reintegros': -_importe('reintegros'),
+                            },
+                            note:
+                                'Aplicar saldo a favor a otra compra no genera un cobro nuevo.',
+                          ),
+                          CommercialSummaryCard(
+                            title: 'AJUSTES DE RENTABILIDAD',
+                            icon: Icons.compare_arrows,
+                            total:
+                                _importe('costo_recuperado') +
+                                _importe('comisiones_revertidas'),
+                            description:
+                                'Recuperación de costo y reversión de comisiones',
+                            breakdown: {
+                              'Costo recuperado': _importe('costo_recuperado'),
+                              'Comisiones revertidas': _importe(
+                                'comisiones_revertidas',
+                              ),
+                            },
+                            note:
+                                'La ganancia ya incluye estos ajustes y las notas de crédito. El costo se recupera al recibir mercadería apta.',
+                          ),
+                          CommercialSummaryCard(
+                            title: 'VENTA TOTAL',
+                            icon: Icons.receipt_long_outlined,
+                            total: _ventaTotal,
+                            description:
+                                'Preventa facturada + venta directa concretada',
+                            breakdown: {
+                              'Preventa facturada': _importe('venta_preventa'),
+                              'Venta directa concretada': _importe(
+                                'venta_directa',
+                              ),
+                            },
+                            note:
+                                'Preventa por fecha de facturación. Venta directa por fecha de finalización.',
+                          ),
+                          CommercialSummaryCard(
+                            title: 'MERCADERÍA ENTREGADA',
+                            icon: Icons.inventory_2_outlined,
+                            total: _mercaderiaEntregada,
+                            description:
+                                'Valor a precio de venta en el período',
+                            breakdown: {
+                              'Preventa': _importe('entrega_preventa'),
+                              'Venta directa': _importe('entrega_directa'),
+                              if (_importe('entrega_sin_clasificar') != 0)
+                                'Sin clasificar': _importe(
+                                  'entrega_sin_clasificar',
+                                ),
+                            },
+                            note:
+                                'Por fecha de finalización. Si no existe, se usa la fecha de entrega registrada.',
+                          ),
+                          CommercialSummaryCard(
+                            title: 'RECAUDACIÓN',
+                            icon: Icons.payments_outlined,
+                            total: _recaudacion,
+                            description: 'Cobrado en el período',
+                            breakdown: {
+                              'Aplicado a preventa': _importe(
+                                'recaudacion_preventa',
+                              ),
+                              'Aplicado a venta directa': _importe(
+                                'recaudacion_directa',
+                              ),
+                              if (_importe('recaudacion_sin_clasificar') != 0)
+                                'Sin clasificar': _importe(
+                                  'recaudacion_sin_clasificar',
+                                ),
+                            },
+                            note:
+                                'Por fecha del cobro. Puede pagar deudas anteriores y distribuirse entre ambas modalidades.',
+                          ),
+                          SizedBox(
+                            width: 280,
+                            child: Card(
+                              child: ExpansionTile(
+                                tilePadding: const EdgeInsets.all(20),
+                                childrenPadding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  0,
+                                  20,
+                                  20,
+                                ),
+                                title: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(
+                                          Icons.account_balance_wallet_outlined,
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'SALDOS PENDIENTES',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      '\$${_saldoPendiente.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _periodoSeleccionado == 0
+                                          ? 'Pendiente de cobro hoy'
+                                          : _periodoSeleccionado == 1
+                                          ? 'Pendiente de cobro en la semana'
+                                          : 'Pendiente de cobro en el período',
+                                    ),
+                                    const SizedBox(height: 8),
 
-Align(
-  alignment: Alignment.centerLeft,
-  child: TextButton.icon(
-    onPressed: () async {
-      setState(() {
-        _mostrarTodosLosSaldos = !_mostrarTodosLosSaldos;
-      });
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                        onPressed: () async {
+                                          setState(() {
+                                            _mostrarTodosLosSaldos =
+                                                !_mostrarTodosLosSaldos;
+                                          });
 
-      await _cargarResumen();
-    },
-    icon: Icon(
-      _mostrarTodosLosSaldos
-          ? Icons.filter_alt_off_outlined
-          : Icons.history_outlined,
-      size: 18,
-    ),
-    label: Text(
-      _mostrarTodosLosSaldos
-          ? 'Ver saldo del período'
-          : 'Ver todos los saldos',
-    ),
-  ),
-),
+                                          await _cargarResumen();
+                                        },
+                                        icon: Icon(
+                                          _mostrarTodosLosSaldos
+                                              ? Icons.filter_alt_off_outlined
+                                              : Icons.history_outlined,
+                                          size: 18,
+                                        ),
+                                        label: Text(
+                                          _mostrarTodosLosSaldos
+                                              ? 'Ver saldo del período'
+                                              : 'Ver todos los saldos',
+                                        ),
+                                      ),
+                                    ),
 
-const SizedBox(height: 4),
-        ],
-      ),
-      children: [
-        if (_saldosPendientesClientes.isEmpty)
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text('No hay clientes con saldo pendiente.'),
-          )
-        else
-          ..._saldosPendientesClientes.map(
-            (cliente) {
-              final nombre =
-                  cliente['nombre']?.toString() ?? 'Cliente sin nombre';
+                                    const SizedBox(height: 4),
+                                  ],
+                                ),
+                                children: [
+                                  if (_saldosPendientesClientes.isEmpty)
+                                    const Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        'No hay clientes con saldo pendiente.',
+                                      ),
+                                    )
+                                  else
+                                    ..._saldosPendientesClientes.map((cliente) {
+                                      final nombre =
+                                          cliente['nombre']?.toString() ??
+                                          'Cliente sin nombre';
 
-              final saldo =
-                  ((cliente['saldo'] as num?) ?? 0).toDouble();
+                                      final saldo =
+                                          ((cliente['saldo'] as num?) ?? 0)
+                                              .toDouble();
 
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 5),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        nombre,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                        ),
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 5,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                nombre,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              '\$${saldo.toStringAsFixed(0)}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 280,
+                            child: Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(
+                                          Icons.inventory_2_outlined,
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'COSTO BRUTO DE MERCADERÍA',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      '\$${_costoMercaderia.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _periodoSeleccionado == 0
+                                          ? 'Costo de lo entregado hoy'
+                                          : _periodoSeleccionado == 1
+                                          ? 'Costo de lo entregado en la semana'
+                                          : 'Costo de lo entregado en el período',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 280,
+                            child: Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.payments_outlined, size: 20),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'COMISIONES',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      '\$${_comisiones.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _periodoSeleccionado == 0
+                                          ? 'Comisiones de lo entregado hoy'
+                                          : _periodoSeleccionado == 1
+                                          ? 'Comisiones de lo entregado en la semana'
+                                          : 'Comisiones de lo entregado en el período',
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Divider(),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'POR PREVENTISTA',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+
+                                    if (_comisionesPorPreventista.isEmpty)
+                                      const Text(
+                                        'Sin comisiones en este período',
+                                      )
+                                    else
+                                      ..._comisionesPorPreventista.entries.map((
+                                        entry,
+                                      ) {
+                                        final nombre =
+                                            _nombresPreventistas[entry.key] ??
+                                            'Preventista';
+
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 6,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  nombre,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Text(
+                                                '\$${entry.value.toStringAsFixed(0)}',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 280,
+                            child: Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(
+                                          Icons.trending_up_outlined,
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'GANANCIA',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      '\$${_ganancia.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _periodoSeleccionado == 0
+                                          ? 'Ganancia neta de ajustes hoy'
+                                          : _periodoSeleccionado == 1
+                                          ? 'Ganancia neta de ajustes en la semana'
+                                          : 'Ganancia neta de ajustes en el período',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '\$${saldo.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-      ],
-    ),
-  ),
-),
-SizedBox(
-  width: 280,
-  child: Card(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.inventory_2_outlined, size: 20),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'COSTO DE MERCADERÍA',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '\$${_costoMercaderia.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            _periodoSeleccionado == 0
-                ? 'Costo de lo entregado hoy'
-                : _periodoSeleccionado == 1
-                    ? 'Costo de lo entregado en la semana'
-                    : 'Costo de lo entregado en el período',
-          ),
-        ],
-      ),
-    ),
-  ),
-),
-SizedBox(
-  width: 280,
-  child: Card(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.payments_outlined, size: 20),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'COMISIONES',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '\$${_comisiones.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _periodoSeleccionado == 0
-                ? 'Comisiones de lo entregado hoy'
-                : _periodoSeleccionado == 1
-                    ? 'Comisiones de lo entregado en la semana'
-                    : 'Comisiones de lo entregado en el período',
-          ),
-          const SizedBox(height: 16),
-const Divider(),
-const SizedBox(height: 8),
-const Text(
-  'POR PREVENTISTA',
-  style: TextStyle(
-    fontSize: 13,
-    fontWeight: FontWeight.bold,
-  ),
-),
-const SizedBox(height: 8),
-
-if (_comisionesPorPreventista.isEmpty)
-  const Text('Sin comisiones en este período')
-else
-  ..._comisionesPorPreventista.entries.map((entry) {
-    final nombre =
-        _nombresPreventistas[entry.key] ?? 'Preventista';
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              nombre,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            '\$${entry.value.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }),
-        ],
-      ),
-    ),
-  ),
-),
-SizedBox(
-  width: 280,
-  child: Card(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.trending_up_outlined, size: 20),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'GANANCIA',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '\$${_ganancia.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _periodoSeleccionado == 0
-                ? 'Ganancia de lo entregado hoy'
-                : _periodoSeleccionado == 1
-                    ? 'Ganancia de lo entregado en la semana'
-                    : 'Ganancia de lo entregado en el período',
-          ),
-        ],
-      ),
-    ),
-  ),
-),
-  ],
-),
-),
-  ),
-),
-          
         ],
       ),
     );

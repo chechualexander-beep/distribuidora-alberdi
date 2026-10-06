@@ -1,9 +1,15 @@
+import 'commission_groups_table.dart';
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
+import 'commission_statistics_page.dart';
 // ignore_for_file: dead_code
 import 'package:flutter/material.dart';
+import 'settlement_review_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_order_detail.dart';
 import 'commission_report_page.dart';
 import '../../core/argentina_date_utils.dart';
+
 class CommissionsPage extends StatefulWidget {
   const CommissionsPage({super.key});
 
@@ -18,14 +24,12 @@ class _CommissionsPageState extends State<CommissionsPage> {
   List<Map<String, dynamic>> _usuarios = [];
   String? _preventistaId;
 
-  DateTime _desde = DateTime.now().subtract(
-    const Duration(days: 30),
-  );
+  DateTime _desde = DateTime.now().subtract(const Duration(days: 30));
 
   DateTime _hasta = DateTime.now();
 
   List<Map<String, dynamic>> _detalles = [];
-bool _calculoRealizado = false;
+  bool _calculoRealizado = false;
   @override
   void initState() {
     super.initState();
@@ -47,8 +51,7 @@ bool _calculoRealizado = false;
 
       if (!mounted) return;
 
-      final usuarios =
-          List<Map<String, dynamic>>.from(respuesta);
+      final usuarios = List<Map<String, dynamic>>.from(respuesta);
 
       setState(() {
         _usuarios = usuarios;
@@ -76,16 +79,13 @@ bool _calculoRealizado = false;
     });
 
     try {
-      final desde =
-    ArgentinaDateUtils.inicioDiaUtc(_desde);
+      final desde = ArgentinaDateUtils.inicioDiaUtc(_desde);
 
-final hastaExclusivo =
-    ArgentinaDateUtils.finDiaExclusivoUtc(_hasta);
+      final hastaExclusivo = ArgentinaDateUtils.finDiaExclusivoUtc(_hasta);
 
       final respuesta = await Supabase.instance.client
           .from('pedido_detalles')
-          .select(
-            '''
+          .select('''
             id,
             cantidad,
             cantidad_entregada,
@@ -108,17 +108,12 @@ final hastaExclusivo =
                 nombre_comercio
               )
             )
-            ''',
-          )
+            ''')
           .eq('pedidos.preventista_id', _preventistaId!)
-          .gte(
-  'pedidos.fecha_finalizacion',
-  desde.toIso8601String(),
-)
-.lt(
-  'pedidos.fecha_finalizacion',
-  hastaExclusivo.toIso8601String(),
-)
+          .inFilter('pedidos.resultado_entrega', ['entregado', 'parcial'])
+          .not('pedidos.estado', 'in', '(cancelado,anulado)')
+          .gte('pedidos.fecha_finalizacion', desde.toIso8601String())
+          .lt('pedidos.fecha_finalizacion', hastaExclusivo.toIso8601String())
           .order(
             'fecha_finalizacion',
             referencedTable: 'pedidos',
@@ -126,39 +121,31 @@ final hastaExclusivo =
           );
 
       if (!mounted) return;
-final idsRespuesta = List<Map<String, dynamic>>.from(
-  respuesta,
-)
-    .map((detalle) => detalle['id']?.toString())
-    .whereType<String>()
-    .toList();
-
-List<Map<String, dynamic>> detallesPendientes =
-    List<Map<String, dynamic>>.from(respuesta);
-
-if (idsRespuesta.isNotEmpty) {
-  final liquidados = await Supabase.instance.client
-      .from('liquidacion_detalles')
-      .select('pedido_detalle_id')
-      .inFilter('pedido_detalle_id', idsRespuesta);
-
-  final idsLiquidados =
-      List<Map<String, dynamic>>.from(liquidados)
-          .map(
-            (fila) =>
-                fila['pedido_detalle_id']?.toString(),
-          )
+      final idsRespuesta = List<Map<String, dynamic>>.from(respuesta)
+          .map((detalle) => detalle['id']?.toString())
           .whereType<String>()
-          .toSet();
+          .toList();
 
-  detallesPendientes = detallesPendientes
-      .where(
-        (detalle) => !idsLiquidados.contains(
-          detalle['id']?.toString(),
-        ),
-      )
-      .toList();
-}
+      List<Map<String, dynamic>> detallesPendientes =
+          List<Map<String, dynamic>>.from(respuesta);
+
+      if (idsRespuesta.isNotEmpty) {
+        final liquidados = await Supabase.instance.client
+            .from('liquidacion_detalles')
+            .select('pedido_detalle_id')
+            .inFilter('pedido_detalle_id', idsRespuesta);
+
+        final idsLiquidados = List<Map<String, dynamic>>.from(liquidados)
+            .map((fila) => fila['pedido_detalle_id']?.toString())
+            .whereType<String>()
+            .toSet();
+
+        detallesPendientes = detallesPendientes
+            .where(
+              (detalle) => !idsLiquidados.contains(detalle['id']?.toString()),
+            )
+            .toList();
+      }
       setState(() {
         _detalles = detallesPendientes;
         _calculoRealizado = true;
@@ -175,10 +162,7 @@ if (idsRespuesta.isNotEmpty) {
   }
 
   double _numero(dynamic valor) {
-    return double.tryParse(
-          valor?.toString() ?? '0',
-        ) ??
-        0;
+    return double.tryParse(valor?.toString() ?? '0') ?? 0;
   }
 
   double get _ventaPedida {
@@ -186,8 +170,7 @@ if (idsRespuesta.isNotEmpty) {
 
     for (final detalle in _detalles) {
       total +=
-          _numero(detalle['cantidad']) *
-          _numero(detalle['precio_unitario']);
+          _numero(detalle['cantidad']) * _numero(detalle['precio_unitario']);
     }
 
     return total;
@@ -221,33 +204,27 @@ if (idsRespuesta.isNotEmpty) {
     double total = 0;
 
     for (final detalle in _detalles) {
-      total += _numero(
-        detalle['importe_comision'],
-      );
+      total += _numero(detalle['importe_comision']);
     }
 
     return total;
   }
+
   Map<String, List<Map<String, dynamic>>> get _detallesPorPedido {
-  final grupos = <String, List<Map<String, dynamic>>>{};
+    final grupos = <String, List<Map<String, dynamic>>>{};
 
-  for (final detalle in _detalles) {
-    final pedido =
-        detalle['pedidos'] as Map<String, dynamic>?;
+    for (final detalle in _detalles) {
+      final pedido = detalle['pedidos'] as Map<String, dynamic>?;
 
-    final pedidoId =
-        pedido?['id']?.toString() ?? 'sin-pedido';
+      final pedidoId = pedido?['id']?.toString() ?? 'sin-pedido';
 
-    grupos.putIfAbsent(
-      pedidoId,
-      () => <Map<String, dynamic>>[],
-    );
+      grupos.putIfAbsent(pedidoId, () => <Map<String, dynamic>>[]);
 
-    grupos[pedidoId]!.add(detalle);
+      grupos[pedidoId]!.add(detalle);
+    }
+
+    return grupos;
   }
-
-  return grupos;
-}
 
   String _formatearPrecio(double valor) {
     final entero = valor.round().toString();
@@ -288,6 +265,8 @@ if (idsRespuesta.isNotEmpty) {
 
     setState(() {
       _desde = fecha;
+      _detalles = [];
+      _calculoRealizado = false;
 
       if (_hasta.isBefore(_desde)) {
         _hasta = _desde;
@@ -307,15 +286,15 @@ if (idsRespuesta.isNotEmpty) {
 
     setState(() {
       _hasta = fecha;
+      _detalles = [];
+      _calculoRealizado = false;
     });
   }
 
   void _mostrarMensaje(String mensaje) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   @override
@@ -323,10 +302,22 @@ if (idsRespuesta.isNotEmpty) {
     if (_cargando) {
       return Scaffold(
         appBar: AppBar(
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.assignment_return_outlined),
+              tooltip: 'Ajustes por notas de crédito',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      CommissionAdjustmentsPage(preventistaId: _preventistaId),
+                ),
+              ),
+            ),
+          ],
           title: const Text('Liquidación de comisiones'),
         ),
-        body: const Center(
-          child: CircularProgressIndicator(),
+        body: DesktopForm(
+          child: const Center(child: CircularProgressIndicator()),
         ),
       );
     }
@@ -334,365 +325,372 @@ if (idsRespuesta.isNotEmpty) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Liquidación de comisiones'),
-      ),
-      body: _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 60,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: _cargarPreventistas,
-                      child: const Text('Reintentar'),
-                    ),
-                  ],
-                ),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    CommissionStatisticsPage(preventistaId: _preventistaId),
               ),
-            )
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _preventistaId,
-                  decoration: const InputDecoration(
-                    labelText: 'Preventista',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _usuarios.map((usuario) {
-                    final nombre =
-                        usuario['nombre']?.toString() ?? '';
-
-                    final apellido =
-                        usuario['apellido']?.toString() ?? '';
-
-                    final nombreCompleto = [
-                      nombre,
-                      apellido,
-                    ].where((e) => e.isNotEmpty).join(' ');
-
-                    return DropdownMenuItem<String>(
-                      value: usuario['id'].toString(),
-                      child: Text(
-                        nombreCompleto.isEmpty
-                            ? 'Usuario'
-                            : nombreCompleto,
+            ),
+            icon: const Icon(Icons.bar_chart),
+            label: const Text('Estadísticas'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.assignment_return_outlined),
+            tooltip: 'Ajustes por notas de crédito',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    CommissionAdjustmentsPage(preventistaId: _preventistaId),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: DesktopForm(
+        child: _error != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, size: 60),
+                      const SizedBox(height: 16),
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: _cargarPreventistas,
+                        child: const Text('Reintentar'),
                       ),
-                    );
-                  }).toList(),
-                  onChanged: (valor) {
-                    setState(() {
-                      _preventistaId = valor;
-                      _detalles = [];
-                    });
-                  },
+                    ],
+                  ),
                 ),
+              )
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: _preventistaId,
+                    decoration: const InputDecoration(
+                      labelText: 'Preventista',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _usuarios.map((usuario) {
+                      final nombre = usuario['nombre']?.toString() ?? '';
 
-                const SizedBox(height: 16),
+                      final apellido = usuario['apellido']?.toString() ?? '';
 
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _seleccionarDesde,
-                        icon: const Icon(
-                          Icons.calendar_month_outlined,
+                      final nombreCompleto = [
+                        nombre,
+                        apellido,
+                      ].where((e) => e.isNotEmpty).join(' ');
+
+                      return DropdownMenuItem<String>(
+                        value: usuario['id'].toString(),
+                        child: Text(
+                          nombreCompleto.isEmpty ? 'Usuario' : nombreCompleto,
                         ),
-                        label: Text(
-                          'Desde ${_formatearFecha(_desde)}',
+                      );
+                    }).toList(),
+                    onChanged: (valor) {
+                      setState(() {
+                        _preventistaId = valor;
+                        _detalles = [];
+                        _calculoRealizado = false;
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _seleccionarDesde,
+                          icon: const Icon(Icons.calendar_month_outlined),
+                          label: Text('Desde ${_formatearFecha(_desde)}'),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _seleccionarHasta,
-                        icon: const Icon(
-                          Icons.calendar_month_outlined,
-                        ),
-                        label: Text(
-                          'Hasta ${_formatearFecha(_hasta)}',
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _seleccionarHasta,
+                          icon: const Icon(Icons.calendar_month_outlined),
+                          label: Text('Hasta ${_formatearFecha(_hasta)}'),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                FilledButton.icon(
-                  onPressed: _buscarComisiones,
-                  icon: const Icon(Icons.search),
-                  label: const Text('CALCULAR COMISIONES'),
-                ),
-
-                const SizedBox(height: 24),
-
-                if (_detalles.isNotEmpty) ...[
-                  const Text(
-                    'Resumen',
-                    style: TextStyle(
-                      fontSize: 21,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    ],
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
-                  _TarjetaResumen(
-                    titulo: 'Venta pedida',
-                    valor: _formatearPrecio(_ventaPedida),
-                  ),
-                  _TarjetaResumen(
-                    titulo: 'Venta entregada',
-                    valor: _formatearPrecio(_ventaEntregada),
-                  ),
-                  _TarjetaResumen(
-                    titulo: 'No entregado',
-                    valor: _formatearPrecio(_ventaNoEntregada),
-                  ),
-                  _TarjetaResumen(
-                    titulo: 'COMISIÓN TOTAL',
-                    valor: _formatearPrecio(_comisionTotal),
-                    destacado: true,
+                  FilledButton.icon(
+                    onPressed: _buscarComisiones,
+                    icon: const Icon(Icons.search),
+                    label: const Text('CALCULAR COMISIONES'),
                   ),
 
                   const SizedBox(height: 24),
 
-                  const Text(
-                    'Detalle',
-                    style: TextStyle(
-                      fontSize: 21,
-                      fontWeight: FontWeight.bold,
+                  if (_detalles.isNotEmpty) ...[
+                    const Text(
+                      'Resumen',
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 10),
+                    const SizedBox(height: 12),
 
-        ..._detallesPorPedido.entries.map((entrada) {
-  final detallesPedido = entrada.value;
-
-  if (detallesPedido.isEmpty) {
-    return const SizedBox.shrink();
-  }
-
-  final primerDetalle = detallesPedido.first;
-
-  final pedido =
-      primerDetalle['pedidos'] as Map<String, dynamic>?;
-
-  final cliente =
-      pedido?['clientes'] as Map<String, dynamic>?;
-
-  final clienteNombre =
-      cliente?['nombre_comercio']?.toString() ??
-          'Cliente';
-
-  final pedidoId =
-      pedido?['id']?.toString() ?? '';
-
-  final numeroPedido = pedidoId.length >= 8
-      ? pedidoId.substring(0, 8).toUpperCase()
-      : pedidoId.toUpperCase();
-
-  double ventaPedidaPedido = 0;
-  double ventaEntregadaPedido = 0;
-  double ventaNoEntregadaPedido = 0;
-  double comisionPedido = 0;
-
-  for (final detalle in detallesPedido) {
-    final cantidad =
-        _numero(detalle['cantidad']);
-
-    final entregada =
-        _numero(detalle['cantidad_entregada']);
-
-    final noEntregada =
-        _numero(detalle['cantidad_no_entregada']);
-
-    final precio =
-        _numero(detalle['precio_unitario']);
-
-    ventaPedidaPedido += cantidad * precio;
-    ventaEntregadaPedido += entregada * precio;
-    ventaNoEntregadaPedido += noEntregada * precio;
-
-    comisionPedido +=
-        _numero(detalle['importe_comision']);
-  }
-
-  return Card(
-    margin: const EdgeInsets.only(bottom: 14),
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            clienteNombre,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Pedido #$numeroPedido',
-            style: const TextStyle(
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Pedido: ${_formatearPrecio(ventaPedidaPedido)}',
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Entregado: ${_formatearPrecio(ventaEntregadaPedido)}',
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'No entregado: ${_formatearPrecio(ventaNoEntregadaPedido)}',
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Comisión: ${_formatearPrecio(comisionPedido)}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const Divider(height: 24),
-CommissionOrderDetail(
-  detalles: detallesPedido,
-),
-
-          if (false)
-  ...detallesPedido.map((detalle) {
-            final producto =
-                detalle['productos']
-                    as Map<String, dynamic>?;
-
-            final nombreProducto =
-                producto?['nombre']?.toString() ??
-                    'Producto';
-
-            final entregada =
-                _numero(detalle['cantidad_entregada']);
-
-            final precio =
-                _numero(detalle['precio_unitario']);
-
-            final porcentaje =
-                _numero(detalle['porcentaje_comision']);
-
-            final comision =
-                _numero(detalle['importe_comision']);
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    nombreProducto,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
+                    _TarjetaResumen(
+                      titulo: 'Venta pedida',
+                      valor: _formatearPrecio(_ventaPedida),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Entregado: ${entregada.toStringAsFixed(0)} × ${_formatearPrecio(precio)}',
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Comisión: ${porcentaje.toStringAsFixed(0)}%',
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Generada: ${_formatearPrecio(comision)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
+                    _TarjetaResumen(
+                      titulo: 'Venta entregada',
+                      valor: _formatearPrecio(_ventaEntregada),
                     ),
-                  ),
+                    _TarjetaResumen(
+                      titulo: 'No entregado',
+                      valor: _formatearPrecio(_ventaNoEntregada),
+                    ),
+                    _TarjetaResumen(
+                      titulo: 'COMISIÓN BRUTA (ANTES DE AJUSTES)',
+                      valor: _formatearPrecio(_comisionTotal),
+                      destacado: true,
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    FilledButton.icon(
+                      onPressed: () async {
+                        if (_preventistaId == null) return;
+
+                        final usuario = _usuarios.firstWhere(
+                          (u) => u['id'].toString() == _preventistaId,
+                        );
+
+                        final nombre = usuario['nombre']?.toString() ?? '';
+
+                        final apellido = usuario['apellido']?.toString() ?? '';
+
+                        final preventista = [
+                          nombre,
+                          apellido,
+                        ].where((e) => e.isNotEmpty).join(' ');
+
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => CommissionReportPage(
+                              preventista: preventista.isEmpty
+                                  ? 'Preventista'
+                                  : preventista,
+                              preventistaId: _preventistaId!,
+                              desde: _desde,
+                              hasta: _hasta,
+                              ventaPedida: _ventaPedida,
+                              ventaEntregada: _ventaEntregada,
+                              ventaNoEntregada: _ventaNoEntregada,
+                              comisionTotal: _comisionTotal,
+                              detalles: _detalles,
+                            ),
+                          ),
+                        );
+                        if (mounted) await _buscarComisiones();
+                      },
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      label: const Text('VER LIQUIDACIÓN'),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Detalle',
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    if (useDesktopLayout(context))
+                      CommissionGroupsTable(groups: _detallesPorPedido)
+                    else
+                      ..._detallesPorPedido.entries.map((entrada) {
+                        final detallesPedido = entrada.value;
+
+                        if (detallesPedido.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final primerDetalle = detallesPedido.first;
+
+                        final pedido =
+                            primerDetalle['pedidos'] as Map<String, dynamic>?;
+
+                        final cliente =
+                            pedido?['clientes'] as Map<String, dynamic>?;
+
+                        final clienteNombre =
+                            cliente?['nombre_comercio']?.toString() ??
+                            'Cliente';
+
+                        final pedidoId = pedido?['id']?.toString() ?? '';
+
+                        final numeroPedido = pedidoId.length >= 8
+                            ? pedidoId.substring(0, 8).toUpperCase()
+                            : pedidoId.toUpperCase();
+
+                        double ventaPedidaPedido = 0;
+                        double ventaEntregadaPedido = 0;
+                        double ventaNoEntregadaPedido = 0;
+                        double comisionPedido = 0;
+
+                        for (final detalle in detallesPedido) {
+                          final cantidad = _numero(detalle['cantidad']);
+
+                          final entregada = _numero(
+                            detalle['cantidad_entregada'],
+                          );
+
+                          final noEntregada = _numero(
+                            detalle['cantidad_no_entregada'],
+                          );
+
+                          final precio = _numero(detalle['precio_unitario']);
+
+                          ventaPedidaPedido += cantidad * precio;
+                          ventaEntregadaPedido += entregada * precio;
+                          ventaNoEntregadaPedido += noEntregada * precio;
+
+                          comisionPedido += _numero(
+                            detalle['importe_comision'],
+                          );
+                        }
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  clienteNombre,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Pedido #$numeroPedido',
+                                  style: const TextStyle(color: Colors.grey),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Pedido: ${_formatearPrecio(ventaPedidaPedido)}',
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Entregado: ${_formatearPrecio(ventaEntregadaPedido)}',
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'No entregado: ${_formatearPrecio(ventaNoEntregadaPedido)}',
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Comisión: ${_formatearPrecio(comisionPedido)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const Divider(height: 24),
+                                CommissionOrderDetail(detalles: detallesPedido),
+
+                                if (false)
+                                  ...detallesPedido.map((detalle) {
+                                    final producto =
+                                        detalle['productos']
+                                            as Map<String, dynamic>?;
+
+                                    final nombreProducto =
+                                        producto?['nombre']?.toString() ??
+                                        'Producto';
+
+                                    final entregada = _numero(
+                                      detalle['cantidad_entregada'],
+                                    );
+
+                                    final precio = _numero(
+                                      detalle['precio_unitario'],
+                                    );
+
+                                    final porcentaje = _numero(
+                                      detalle['porcentaje_comision'],
+                                    );
+
+                                    final comision = _numero(
+                                      detalle['importe_comision'],
+                                    );
+
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            nombreProducto,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Entregado: ${entregada.toStringAsFixed(0)} × ${_formatearPrecio(precio)}',
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Comisión: ${porcentaje.toStringAsFixed(0)}%',
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Generada: ${_formatearPrecio(comision)}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    const SizedBox(height: 24),
+                  ] else ...[
+                    const SizedBox(height: 50),
+                    Center(
+                      child: Text(
+                        _calculoRealizado
+                            ? 'No hay comisiones pendientes de liquidar.'
+                            : 'Seleccioná un preventista y un período.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
                 ],
               ),
-            );
-          }),
-        ],
       ),
-    ),
-  );
-}),
-const SizedBox(height: 24),
-
-FilledButton.icon(
-  onPressed: () {
-    if (_preventistaId == null) return;
-
-    final usuario = _usuarios.firstWhere(
-      (u) => u['id'].toString() == _preventistaId,
-    );
-
-    final nombre =
-        usuario['nombre']?.toString() ?? '';
-
-    final apellido =
-        usuario['apellido']?.toString() ?? '';
-
-    final preventista = [
-      nombre,
-      apellido,
-    ].where((e) => e.isNotEmpty).join(' ');
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CommissionReportPage(
-          preventista: preventista.isEmpty
-              ? 'Preventista'
-              : preventista,
-              preventistaId: _preventistaId!,
-          desde: _desde,
-          hasta: _hasta,
-          ventaPedida: _ventaPedida,
-          ventaEntregada: _ventaEntregada,
-          ventaNoEntregada: _ventaNoEntregada,
-          comisionTotal: _comisionTotal,
-          detalles: _detalles,
-        ),
-      ),
-    );
-  },
-  icon: const Icon(
-    Icons.receipt_long_outlined,
-  ),
-  label: const Text(
-    'VER LIQUIDACIÓN',
-  ),
-),
-  ] else ...[
-  const SizedBox(height: 50),
-  Center(
-    child: Text(
-      _calculoRealizado
-          ? 'No hay comisiones pendientes de liquidar.'
-          : 'Seleccioná un preventista y un período.',
-      textAlign: TextAlign.center,
-    ),
-  ),
-],
-],
-),
     );
   }
 }
@@ -715,8 +713,7 @@ class _TarjetaResumen extends StatelessWidget {
         title: Text(
           titulo,
           style: TextStyle(
-            fontWeight:
-                destacado ? FontWeight.bold : FontWeight.normal,
+            fontWeight: destacado ? FontWeight.bold : FontWeight.normal,
           ),
         ),
         trailing: Text(

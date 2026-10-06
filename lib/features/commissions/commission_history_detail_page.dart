@@ -1,12 +1,14 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
+import 'settlement_review_page.dart';
+import '../orders/credit_notes_page.dart' show ncMoney;
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 class CommissionHistoryDetailPage extends StatefulWidget {
   final Map<String, dynamic> liquidacion;
 
-  const CommissionHistoryDetailPage({
-    super.key,
-    required this.liquidacion,
-  });
+  const CommissionHistoryDetailPage({super.key, required this.liquidacion});
 
   @override
   State<CommissionHistoryDetailPage> createState() =>
@@ -17,58 +19,45 @@ class _CommissionHistoryDetailPageState
     extends State<CommissionHistoryDetailPage> {
   Map<String, dynamic> get liquidacion => widget.liquidacion;
   Map<String, List<Map<String, dynamic>>> get _detallesPorPedido {
-  final grupos =
-      <String, List<Map<String, dynamic>>>{};
+    final grupos = <String, List<Map<String, dynamic>>>{};
 
-  for (final registro in _detalles) {
-    final detalle =
-        registro['pedido_detalles']
-            as Map<String, dynamic>?;
+    for (final registro in _detalles) {
+      final detalle = registro['pedido_detalles'] as Map<String, dynamic>?;
 
-    final pedido =
-        detalle?['pedidos']
-            as Map<String, dynamic>?;
+      final pedido = detalle?['pedidos'] as Map<String, dynamic>?;
 
-    final pedidoId =
-        pedido?['id']?.toString() ??
-        'sin-pedido';
+      final pedidoId = pedido?['id']?.toString() ?? 'sin-pedido';
 
-    grupos.putIfAbsent(
-      pedidoId,
-      () => <Map<String, dynamic>>[],
-    );
+      grupos.putIfAbsent(pedidoId, () => <Map<String, dynamic>>[]);
 
-    grupos[pedidoId]!.add(registro);
-  }
-
-  return grupos;
-}
-bool _cargandoDetalles = true;
-String? _errorDetalles;
-
-List<Map<String, dynamic>> _detalles = [];
-
-@override
-void initState() {
-  super.initState();
-  _cargarDetalles();
-}
-
-Future<void> _cargarDetalles() async {
-  try {
-    final liquidacionId =
-        liquidacion['id']?.toString();
-
-    if (liquidacionId == null ||
-        liquidacionId.isEmpty) {
-      throw Exception('Liquidación sin ID');
+      grupos[pedidoId]!.add(registro);
     }
 
-    final respuesta =
-        await Supabase.instance.client
-            .from('liquidacion_detalles')
-            .select(
-              '''
+    return grupos;
+  }
+
+  bool _cargandoDetalles = true;
+  String? _errorDetalles;
+
+  List<Map<String, dynamic>> _detalles = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarDetalles();
+  }
+
+  Future<void> _cargarDetalles() async {
+    try {
+      final liquidacionId = liquidacion['id']?.toString();
+
+      if (liquidacionId == null || liquidacionId.isEmpty) {
+        throw Exception('Liquidación sin ID');
+      }
+
+      final respuesta = await Supabase.instance.client
+          .from('liquidacion_detalles')
+          .select('''
               id,
               importe_comision,
               pedido_detalles (
@@ -91,34 +80,27 @@ Future<void> _cargarDetalles() async {
                   )
                 )
               )
-              ''',
-            )
-            .eq('liquidacion_id', liquidacionId);
+              ''')
+          .eq('liquidacion_id', liquidacionId);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _detalles =
-          List<Map<String, dynamic>>.from(
-        respuesta,
-      );
-      _cargandoDetalles = false;
-    });
-  } catch (_) {
-    if (!mounted) return;
+      setState(() {
+        _detalles = List<Map<String, dynamic>>.from(respuesta);
+        _cargandoDetalles = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
 
-    setState(() {
-      _errorDetalles =
-          'No se pudo cargar el detalle de la liquidación.';
-      _cargandoDetalles = false;
-    });
+      setState(() {
+        _errorDetalles = 'No se pudo cargar el detalle de la liquidación.';
+        _cargandoDetalles = false;
+      });
+    }
   }
-}
+
   double _numero(dynamic valor) {
-    return double.tryParse(
-          valor?.toString() ?? '0',
-        ) ??
-        0;
+    return double.tryParse(valor?.toString() ?? '0') ?? 0;
   }
 
   String _formatearPrecio(double valor) {
@@ -158,19 +140,13 @@ Future<void> _cargarDetalles() async {
   }
 
   String _nombrePreventista() {
-    final usuario =
-        liquidacion['usuarios'] as Map<String, dynamic>?;
+    final usuario = liquidacion['usuarios'] as Map<String, dynamic>?;
 
-    final nombre =
-        usuario?['nombre']?.toString() ?? '';
+    final nombre = usuario?['nombre']?.toString() ?? '';
 
-    final apellido =
-        usuario?['apellido']?.toString() ?? '';
+    final apellido = usuario?['apellido']?.toString() ?? '';
 
-    final completo = [
-      nombre,
-      apellido,
-    ].where((e) => e.isNotEmpty).join(' ');
+    final completo = [nombre, apellido].where((e) => e.isNotEmpty).join(' ');
 
     return completo.isEmpty ? 'Preventista' : completo;
   }
@@ -179,267 +155,304 @@ Future<void> _cargarDetalles() async {
   Widget build(BuildContext context) {
     final preventista = _nombrePreventista();
 
-    final fechaDesde =
-        _formatearFecha(liquidacion['fecha_desde']);
+    final fechaDesde = _formatearFecha(liquidacion['fecha_desde']);
 
-    final fechaHasta =
-        _formatearFecha(liquidacion['fecha_hasta']);
+    final fechaHasta = _formatearFecha(liquidacion['fecha_hasta']);
 
-    final ventaEntregada =
-        _numero(liquidacion['venta_entregada']);
+    final ventaEntregada = _numero(liquidacion['venta_entregada']);
 
-    final comisionTotal =
-        _numero(liquidacion['comision_total']);
+    final comisionTotal = _numero(liquidacion['comision_total']);
 
     final estado =
-        liquidacion['estado']
-                ?.toString()
-                .toUpperCase() ??
-            'PENDIENTE';
+        liquidacion['estado']?.toString().toUpperCase() ?? 'PENDIENTE';
 
-    final fechaPago =
-        _formatearFecha(liquidacion['fecha_pago']);
+    final fechaPago = _formatearFecha(liquidacion['fecha_pago']);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Detalle de liquidación',
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    preventista,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Período: $fechaDesde al $fechaHasta',
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Venta entregada: ${_formatearPrecio(ventaEntregada)}',
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Estado: $estado',
-                  ),
-                  if (fechaPago.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Fecha de pago: $fechaPago',
-                    ),
-                  ],
-                ],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.assignment_return_outlined),
+            tooltip: 'Ajustes por notas de crédito',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CommissionAdjustmentsPage(
+                  liquidacionId: widget.liquidacion['id'].toString(),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'TOTAL PAGADO',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    _formatearPrecio(comisionTotal),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Detalle de ventas',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-         if (_cargandoDetalles)
-  const Padding(
-    padding: EdgeInsets.symmetric(vertical: 24),
-    child: Center(
-      child: CircularProgressIndicator(),
-    ),
-  )
-else if (_errorDetalles != null)
-  Padding(
-    padding: const EdgeInsets.symmetric(vertical: 16),
-    child: Text(
-      _errorDetalles!,
-      style: const TextStyle(
-        color: Colors.red,
+        ],
+        title: const Text('Detalle de liquidación'),
       ),
-    ),
-  )
-else if (_detalles.isEmpty)
-  const Padding(
-    padding: EdgeInsets.symmetric(vertical: 16),
-    child: Text(
-      'No hay detalles registrados para esta liquidación.',
-    ),
-  )
-else
-  ..._detallesPorPedido.entries.map((grupo) {
-  final registros = grupo.value;
-  final primerRegistro = registros.first;
-
-  final primerDetalle =
-      primerRegistro['pedido_detalles']
-          as Map<String, dynamic>?;
-
-  final pedido =
-      primerDetalle?['pedidos']
-          as Map<String, dynamic>?;
-final pedidoId =
-    pedido?['id']?.toString() ?? '';
-
-final pedidoCorto =
-    pedidoId.length >= 8
-        ? pedidoId.substring(0, 8).toUpperCase()
-        : pedidoId.toUpperCase();
-  final cliente =
-      pedido?['clientes']
-          as Map<String, dynamic>?;
-
-  final nombreCliente =
-      cliente?['nombre_comercio']?.toString() ??
-      'Cliente';
-
-  final comisionPedido = registros.fold<double>(
-    0,
-    (total, registro) =>
-        total + _numero(registro['importe_comision']),
-  );
-
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: DesktopForm(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            Text(
-              nombreCliente,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+            if (widget.liquidacion['comision_bruta'] != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Comisión bruta: ${ncMoney(widget.liquidacion['comision_bruta'])}\nAjustes por notas: ${ncMoney(widget.liquidacion['ajustes_nc'])}\nPagado neto: ${ncMoney(widget.liquidacion['comision_total'])}',
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-Text(
-  'Pedido #$pedidoCorto',
-  style: const TextStyle(
-    fontSize: 12,
-    color: Colors.grey,
-  ),
-),
-const SizedBox(height: 12),
-
-            ...registros.map((registro) {
-              final detalle =
-                  registro['pedido_detalles']
-                      as Map<String, dynamic>?;
-
-              final producto =
-                  detalle?['productos']
-                      as Map<String, dynamic>?;
-
-              final nombreProducto =
-                  producto?['nombre']?.toString() ??
-                  'Producto';
-
-              final cantidadEntregada =
-                  _numero(detalle?['cantidad_entregada']);
-
-              final precioUnitario =
-                  _numero(detalle?['precio_unitario']);
-
-              final porcentaje =
-                  _numero(detalle?['porcentaje_comision']);
-
-              final comision =
-                  _numero(registro['importe_comision']);
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(nombreProducto),
-                    const SizedBox(height: 4),
                     Text(
-                      'Entregado: ${cantidadEntregada.toStringAsFixed(0)} × ${_formatearPrecio(precioUnitario)}',
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Comisión: ${porcentaje.toStringAsFixed(0)}%',
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Generada: ${_formatearPrecio(comision)}',
+                      preventista,
                       style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text('Período: $fechaDesde al $fechaHasta'),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Venta entregada: ${_formatearPrecio(ventaEntregada)}',
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Estado: $estado'),
+                    if (fechaPago.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('Fecha de pago: $fechaPago'),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'TOTAL PAGADO',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      _formatearPrecio(comisionTotal),
+                      style: const TextStyle(
+                        fontSize: 24,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
-              );
-            }),
-
-            const Divider(),
-
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Comisión del pedido',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  _formatearPrecio(comisionPedido),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
+              ),
             ),
+            const SizedBox(height: 24),
+            const Text(
+              'Detalle de ventas',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            if (_cargandoDetalles)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_errorDetalles != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  _errorDetalles!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              )
+            else if (_detalles.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'No hay detalles registrados para esta liquidación.',
+                ),
+              )
+            else
+              ..._detallesPorPedido.entries.map((grupo) {
+                final registros = grupo.value;
+                final primerRegistro = registros.first;
+
+                final primerDetalle =
+                    primerRegistro['pedido_detalles'] as Map<String, dynamic>?;
+
+                final pedido =
+                    primerDetalle?['pedidos'] as Map<String, dynamic>?;
+                final pedidoId = pedido?['id']?.toString() ?? '';
+
+                final pedidoCorto = pedidoId.length >= 8
+                    ? pedidoId.substring(0, 8).toUpperCase()
+                    : pedidoId.toUpperCase();
+                final cliente = pedido?['clientes'] as Map<String, dynamic>?;
+
+                final nombreCliente =
+                    cliente?['nombre_comercio']?.toString() ?? 'Cliente';
+
+                final comisionPedido = registros.fold<double>(
+                  0,
+                  (total, registro) =>
+                      total + _numero(registro['importe_comision']),
+                );
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            nombreCliente,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Pedido #$pedidoCorto',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          if (useDesktopLayout(context))
+                            DesktopRecords(
+                              embedded: true,
+                              records: registros,
+                              fields: [
+                                DesktopField(
+                                  'Producto',
+                                  (r) =>
+                                      ((r['pedido_detalles']
+                                              as Map?)?['productos']
+                                          as Map?)?['nombre'],
+                                  width: 250,
+                                ),
+                                DesktopField(
+                                  'Entregada',
+                                  (r) =>
+                                      (r['pedido_detalles']
+                                          as Map?)?['cantidad_entregada'],
+                                  numeric: true,
+                                  width: 90,
+                                ),
+                                DesktopField(
+                                  'Precio',
+                                  (r) => desktopMoney(
+                                    (r['pedido_detalles']
+                                        as Map?)?['precio_unitario'],
+                                  ),
+                                  numeric: true,
+                                  width: 110,
+                                ),
+                                DesktopField(
+                                  'Comisión %',
+                                  (r) =>
+                                      (r['pedido_detalles']
+                                          as Map?)?['porcentaje_comision'],
+                                  numeric: true,
+                                  width: 95,
+                                ),
+                                DesktopField(
+                                  'Comisión',
+                                  (r) => desktopMoney(r['importe_comision']),
+                                  numeric: true,
+                                  width: 120,
+                                ),
+                              ],
+                            )
+                          else
+                            ...registros.map((registro) {
+                              final detalle =
+                                  registro['pedido_detalles']
+                                      as Map<String, dynamic>?;
+
+                              final producto =
+                                  detalle?['productos']
+                                      as Map<String, dynamic>?;
+
+                              final nombreProducto =
+                                  producto?['nombre']?.toString() ?? 'Producto';
+
+                              final cantidadEntregada = _numero(
+                                detalle?['cantidad_entregada'],
+                              );
+
+                              final precioUnitario = _numero(
+                                detalle?['precio_unitario'],
+                              );
+
+                              final porcentaje = _numero(
+                                detalle?['porcentaje_comision'],
+                              );
+
+                              final comision = _numero(
+                                registro['importe_comision'],
+                              );
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(nombreProducto),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Entregado: ${cantidadEntregada.toStringAsFixed(0)} × ${_formatearPrecio(precioUnitario)}',
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Comisión: ${porcentaje.toStringAsFixed(0)}%',
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Generada: ${_formatearPrecio(comision)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+
+                          const Divider(),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Comisión del pedido',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                _formatearPrecio(comisionPedido),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
           ],
         ),
-      ),
-    ),
-  );
-}),
-  ],
       ),
     );
   }

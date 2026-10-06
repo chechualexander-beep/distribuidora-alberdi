@@ -1,23 +1,24 @@
+import '../../core/desktop_records.dart';
+import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_history_detail_page.dart';
+
 class CommissionHistoryPage extends StatefulWidget {
   const CommissionHistoryPage({super.key});
 
   @override
-  State<CommissionHistoryPage> createState() =>
-      _CommissionHistoryPageState();
+  State<CommissionHistoryPage> createState() => _CommissionHistoryPageState();
 }
 
-class _CommissionHistoryPageState
-    extends State<CommissionHistoryPage> {
+class _CommissionHistoryPageState extends State<CommissionHistoryPage> {
   bool _cargando = true;
   String? _error;
 
   List<Map<String, dynamic>> _liquidaciones = [];
-String? _preventistaSeleccionado;
-DateTime? _fechaDesdeFiltro;
-DateTime? _fechaHastaFiltro;
+  String? _preventistaSeleccionado;
+  DateTime? _fechaDesdeFiltro;
+  DateTime? _fechaHastaFiltro;
   @override
   void initState() {
     super.initState();
@@ -33,13 +34,14 @@ DateTime? _fechaHastaFiltro;
     try {
       final respuesta = await Supabase.instance.client
           .from('liquidaciones')
-          .select(
-            '''
+          .select('''
             id,
             fecha_desde,
             fecha_hasta,
             venta_entregada,
             comision_total,
+            comision_bruta,
+            ajustes_nc,
             estado,
             fecha_pago,
             created_at,
@@ -48,15 +50,13 @@ DateTime? _fechaHastaFiltro;
               nombre,
               apellido
             )
-            ''',
-          )
+            ''')
           .order('fecha_hasta', ascending: false);
 
       if (!mounted) return;
 
       setState(() {
-        _liquidaciones =
-            List<Map<String, dynamic>>.from(respuesta);
+        _liquidaciones = List<Map<String, dynamic>>.from(respuesta);
         _cargando = false;
       });
     } catch (_) {
@@ -70,10 +70,7 @@ DateTime? _fechaHastaFiltro;
   }
 
   double _numero(dynamic valor) {
-    return double.tryParse(
-          valor?.toString() ?? '0',
-        ) ??
-        0;
+    return double.tryParse(valor?.toString() ?? '0') ?? 0;
   }
 
   String _formatearPrecio(double valor) {
@@ -112,45 +109,32 @@ DateTime? _fechaHastaFiltro;
     return '$dia/$mes/${local.year}';
   }
 
-  String _nombrePreventista(
-    Map<String, dynamic> liquidacion,
-  ) {
-    final usuario =
-        liquidacion['usuarios'] as Map<String, dynamic>?;
+  String _nombrePreventista(Map<String, dynamic> liquidacion) {
+    final usuario = liquidacion['usuarios'] as Map<String, dynamic>?;
 
-    final nombre =
-        usuario?['nombre']?.toString() ?? '';
+    final nombre = usuario?['nombre']?.toString() ?? '';
 
-    final apellido =
-        usuario?['apellido']?.toString() ?? '';
+    final apellido = usuario?['apellido']?.toString() ?? '';
 
     final nombreCompleto = [
       nombre,
       apellido,
     ].where((e) => e.isNotEmpty).join(' ');
 
-    return nombreCompleto.isEmpty
-        ? 'Preventista'
-        : nombreCompleto;
+    return nombreCompleto.isEmpty ? 'Preventista' : nombreCompleto;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Historial de liquidaciones',
-        ),
-      ),
-      body: _construirContenido(),
+      appBar: AppBar(title: const Text('Historial de liquidaciones')),
+      body: DesktopForm(child: _construirContenido()),
     );
   }
 
   Widget _construirContenido() {
     if (_cargando) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -160,15 +144,9 @@ DateTime? _fechaHastaFiltro;
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.error_outline,
-                size: 56,
-              ),
+              const Icon(Icons.error_outline, size: 56),
               const SizedBox(height: 16),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-              ),
+              Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: _cargarHistorial,
@@ -189,253 +167,246 @@ DateTime? _fechaHastaFiltro;
         ),
       );
     }
-final liquidacionesFiltradas =
-    _liquidaciones.where((liquidacion) {
-  // Filtro por preventista
-  if (_preventistaSeleccionado != null) {
-    final usuario =
-        liquidacion['usuarios']
-            as Map<String, dynamic>?;
+    final liquidacionesFiltradas = _liquidaciones.where((liquidacion) {
+      // Filtro por preventista
+      if (_preventistaSeleccionado != null) {
+        final usuario = liquidacion['usuarios'] as Map<String, dynamic>?;
 
-    final id = usuario?['id']?.toString();
+        final id = usuario?['id']?.toString();
 
-    if (id != _preventistaSeleccionado) {
-      return false;
-    }
-  }
+        if (id != _preventistaSeleccionado) {
+          return false;
+        }
+      }
 
-  // Filtro Fecha desde
-  if (_fechaDesdeFiltro != null) {
-    final fechaDesde =
-        DateTime.tryParse(
+      // Filtro Fecha desde
+      if (_fechaDesdeFiltro != null) {
+        final fechaDesde = DateTime.tryParse(
           liquidacion['fecha_desde']?.toString() ?? '',
         );
 
-    if (fechaDesde == null ||
-        fechaDesde.isBefore(_fechaDesdeFiltro!)) {
-      return false;
+        if (fechaDesde == null || fechaDesde.isBefore(_fechaDesdeFiltro!)) {
+          return false;
+        }
+      }
+      // Filtro Fecha hasta
+      if (_fechaHastaFiltro != null) {
+        final fechaHasta = DateTime.tryParse(
+          liquidacion['fecha_hasta']?.toString() ?? '',
+        );
+
+        if (fechaHasta == null || fechaHasta.isAfter(_fechaHastaFiltro!)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+    final preventistasDisponibles = <String, String>{};
+
+    for (final liquidacion in _liquidaciones) {
+      final usuario = liquidacion['usuarios'] as Map<String, dynamic>?;
+
+      final id = usuario?['id']?.toString();
+
+      if (id != null && id.isNotEmpty) {
+        preventistasDisponibles[id] = _nombrePreventista(liquidacion);
+      }
     }
-  }
-// Filtro Fecha hasta
-if (_fechaHastaFiltro != null) {
-  final fechaHasta =
-      DateTime.tryParse(
-        liquidacion['fecha_hasta']?.toString() ?? '',
-      );
-
-  if (fechaHasta == null ||
-      fechaHasta.isAfter(_fechaHastaFiltro!)) {
-    return false;
-  }
-}
-  return true;
-}).toList();
-          final preventistasDisponibles = <String, String>{};
-
-for (final liquidacion in _liquidaciones) {
-  final usuario =
-      liquidacion['usuarios']
-          as Map<String, dynamic>?;
-
-  final id = usuario?['id']?.toString();
-
-  if (id != null && id.isNotEmpty) {
-    preventistasDisponibles[id] =
-        _nombrePreventista(liquidacion);
-  }
-}
     return RefreshIndicator(
       onRefresh: _cargarHistorial,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: liquidacionesFiltradas.isEmpty
-    ? 5
-    : liquidacionesFiltradas.length + 4,
-        separatorBuilder: (_, _) =>
-            const SizedBox(height: 10),
+        itemCount: useDesktopLayout(context)
+            ? 5
+            : liquidacionesFiltradas.isEmpty
+            ? 5
+            : liquidacionesFiltradas.length + 4,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           if (index == 0) {
-  return DropdownButtonFormField<String?>(
-    initialValue: _preventistaSeleccionado,
-    decoration: const InputDecoration(
-      labelText: 'Preventista',
-      border: OutlineInputBorder(),
-    ),
-    items: [
-      const DropdownMenuItem<String?>(
-        value: null,
-        child: Text('Todos los preventistas'),
-      ),
-      ...preventistasDisponibles.entries.map(
-        (entry) => DropdownMenuItem<String?>(
-          value: entry.key,
-          child: Text(entry.value),
-        ),
-      ),
-    ],
-    onChanged: (valor) {
-      setState(() {
-        _preventistaSeleccionado = valor;
-      });
-    },
-  );
-}
-if (index == 1) {
-  return OutlinedButton.icon(
-    onPressed: () async {
-      final fecha = await showDatePicker(
-        context: context,
-        initialDate: _fechaDesdeFiltro ?? DateTime.now(),
-        firstDate: DateTime(2020),
-        lastDate: DateTime(2100),
-      );
+            return DropdownButtonFormField<String?>(
+              initialValue: _preventistaSeleccionado,
+              decoration: const InputDecoration(
+                labelText: 'Preventista',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('Todos los preventistas'),
+                ),
+                ...preventistasDisponibles.entries.map(
+                  (entry) => DropdownMenuItem<String?>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+                ),
+              ],
+              onChanged: (valor) {
+                setState(() {
+                  _preventistaSeleccionado = valor;
+                });
+              },
+            );
+          }
+          if (index == 1) {
+            return OutlinedButton.icon(
+              onPressed: () async {
+                final fecha = await showDatePicker(
+                  context: context,
+                  initialDate: _fechaDesdeFiltro ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
+                );
 
-      if (fecha != null) {
-        setState(() {
-          _fechaDesdeFiltro = fecha;
-        });
-      }
-    },
-    icon: const Icon(Icons.calendar_month),
-    label: Text(
-      _fechaDesdeFiltro == null
-          ? 'Fecha desde'
-          : 'Desde: ${_fechaDesdeFiltro!.day.toString().padLeft(2, '0')}/${_fechaDesdeFiltro!.month.toString().padLeft(2, '0')}/${_fechaDesdeFiltro!.year}',
-    ),
-  );
-}
-if (index == 2) {
-  return OutlinedButton.icon(
-    onPressed: () async {
-      final fecha = await showDatePicker(
-        context: context,
-        initialDate: _fechaHastaFiltro ?? DateTime.now(),
-        firstDate: DateTime(2020),
-        lastDate: DateTime(2100),
-      );
+                if (fecha != null) {
+                  setState(() {
+                    _fechaDesdeFiltro = fecha;
+                  });
+                }
+              },
+              icon: const Icon(Icons.calendar_month),
+              label: Text(
+                _fechaDesdeFiltro == null
+                    ? 'Fecha desde'
+                    : 'Desde: ${_fechaDesdeFiltro!.day.toString().padLeft(2, '0')}/${_fechaDesdeFiltro!.month.toString().padLeft(2, '0')}/${_fechaDesdeFiltro!.year}',
+              ),
+            );
+          }
+          if (index == 2) {
+            return OutlinedButton.icon(
+              onPressed: () async {
+                final fecha = await showDatePicker(
+                  context: context,
+                  initialDate: _fechaHastaFiltro ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
+                );
 
-      if (fecha != null) {
-        setState(() {
-          _fechaHastaFiltro = fecha;
-        });
-      }
-    },
-    icon: const Icon(Icons.calendar_month),
-    label: Text(
-      _fechaHastaFiltro == null
-          ? 'Fecha hasta'
-          : 'Hasta: ${_fechaHastaFiltro!.day.toString().padLeft(2, '0')}/${_fechaHastaFiltro!.month.toString().padLeft(2, '0')}/${_fechaHastaFiltro!.year}',
-    ),
-  );
-}
-if (index == 3) {
-  return OutlinedButton.icon(
-    onPressed: () {
-      setState(() {
-        _preventistaSeleccionado = null;
-        _fechaDesdeFiltro = null;
-        _fechaHastaFiltro = null;
-      });
-    },
-    icon: const Icon(Icons.filter_alt_off),
-    label: const Text('Limpiar filtros'),
-  );
-}
-if (index == 4 && liquidacionesFiltradas.isEmpty) {
-  return const Padding(
-    padding: EdgeInsets.symmetric(vertical: 24),
-    child: Center(
-      child: Text(
-        'No hay liquidaciones para los filtros seleccionados.',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: Colors.grey,
-          fontSize: 14,
-        ),
-      ),
-    ),
-  );
-}
-          final liquidacion =
-    liquidacionesFiltradas[index - 4];
+                if (fecha != null) {
+                  setState(() {
+                    _fechaHastaFiltro = fecha;
+                  });
+                }
+              },
+              icon: const Icon(Icons.calendar_month),
+              label: Text(
+                _fechaHastaFiltro == null
+                    ? 'Fecha hasta'
+                    : 'Hasta: ${_fechaHastaFiltro!.day.toString().padLeft(2, '0')}/${_fechaHastaFiltro!.month.toString().padLeft(2, '0')}/${_fechaHastaFiltro!.year}',
+              ),
+            );
+          }
+          if (index == 3) {
+            return OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _preventistaSeleccionado = null;
+                  _fechaDesdeFiltro = null;
+                  _fechaHastaFiltro = null;
+                });
+              },
+              icon: const Icon(Icons.filter_alt_off),
+              label: const Text('Limpiar filtros'),
+            );
+          }
+          if (index == 4 && liquidacionesFiltradas.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No hay liquidaciones para los filtros seleccionados.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey, fontSize: 14),
+                ),
+              ),
+            );
+          }
+          if (useDesktopLayout(context)) {
+            return DesktopRecords(
+              embedded: true,
+              records: liquidacionesFiltradas,
+              fields: [
+                DesktopField('Preventista', _nombrePreventista, width: 200),
+                DesktopField(
+                  'Desde',
+                  (r) => _formatearFecha(r['fecha_desde']),
+                  width: 110,
+                ),
+                DesktopField(
+                  'Hasta',
+                  (r) => _formatearFecha(r['fecha_hasta']),
+                  width: 110,
+                ),
+                DesktopField('Estado', (r) => r['estado'], width: 110),
+                DesktopField(
+                  'Venta entregada',
+                  (r) => desktopMoney(r['venta_entregada']),
+                  numeric: true,
+                  width: 140,
+                ),
+                DesktopField(
+                  'Comisión',
+                  (r) => desktopMoney(r['comision_total']),
+                  numeric: true,
+                  width: 130,
+                ),
+              ],
+              onOpen: (liquidacion) => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      CommissionHistoryDetailPage(liquidacion: liquidacion),
+                ),
+              ),
+            );
+          }
+          final liquidacion = liquidacionesFiltradas[index - 4];
 
-          final preventista =
-              _nombrePreventista(liquidacion);
+          final preventista = _nombrePreventista(liquidacion);
 
-          final fechaDesde =
-              _formatearFecha(
-                liquidacion['fecha_desde'],
-              );
+          final fechaDesde = _formatearFecha(liquidacion['fecha_desde']);
 
-          final fechaHasta =
-              _formatearFecha(
-                liquidacion['fecha_hasta'],
-              );
+          final fechaHasta = _formatearFecha(liquidacion['fecha_hasta']);
 
           final estado =
-              liquidacion['estado']
-                      ?.toString()
-                      .toUpperCase() ??
-                  'PENDIENTE';
+              liquidacion['estado']?.toString().toUpperCase() ?? 'PENDIENTE';
 
-          final comision =
-              _numero(
-                liquidacion['comision_total'],
-              );
+          final comision = _numero(liquidacion['comision_total']);
 
-          final ventaEntregada =
-              _numero(
-                liquidacion['venta_entregada'],
-              );
+          final ventaEntregada = _numero(liquidacion['venta_entregada']);
 
           return Card(
             child: ListTile(
-              contentPadding:
-                  const EdgeInsets.all(14),
+              contentPadding: const EdgeInsets.all(14),
               leading: const CircleAvatar(
-                child: Icon(
-                  Icons.receipt_long_outlined,
-                ),
+                child: Icon(Icons.receipt_long_outlined),
               ),
               title: Text(
                 preventista,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               subtitle: Padding(
-                padding:
-                    const EdgeInsets.only(top: 6),
+                padding: const EdgeInsets.only(top: 6),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '$fechaDesde → $fechaHasta',
-                    ),
+                    Text('$fechaDesde → $fechaHasta'),
                     const SizedBox(height: 4),
                     Text(
                       'Venta entregada: ${_formatearPrecio(ventaEntregada)}',
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'Estado: $estado',
-                    ),
+                    Text('Estado: $estado'),
                   ],
                 ),
               ),
               trailing: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.center,
-                crossAxisAlignment:
-                    CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   const Text(
                     'Comisión',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -447,15 +418,14 @@ if (index == 4 && liquidacionesFiltradas.isEmpty) {
                   ),
                 ],
               ),
-             onTap: () {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => CommissionHistoryDetailPage(
-        liquidacion: liquidacion,
-      ),
-    ),
-  );
-},
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        CommissionHistoryDetailPage(liquidacion: liquidacion),
+                  ),
+                );
+              },
             ),
           );
         },
