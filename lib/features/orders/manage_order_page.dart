@@ -1,4 +1,5 @@
 import '../../core/app_config.dart';
+import 'delivery_quantity.dart';
 import 'finalization_request.dart';
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
@@ -21,6 +22,7 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
   Map<String, dynamic>? _pendiente;
   bool _esCatalogo = false;
   bool _catalogoConPreventista = false;
+  bool _entregaCerrada = false;
   String? _error;
 
   String _estado = 'pendiente';
@@ -125,12 +127,14 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
       try {
         final origen = await Supabase.instance.client
             .from('pedidos')
-            .select('origen,catalogo_preventista_id')
+            .select('origen,catalogo_preventista_id,resultado_entrega')
             .eq('id', widget.pedido['id'])
             .single();
         // La asignación queda guardada en cada pedido, independiente del enlace actual.
         _esCatalogo = origen['origen'] == 'catalogo';
         _catalogoConPreventista = origen['catalogo_preventista_id'] != null;
+        _entregaCerrada =
+            (origen['resultado_entrega'] ?? 'pendiente') != 'pendiente';
       } on PostgrestException catch (error) {
         // Compatibilidad mientras todavía no se instaló la migración.
         if (error.code != '42703' && error.code != 'PGRST204') rethrow;
@@ -153,6 +157,10 @@ cantidad_entregada,
             productos (
               nombre,
               codigo_original,
+              precio_normal,
+              precio_promo,
+              precio_interior,
+              costo,
               comision_normal,
               comision_promo,
               comision_interior
@@ -202,16 +210,106 @@ cantidad_entregada,
     return detalle['agregado_en_entrega_local'] == true;
   }
 
+  bool get _aumentoContextual {
+    final tipo = widget.pedido['tipo_operacion']?.toString();
+    return tipo == 'venta_directa' && appConfig.usesV2For(tipo);
+  }
+
+  bool _esExcedente(Map<String, dynamic> detalle) =>
+      detalle['excedente_local'] == true;
+
+  bool get _confirmada =>
+      _entregaCerrada ||
+      (widget.pedido['resultado_entrega'] ?? 'pendiente') != 'pendiente';
+
+  Map<String, dynamic>? _excedenteDe(Map<String, dynamic> original) {
+    for (final detalle in _detalles) {
+      if (detalle['original_id_local'] == original['id']) return detalle;
+    }
+    return null;
+  }
+
+  String _textoCantidad(Map<String, dynamic> detalle) =>
+      _entregadosControllers[detalle['id'].toString()]?.text ?? '0';
+
+  String? _desgloseExcedente(Map<String, dynamic> original) {
+    final extra = _excedenteDe(original);
+    if (extra == null) return null;
+    return '${_numeroLimpio(_cantidadEntregada(original))} del pedido a '
+        '${desktopMoney(_precio(original))} + '
+        '${_numeroLimpio(_cantidadEntregada(extra))} adicionales a '
+        '${desktopMoney(_precio(extra))}';
+  }
+
+  void _cambiarCantidad(Map<String, dynamic> detalle) {
+    setState(() {
+      if (!_aumentoContextual || _esAgregadoEnEntrega(detalle)) return;
+      final base = (_cantidadPedida(detalle) * 100).round();
+      final propuesta = splitDeliveryQuantity(
+        _textoCantidad(detalle),
+        base,
+        allowsAdditional: true,
+      );
+      final previo = _excedenteDe(detalle);
+      if (propuesta == null || propuesta.additional == 0) {
+        if (previo != null) _eliminarAgregado(previo);
+        return;
+      }
+      final producto = detalle['productos'] as Map<String, dynamic>?;
+      final lista = detalle['tipo_precio']?.toString() ?? 'normal';
+      final precio = producto == null
+          ? 0.0
+          : _precioProductoSegunLista(producto, lista);
+      if (!precio.isFinite || precio <= 0) return;
+      final cantidad = _numeroLimpio(propuesta.additional / 100);
+      if (previo != null) {
+        _entregadosControllers[previo['id'].toString()]!.text = cantidad;
+        return;
+      }
+      final id = 'excedente_${detalle['id']}';
+      _entregadosControllers[id] = TextEditingController(text: cantidad);
+      _detalles.add({
+        ...detalle,
+        'id': id,
+        'cantidad': 0,
+        'cantidad_facturada': 0,
+        'precio_unitario': precio,
+        'costo_unitario': producto?['costo'],
+        'tipo_precio': lista,
+        'agregado_en_entrega_local': true,
+        'excedente_local': true,
+        'original_id_local': detalle['id'],
+      });
+    });
+  }
+
+  void _eliminarAgregado(Map<String, dynamic> detalle) {
+    _entregadosControllers.remove(detalle['id'].toString())?.dispose();
+    _detalles.remove(detalle);
+  }
+
+  void _seleccionarModo(String? modo) {
+    if (modo == null || modo == _modoEntrega) return;
+    setState(() {
+      if (modo != 'parcial' || _modoEntrega == null) {
+        for (final extra in _detalles.where(_esAgregadoEnEntrega).toList()) {
+          _eliminarAgregado(extra);
+        }
+        for (final detalle in _detalles) {
+          _entregadosControllers[detalle['id'].toString()]?.text =
+              modo == 'rechazado'
+              ? '0'
+              : _numeroLimpio(_cantidadPedida(detalle));
+        }
+      }
+      _modoEntrega = modo;
+    });
+  }
+
   void _quitarProductoAgregado(Map<String, dynamic> detalle) {
     if (!_esAgregadoEnEntrega(detalle)) return;
 
-    final id = detalle['id'].toString();
-
-    _entregadosControllers.remove(id)?.dispose();
-
-    setState(() {
-      _detalles.remove(detalle);
-    });
+    setState(() => _eliminarAgregado(detalle));
   }
 
   double _cantidadPedida(Map<String, dynamic> detalle) {
@@ -225,12 +323,13 @@ cantidad_entregada,
   }
 
   double _cantidadEntregada(Map<String, dynamic> detalle) {
-    final id = detalle['id'].toString();
-
-    return double.tryParse(
-          _entregadosControllers[id]?.text.replaceAll(',', '.') ?? '0',
-        ) ??
-        0;
+    final cantidad = deliveryHundredths(_textoCantidad(detalle));
+    if (cantidad == null) return 0;
+    if (_aumentoContextual && !_esAgregadoEnEntrega(detalle)) {
+      final base = (_cantidadPedida(detalle) * 100).round();
+      return (cantidad > base ? base : cantidad) / 100;
+    }
+    return cantidad / 100;
   }
 
   double _cantidadNoEntregada(Map<String, dynamic> detalle) {
@@ -323,15 +422,7 @@ cantidad_entregada,
 
       if (!mounted) return;
 
-      final admiteOriginalComoAgregado =
-          appConfig.isTesting &&
-          appConfig.directSalesEnabled &&
-          widget.pedido['tipo_operacion'] == 'venta_directa';
       final idsYaIncluidos = _detalles
-          .where(
-            (detalle) =>
-                !admiteOriginalComoAgregado || _esAgregadoEnEntrega(detalle),
-          )
           .map((detalle) => detalle['producto_id']?.toString())
           .whereType<String>()
           .toSet();
@@ -565,7 +656,8 @@ cantidad_entregada,
   }
 
   String _formatearPrecio(double valor) {
-    final entero = valor.round().toString();
+    final partes = valor.toStringAsFixed(2).split('.');
+    final entero = partes.first;
 
     final buffer = StringBuffer();
     int contador = 0;
@@ -580,7 +672,10 @@ cantidad_entregada,
       }
     }
 
-    return '\$${buffer.toString().split('').reversed.join()}';
+    final decimales = partes.length == 2 && partes.last != '00'
+        ? ',${partes.last}'
+        : '';
+    return '\$${buffer.toString().split('').reversed.join()}$decimales';
   }
 
   double _totalEntregadoActual() {
@@ -594,24 +689,31 @@ cantidad_entregada,
 
   bool _validarCantidades() {
     for (final detalle in _detalles) {
-      final entregada = _cantidadEntregada(detalle);
-
-      if (_esAgregadoEnEntrega(detalle)) {
-        if (entregada <= 0) {
-          _mostrarMensaje(
-            'La cantidad del producto agregado debe ser mayor que 0.',
-          );
-          return false;
-        }
-
-        continue;
+      final total = deliveryHundredths(_textoCantidad(detalle));
+      if (total == null) {
+        _mostrarMensaje('Ingresá una cantidad válida con hasta dos decimales.');
+        return false;
       }
-
-      final pedida = _cantidadPedida(detalle);
-
-      if (entregada < 0 || entregada > pedida) {
+      if (_esAgregadoEnEntrega(detalle)) continue;
+      final base = (_cantidadPedida(detalle) * 100).round();
+      final propuesta = splitDeliveryQuantity(
+        _textoCantidad(detalle),
+        base,
+        allowsAdditional: _aumentoContextual,
+      );
+      if (propuesta == null) {
         _mostrarMensaje(
-          'La cantidad entregada no puede ser menor que 0 ni mayor que la pedida.',
+          'En este pedido la cantidad entregada no puede superar la original.',
+        );
+        return false;
+      }
+      final extra = _excedenteDe(detalle);
+      if (propuesta.additional > 0 &&
+          (extra == null ||
+              deliveryHundredths(_textoCantidad(extra)) !=
+                  propuesta.additional)) {
+        _mostrarMensaje(
+          'No hay un precio válido para las unidades adicionales.',
         );
         return false;
       }
@@ -694,6 +796,7 @@ cantidad_entregada,
   }
 
   Future<void> _prepararGestion() async {
+    if (_confirmada) return;
     if (appConfig.blocksOrderOperation(
       widget.pedido['tipo_operacion']?.toString() ?? '',
     )) {
@@ -865,29 +968,39 @@ cantidad_entregada,
     }
 
     try {
-      final detallesGestion = _detalles.map((detalle) {
-        final esAgregado = _esAgregadoEnEntrega(detalle);
+      final detallesGestion = _detalles
+          .where(
+            (detalle) =>
+                !_esAgregadoEnEntrega(detalle) ||
+                _cantidadEntregada(detalle) > 0,
+          )
+          .map((detalle) {
+            final esAgregado = _esAgregadoEnEntrega(detalle);
 
-        final entregada = _cantidadEntregada(detalle);
-        final noEntregada = esAgregado ? 0 : _cantidadNoEntregada(detalle);
+            final entregada = _cantidadEntregada(detalle);
+            final noEntregada = esAgregado ? 0 : _cantidadNoEntregada(detalle);
 
-        final porcentaje = _porcentajeComision(detalle);
-        final importeComision = _importeComision(detalle);
+            final porcentaje = _porcentajeComision(detalle);
+            final importeComision = _importeComision(detalle);
 
-        return <String, dynamic>{
-          'id': esAgregado ? null : detalle['id'],
-          'producto_id': detalle['producto_id'],
-          'agregado_en_entrega': esAgregado,
-          'cantidad_entregada': entregada,
-          'cantidad_no_entregada': noEntregada,
-          'precio_unitario': _precio(detalle),
-          'costo_unitario':
-              double.tryParse(detalle['costo_unitario']?.toString() ?? '') ?? 0,
-          'porcentaje_comision': porcentaje,
-          'importe_comision': importeComision,
-          'tipo_precio': detalle['tipo_precio']?.toString() ?? 'normal',
-        };
-      }).toList();
+            return <String, dynamic>{
+              'id': esAgregado ? null : detalle['id'],
+              'producto_id': detalle['producto_id'],
+              'agregado_en_entrega': esAgregado,
+              'cantidad_entregada': entregada,
+              'cantidad_no_entregada': noEntregada,
+              'precio_unitario': _precio(detalle),
+              'costo_unitario':
+                  double.tryParse(
+                    detalle['costo_unitario']?.toString() ?? '',
+                  ) ??
+                  0,
+              'porcentaje_comision': porcentaje,
+              'importe_comision': importeComision,
+              'tipo_precio': detalle['tipo_precio']?.toString() ?? 'normal',
+            };
+          })
+          .toList();
 
       String tipoPago = 'sin_pago';
       double? importePago;
@@ -1069,6 +1182,12 @@ cantidad_entregada,
         ),
       );
     }
+    if (_confirmada) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Gestionar pedido')),
+        body: const Center(child: Text('La entrega ya fue confirmada.')),
+      );
+    }
     final resultado = _resultadoEntrega();
     final totalEntregadoActual = _totalEntregadoActual();
     final esVentaDirecta =
@@ -1162,22 +1281,7 @@ cantidad_entregada,
                     groupValue: _modoEntrega,
                     title: const Text('TODO ENTREGADO'),
                     subtitle: const Text('El cliente recibió todo el pedido'),
-                    onChanged: (valor) {
-                      if (valor == null) return;
-
-                      setState(() {
-                        _modoEntrega = valor;
-
-                        for (final detalle in _detalles) {
-                          final id = detalle['id'].toString();
-                          final cantidad = _cantidadPedida(detalle);
-
-                          _entregadosControllers[id]?.text = _numeroLimpio(
-                            cantidad,
-                          );
-                        }
-                      });
-                    },
+                    onChanged: _seleccionarModo,
                   ),
 
                   const Divider(height: 1),
@@ -1189,18 +1293,7 @@ cantidad_entregada,
                     subtitle: const Text(
                       'El cliente no recibió ningún producto',
                     ),
-                    onChanged: (valor) {
-                      if (valor == null) return;
-
-                      setState(() {
-                        _modoEntrega = valor;
-
-                        for (final detalle in _detalles) {
-                          final id = detalle['id'].toString();
-                          _entregadosControllers[id]?.text = '0';
-                        }
-                      });
-                    },
+                    onChanged: _seleccionarModo,
                   ),
 
                   const Divider(height: 1),
@@ -1208,30 +1301,11 @@ cantidad_entregada,
                   RadioListTile<String>(
                     value: 'parcial',
                     groupValue: _modoEntrega,
-                    title: const Text('ENTREGA PARCIAL'),
+                    title: const Text('MODIFICAR ENTREGA'),
                     subtitle: const Text(
-                      'Indicar cantidades producto por producto',
+                      'Ajustá cantidades o agregá otros productos',
                     ),
-                    onChanged: (valor) {
-                      if (valor == null) return;
-
-                      setState(() {
-                        _modoEntrega = valor;
-
-                        for (final detalle in _detalles) {
-                          if (_esAgregadoEnEntrega(detalle)) {
-                            continue;
-                          }
-
-                          final id = detalle['id'].toString();
-                          final cantidad = _cantidadPedida(detalle);
-
-                          _entregadosControllers[id]?.text = _numeroLimpio(
-                            cantidad,
-                          );
-                        }
-                      });
-                    },
+                    onChanged: _seleccionarModo,
                   ),
                 ],
               ),
@@ -1242,7 +1316,7 @@ cantidad_entregada,
             if (_modoEntrega == 'parcial' && useDesktopLayout(context))
               DesktopRecords(
                 embedded: true,
-                records: _detalles,
+                records: _detalles.where((d) => !_esExcedente(d)).toList(),
                 fields: [
                   DesktopField(
                     'Producto',
@@ -1265,7 +1339,7 @@ cantidad_entregada,
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (_) => _cambiarCantidad(r),
                         decoration: const InputDecoration(
                           labelText: 'Cantidad',
                           isDense: true,
@@ -1300,10 +1374,12 @@ cantidad_entregada,
                   ),
                   DesktopField(
                     'Origen',
-                    (r) => _esAgregadoEnEntrega(r)
-                        ? 'Agregado en entrega'
-                        : 'Pedido',
-                    width: 145,
+                    (r) =>
+                        _desgloseExcedente(r) ??
+                        (_esAgregadoEnEntrega(r)
+                            ? 'Agregado en entrega'
+                            : 'Pedido'),
+                    width: 265,
                   ),
                 ],
                 actions: (r) => _esAgregadoEnEntrega(r)
@@ -1315,7 +1391,7 @@ cantidad_entregada,
                     : const SizedBox.shrink(),
               ),
             if (_modoEntrega == 'parcial' && !useDesktopLayout(context))
-              ..._detalles.map((detalle) {
+              ..._detalles.where((d) => !_esExcedente(d)).map((detalle) {
                 final producto = detalle['productos'] as Map<String, dynamic>?;
 
                 final nombre =
@@ -1393,14 +1469,14 @@ cantidad_entregada,
                             labelText: 'Cantidad entregada',
                             border: OutlineInputBorder(),
                           ),
-                          onChanged: (_) {
-                            setState(() {});
-                          },
+                          onChanged: (_) => _cambiarCantidad(detalle),
                         ),
                         const SizedBox(height: 10),
                         Text('No entregada: ${_numeroLimpio(noEntregada)}'),
                         const SizedBox(height: 8),
                         Text('Precio: ${_formatearPrecio(_precio(detalle))}'),
+                        if (_desgloseExcedente(detalle) case final desglose?)
+                          Text(desglose),
                         const SizedBox(height: 4),
                         Text('Comisión: ${_numeroLimpio(porcentaje)}%'),
                         const SizedBox(height: 4),
