@@ -19,6 +19,11 @@ class AppConfig {
   // No testing catalog destination has been approved yet.
   bool get catalogEnabled => !isTesting;
   bool get finalizationV2Enabled => isTesting;
+  bool get directSalesEnabled => !isTesting;
+  static const directSalesTestingMessage =
+      'Venta directa temporalmente fuera de operación en TESTING. Su integración con Stock V2 está pendiente.';
+  bool blocksOrderOperation(String operation) =>
+      !directSalesEnabled && operation == 'venta_directa';
   String get project => isTesting ? testingProject : productionProject;
   String get title =>
       isTesting ? 'Alberdi TESTING — datos ficticios' : 'Distribuidora Alberdi';

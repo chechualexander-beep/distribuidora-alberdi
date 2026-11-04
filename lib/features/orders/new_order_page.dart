@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'order_products_page.dart';
+import '../../core/app_config.dart';
+import 'order_operation_selector.dart';
 import '../clients/client_detail_page.dart';
 import 'order_detail_page.dart';
 import '../clients/new_client_page.dart';
@@ -310,23 +312,12 @@ class _NewOrderPageState extends State<NewOrderPage> {
             ),
             const SizedBox(height: 10),
 
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment<String>(
-                  value: 'pedido',
-                  icon: Icon(Icons.shopping_cart_outlined),
-                  label: Text('Pedido'),
-                ),
-                ButtonSegment<String>(
-                  value: 'venta_directa',
-                  icon: Icon(Icons.point_of_sale),
-                  label: Text('Venta directa'),
-                ),
-              ],
-              selected: {_tipoOperacion},
-              onSelectionChanged: (seleccion) {
+            OrderOperationSelector(
+              value: _tipoOperacion,
+              allowDirectSales: appConfig.directSalesEnabled,
+              onChanged: (operacion) {
                 setState(() {
-                  _tipoOperacion = seleccion.first;
+                  _tipoOperacion = operacion;
 
                   if (_tipoOperacion == 'venta_directa') {
                     final hoy = DateTime.now();

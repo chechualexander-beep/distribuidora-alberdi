@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'invoice_detail_page.dart';
 import '../../core/desktop_table.dart';
 import 'invoicing_desktop_table.dart';
+import '../../core/app_config.dart';
+import 'invoice_recovery_page.dart';
 
 class InvoicingPage extends StatefulWidget {
   const InvoicingPage({super.key, this.embedded = false});
@@ -112,9 +114,40 @@ class _InvoicingPageState extends State<InvoicingPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.embedded) return _construirContenido();
+    if (widget.embedded) {
+      return Column(
+        children: [
+          if (appConfig.isTesting)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const InvoiceRecoveryPage(),
+                  ),
+                ),
+                icon: const Icon(Icons.history),
+                label: const Text('Recuperación de boletas internas'),
+              ),
+            ),
+          Expanded(child: _construirContenido()),
+        ],
+      );
+    }
     return Scaffold(
-      appBar: AppBar(title: const Text('Facturación')),
+      appBar: AppBar(
+        title: const Text('Facturación'),
+        actions: [
+          if (appConfig.isTesting)
+            IconButton(
+              tooltip: 'Recuperación de boletas internas',
+              icon: const Icon(Icons.history),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const InvoiceRecoveryPage()),
+              ),
+            ),
+        ],
+      ),
       body: _construirContenido(),
     );
   }
@@ -146,12 +179,12 @@ class _InvoicingPageState extends State<InvoicingPage> {
         orders: _pedidos,
         onRefresh: _cargarPedidos,
         onOpen: (pedido) async {
-          final result = await Navigator.of(context).push<bool>(
+          await Navigator.of(context).push<bool>(
             MaterialPageRoute(
               builder: (_) => InvoiceDetailPage(pedido: pedido),
             ),
           );
-          if (result == true && mounted) await _cargarPedidos();
+          if (mounted) await _cargarPedidos();
         },
       );
     }
@@ -195,13 +228,13 @@ class _InvoicingPageState extends State<InvoicingPage> {
           return Card(
             child: InkWell(
               onTap: () async {
-                final resultado = await Navigator.of(context).push<bool>(
+                await Navigator.of(context).push<bool>(
                   MaterialPageRoute(
                     builder: (_) => InvoiceDetailPage(pedido: pedido),
                   ),
                 );
 
-                if (resultado == true) {
+                if (mounted) {
                   await _cargarPedidos();
                 }
               },

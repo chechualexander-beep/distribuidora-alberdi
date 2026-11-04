@@ -13,6 +13,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'helpers/outbox_fixture.dart' show memoryDatabase;
 import 'app_config_test.dart' show testingConfig, fixtureKey, testingUrl;
 
 void main() {
@@ -163,6 +164,11 @@ void main() {
             reconcileFinalization(
               client,
               {'p_solicitud_id': 'fixture'},
+              store: FinalizationRequestStore(
+                memoryDatabase(),
+                '$testingUrl/rest/v1',
+                'admin',
+              ),
               retry: true,
               config: config,
             ),
@@ -181,11 +187,13 @@ void main() {
     () async {
       SharedPreferences.setMockInitialValues({});
       final store = FinalizationRequestStore(
-        await SharedPreferences.getInstance(),
-        testingUrl,
+        memoryDatabase(),
+        '$testingUrl/rest/v1',
         'admin',
       );
-      final payload = await store.prepare('order', {'p_tipo_pago': 'sin_pago'});
+      final payload = await store.prepare('order', {
+        'p_tipo_pago': 'sin_pago',
+      }, physicalDate: DateTime.utc(2026, 1));
       final paths = <String>[];
       final client = SupabaseClient(
         testingUrl,
@@ -209,6 +217,7 @@ void main() {
           reconcileFinalization(
             client,
             payload,
+            store: store,
             retry: true,
             config: testingConfig(),
           ),
@@ -228,6 +237,16 @@ void main() {
   test(
     'unrecognized reconciliation status cannot cause a finalization',
     () async {
+      final store = FinalizationRequestStore(
+        memoryDatabase(),
+        '$testingUrl/rest/v1',
+        'admin',
+      );
+      final payload = await store.prepare(
+        'order',
+        {},
+        physicalDate: DateTime.utc(2026),
+      );
       final paths = <String>[];
       final client = SupabaseClient(
         testingUrl,
@@ -246,11 +265,12 @@ void main() {
         await expectLater(
           reconcileFinalization(
             client,
-            {'p_solicitud_id': 'fixture'},
+            payload,
+            store: store,
             retry: true,
             config: testingConfig(),
           ),
-          throwsStateError,
+          throwsA(isA<LocalOutboxException>()),
         );
         expect(paths, ['/rest/v1/rpc/consultar_finalizacion_solicitud']);
       } finally {

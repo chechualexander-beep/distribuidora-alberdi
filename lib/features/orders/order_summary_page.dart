@@ -1,5 +1,6 @@
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
+import '../../core/app_config.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -179,6 +180,10 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
 
   Future<void> _confirmarPedido() async {
     if (_guardando) return;
+    if (appConfig.blocksOrderOperation(widget.tipoOperacion)) {
+      _mostrarMensaje(AppConfig.directSalesTestingMessage);
+      return;
+    }
 
     final usuario = Supabase.instance.client.auth.currentUser;
 
@@ -467,6 +472,11 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
                     icon: const Icon(Icons.arrow_back),
                     label: const Text('VOLVER A PRODUCTOS'),
                   ),
+                  if (appConfig.blocksOrderOperation(widget.tipoOperacion))
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text(AppConfig.directSalesTestingMessage),
+                    ),
                   const SizedBox(height: 10),
 
                   OutlinedButton.icon(
@@ -477,7 +487,11 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
 
                   const SizedBox(height: 10),
                   FilledButton.icon(
-                    onPressed: _guardando ? null : _confirmarPedido,
+                    onPressed:
+                        _guardando ||
+                            appConfig.blocksOrderOperation(widget.tipoOperacion)
+                        ? null
+                        : _confirmarPedido,
                     icon: _guardando
                         ? const SizedBox(
                             width: 22,

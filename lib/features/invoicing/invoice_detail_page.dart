@@ -6,6 +6,10 @@ import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 
 import 'invoice_pdf_service.dart';
+import '../../core/app_config.dart';
+import '../../core/local_outbox.dart';
+import 'invoice_request.dart';
+import 'invoice_snapshot_pdf.dart';
 
 class InvoiceDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -29,14 +33,212 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   List<Map<String, dynamic>> _detalles = [];
   List<Map<String, dynamic>> _productosDisponibles = [];
   final Set<String> _detallesQuitados = {};
+  final Set<String> _originalIds = {};
+  InvoiceService? _billing;
+  OutboxRecord? _savedBill;
+  InvoiceDocument? _document;
+  bool _billingReady = false;
+  bool _billingBusy = false;
+  String? _billingError;
+  bool get _readOnly =>
+      widget.soloLectura ||
+      _document != null ||
+      _savedBill != null ||
+      !_billingReady ||
+      _billingBusy;
+  String get _orderId => widget.pedido['id'].toString();
+
+  void _refreshSavedBill() {
+    try {
+      if (_billing != null) _savedBill = _billing!.store.read(_orderId);
+    } catch (_) {
+      _billingError =
+          'No se pudo leer la solicitud local. Se conserva y no se habilita otra emisión.';
+    }
+  }
 
   final Map<String, TextEditingController> _cantidadFacturadaControllers = {};
 
   @override
   void initState() {
     super.initState();
-    _cargarDetalles();
-    _cargarProductosDisponibles();
+    _initializeBilling();
+  }
+
+  Future<void> _initializeBilling() async {
+    try {
+      if (appConfig.isTesting) {
+        _billing = await invoiceService(Supabase.instance.client);
+        _savedBill = _billing!.store.read(_orderId);
+        if (_savedBill?.result != null) {
+          _document = InvoiceDocument.validate(
+            _savedBill!.result!,
+            order: _orderId,
+            payload: _savedBill!.payload,
+          );
+        } else if (_savedBill == null && widget.soloLectura) {
+          _document = await _billing!.lookup(_orderId);
+        }
+      }
+      if (_document == null) {
+        await _cargarDetalles();
+        if (!widget.soloLectura && _savedBill == null) {
+          await _cargarProductosDisponibles();
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _billingReady = true;
+          _cargando = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _billingError =
+              'No se pudo comprobar el almacén o el comprobante. No se habilita otra emisión; requiere revisión.',
+        );
+      }
+    }
+  }
+
+  Future<void> _recoverBill({bool send = false}) async {
+    if (_billingBusy || _billing == null) return;
+    setState(() => _billingBusy = true);
+    try {
+      _document = await _billing!.reconcile(_orderId, sendIfAbsent: send);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'La boleta se conserva pendiente o para revisión. No generes otra solicitud.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      _refreshSavedBill();
+      if (mounted) setState(() => _billingBusy = false);
+    }
+  }
+
+  Future<void> _printBill() async {
+    if (_billingBusy) return;
+    setState(() => _billingBusy = true);
+    try {
+      if (_billing != null) {
+        _savedBill = _billing!.store.read(_orderId);
+        _document = await _billing!.lookup(_orderId);
+      }
+      if (_document != null) {
+        Future<bool> print(InvoiceDocument doc) => Printing.layoutPdf(
+          onLayout: (_) => InvoiceSnapshotPdf.generate(doc),
+          name: 'Boleta_${doc.number}',
+          format: PdfPageFormat.a5,
+        );
+        if (_savedBill?.result != null) {
+          await _billing!.printConfirmed(_orderId, print);
+        } else {
+          await print(
+            _document!,
+          ); // Read-only server document; no new local request.
+        }
+      } else {
+        // Only explicit legacy/no-new-document lookup may reach historical PDF.
+        final bytes = await InvoicePdfService.generarBoleta(
+          pedido: widget.pedido,
+          detalles: _detalles,
+        );
+        await Printing.layoutPdf(
+          onLayout: (_) async => bytes,
+          name: 'Boleta ${widget.pedido['numero_comprobante'] ?? ''}',
+          format: PdfPageFormat.a5,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _document != null
+                  ? 'La boleta sigue confirmada. Impresión pendiente; podés volver a imprimir sin emitir otra.'
+                  : 'No se pudo verificar o imprimir el comprobante. Revisá la solicitud guardada; no se emitió otra boleta.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      _refreshSavedBill();
+      if (mounted) setState(() => _billingBusy = false);
+    }
+  }
+
+  Future<void> _facturarPedido() async {
+    if (_billingBusy || !_billingReady || _billingError != null) return;
+    if (_savedBill != null) {
+      await _recoverBill();
+      return;
+    }
+    if (_document != null) return;
+    setState(() => _billingBusy = true);
+    try {
+      if (_billing?.enabled == true) {
+        final originals = [
+          for (final id in _originalIds)
+            {
+              'detalle_id': id,
+              'cantidad_facturada': _detallesQuitados.contains(id)
+                  ? 0
+                  : num.parse(_cantidadFacturadaControllers[id]!.text),
+            },
+        ];
+        final added = [
+          for (final d in _detalles.where(
+            (d) => d['id'].toString().startsWith('nuevo_'),
+          ))
+            {
+              'producto_id': d['producto_id'],
+              'tipo_precio': d['tipo_precio'],
+              'cantidad_facturada': num.parse(
+                _cantidadFacturadaControllers[d['id']]!.text,
+              ),
+            },
+        ];
+        await _billing!.prepare(_orderId, {
+          'p_originales': originals,
+          'p_agregados': added,
+        });
+        _document = await _billing!.reconcile(_orderId, sendIfAbsent: true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Boleta confirmada — impresión pendiente.'),
+            ),
+          );
+        }
+      } else {
+        // Explicit old mode only; never reached as a recovery/error fallback.
+        if (_billing != null) {
+          await _billing!.runLegacyIfClear(_orderId, _facturarPedidoLegacy);
+        } else {
+          await _facturarPedidoLegacy();
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se completó la confirmación. Revisá la boleta guardada antes de continuar; no crees otra.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      _refreshSavedBill();
+      if (mounted) setState(() => _billingBusy = false);
+    }
   }
 
   double _precioProductoParaPedido(Map<String, dynamic> producto) {
@@ -248,6 +450,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
       setState(() {
         _detalles = List<Map<String, dynamic>>.from(respuesta);
+        _originalIds
+          ..clear()
+          ..addAll(_detalles.map((d) => d['id'].toString()));
         _observacion = pedidoRespuesta['observacion']?.toString();
 
         for (final detalle in _detalles) {
@@ -261,7 +466,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               cantidad;
 
           _cantidadFacturadaControllers[id] = TextEditingController(
-            text: cantidadFacturada.toStringAsFixed(0),
+            text: _billing?.enabled == true
+                ? cantidadFacturada.toString()
+                : cantidadFacturada.toStringAsFixed(0),
           );
         }
 
@@ -277,7 +484,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
-  Future<void> _facturarPedido() async {
+  Future<void> _facturarPedidoLegacy() async {
     final numeroComprobante =
         await Supabase.instance.client.rpc('siguiente_numero_comprobante')
             as String;
@@ -436,6 +643,33 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   }
 
   Widget _construirContenido(String nombreCliente, dynamic total) {
+    if (_billingError != null) return Center(child: Text(_billingError!));
+    if (_document != null) {
+      final c = _document!.snapshot;
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text('Boleta interna confirmada'),
+          Text('Comprobante: ${_document!.number}'),
+          Text('Cliente: ${c['cliente']['nombre']}'),
+          for (final line in c['lineas'] as List)
+            Text(
+              '${line['cantidad_documentada']} × ${line['nombre']} — ${line['subtotal']}',
+            ),
+          Text('Total: ${c['total']} ARS'),
+          Text(
+            _savedBill?.state == 'acknowledged'
+                ? 'Boleta confirmada'
+                : 'Boleta confirmada — impresión pendiente',
+          ),
+          FilledButton.icon(
+            onPressed: _billingBusy || !_billingReady ? null : _printBill,
+            icon: const Icon(Icons.print_outlined),
+            label: const Text('VISUALIZAR / REIMPRIMIR'),
+          ),
+        ],
+      );
+    }
     if (_cargando) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -463,6 +697,34 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (_savedBill != null && _savedBill!.result == null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  Text(
+                    _savedBill!.state == 'review'
+                        ? 'Boleta con error o conflicto — requiere revisión'
+                        : 'Boleta pendiente de confirmación',
+                  ),
+                  Text('Solicitud: ${_savedBill!.payload['p_solicitud_id']}'),
+                  if (_savedBill!.state != 'review') ...[
+                    TextButton(
+                      onPressed: _billingBusy ? null : () => _recoverBill(),
+                      child: const Text('Consultar confirmación'),
+                    ),
+                    TextButton(
+                      onPressed: _billingBusy || _billing?.enabled != true
+                          ? null
+                          : () => _recoverBill(send: true),
+                      child: const Text('Reintentar solicitud original'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -510,7 +772,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        if (!widget.soloLectura) ...[
+        if (!_readOnly) ...[
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -544,7 +806,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   width: 110,
                   child: TextField(
                     key: ValueKey('facturar-${r['id']}'),
-                    enabled: !widget.soloLectura,
+                    enabled: !_readOnly,
                     controller:
                         _cantidadFacturadaControllers[r['id'].toString()],
                     keyboardType: TextInputType.number,
@@ -581,7 +843,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                 width: 120,
               ),
             ],
-            actions: widget.soloLectura
+            actions: _readOnly
                 ? null
                 : (detalle) => IconButton(
                     tooltip: 'Quitar de la boleta',
@@ -642,6 +904,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                     Text('Cantidad pedida: ${cantidad.toStringAsFixed(0)}'),
                     const SizedBox(height: 8),
                     TextField(
+                      enabled: !_readOnly,
                       controller:
                           _cantidadFacturadaControllers[detalle['id']
                               .toString()],
@@ -664,22 +927,28 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            final detalleId = detalle['id'].toString();
+                        onPressed: _readOnly
+                            ? null
+                            : () {
+                                setState(() {
+                                  final detalleId = detalle['id'].toString();
 
-                            if (!detalleId.startsWith('nuevo_')) {
-                              _detallesQuitados.add(detalleId);
-                            }
+                                  if (!detalleId.startsWith('nuevo_')) {
+                                    _detallesQuitados.add(detalleId);
+                                  }
 
-                            _detalles.removeWhere(
-                              (item) => item['id'].toString() == detalleId,
-                            );
+                                  _detalles.removeWhere(
+                                    (item) =>
+                                        item['id'].toString() == detalleId,
+                                  );
 
-                            _cantidadFacturadaControllers[detalleId]?.dispose();
-                            _cantidadFacturadaControllers.remove(detalleId);
-                          });
-                        },
+                                  _cantidadFacturadaControllers[detalleId]
+                                      ?.dispose();
+                                  _cantidadFacturadaControllers.remove(
+                                    detalleId,
+                                  );
+                                });
+                              },
                         icon: const Icon(Icons.delete_outline),
                         label: const Text('Quitar de la boleta'),
                       ),
@@ -715,7 +984,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         ),
         const SizedBox(height: 20),
 
-        if (widget.soloLectura) ...[
+        if (_savedBill != null && _savedBill!.result == null) ...[
+          const SizedBox.shrink(),
+        ] else if (widget.soloLectura) ...[
           const SizedBox(height: 16),
 
           Card(
@@ -749,19 +1020,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () async {
-                final pdfBytes = await InvoicePdfService.generarBoleta(
-                  pedido: widget.pedido,
-                  detalles: _detalles,
-                );
-
-                if (!mounted) return;
-
-                await Printing.layoutPdf(
-                  onLayout: (_) async => pdfBytes,
-                  name: 'Boleta ${widget.pedido['numero_comprobante'] ?? ''}',
-                );
-              },
+              onPressed: _billingBusy || !_billingReady ? null : _printBill,
               icon: const Icon(Icons.print_outlined),
               label: const Text('REIMPRIMIR'),
             ),
@@ -770,7 +1029,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _facturarPedido,
+              onPressed: _billingBusy || !_billingReady
+                  ? null
+                  : _facturarPedido,
               icon: const Icon(Icons.check_circle_outline),
               label: const Text('FACTURAR'),
             ),

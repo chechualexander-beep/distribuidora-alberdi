@@ -1,93 +1,222 @@
 import 'dart:convert';
-import 'dart:math';
+import 'dart:io';
 
 import '../../core/app_config.dart';
-
+import '../../core/local_outbox.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_android/shared_preferences_android.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// One immutable operational request, scoped by project and authenticated actor.
-/// No names, credentials, tokens or calculated commercial results are stored.
+export '../../core/local_outbox.dart' show LocalOutbox, LocalOutboxException;
+
 class FinalizationRequestStore {
-  FinalizationRequestStore(this.preferences, this.projectUrl, this.actorId);
+  FinalizationRequestStore(this.database, this.projectUrl, this.actorId);
+  final LocalOutbox database;
+  final String projectUrl, actorId;
+  OutboxKey key(String orderId) => OutboxKey(projectUrl, actorId, orderId);
 
-  final SharedPreferences preferences;
-  final String projectUrl;
-  final String actorId;
-  String get _prefix =>
-      'preventa_v1:${Uri.encodeComponent(projectUrl)}:$actorId:';
-  String _key(String orderId) => '$_prefix$orderId';
+  Map<String, dynamic>? read(String orderId) =>
+      database.read(key(orderId))?.payload;
+  List<String> get pendingOrderIds => database.pending(projectUrl, actorId);
 
-  Map<String, dynamic>? read(String orderId) {
-    final raw = preferences.getString(_key(orderId));
-    if (raw == null) return null;
-    // Corrupt persistence must block a new request instead of silently duplicating.
-    final payload = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-    if (payload['p_pedido_id'] != orderId ||
-        payload['p_solicitud_id'] is! String ||
-        DateTime.tryParse(payload['p_fecha_fisica']?.toString() ?? '') ==
-            null) {
-      throw const FormatException('Solicitud pendiente inválida');
-    }
-    return payload;
-  }
-
-  List<String> get pendingOrderIds => preferences
-      .getKeys()
-      .where((key) => key.startsWith(_prefix))
-      .map((key) => key.substring(_prefix.length))
-      .toList();
+  static const allowedInput = {
+    'p_estado',
+    'p_originales',
+    'p_agregados',
+    'p_tipo_pago',
+    'p_motivo_no_entrega',
+    'p_importe_pago',
+    'p_medio_pago',
+  };
 
   Future<Map<String, dynamic>> prepare(
     String orderId,
     Map<String, dynamic> input, {
     DateTime? physicalDate,
+    Future<DateTime> Function()? serverClock,
+    Future<Map<String, dynamic>> Function(String requestId)? serverContext,
   }) async {
-    final existing = read(orderId);
-    if (existing != null) return existing;
-    const allowed = {
-      'p_estado',
-      'p_originales',
-      'p_agregados',
-      'p_tipo_pago',
-      'p_motivo_no_entrega',
-      'p_importe_pago',
-      'p_medio_pago',
-    };
-    if (input.keys.any((key) => !allowed.contains(key))) {
+    // Snapshot operational input before any await. Existing rows always win.
+    if (read(orderId) != null) return read(orderId)!;
+    if (input.keys.any((name) => !allowedInput.contains(name))) {
       throw ArgumentError('La solicitud contiene campos no operativos');
     }
-    final payload = <String, dynamic>{
-      ...input,
-      'p_pedido_id': orderId,
-      'p_solicitud_id': _uuid(),
-      'p_fecha_fisica': (physicalDate ?? DateTime.now())
-          .toUtc()
-          .toIso8601String(),
-    };
-    // Serialize before returning: callers cannot mutate the durable retry payload.
-    if (!await preferences.setString(_key(orderId), jsonEncode(payload))) {
-      throw StateError('No se pudo conservar la solicitud');
-    }
-    return read(orderId)!;
+    final frozen = Map<String, dynamic>.from(
+      jsonDecode(jsonEncode(input)) as Map,
+    );
+    return database.prepare(key(orderId), (id) async {
+      if (serverContext != null) {
+        final context = await serverContext(id);
+        final date = context['fecha_fisica'];
+        if (context['solicitud_id'] != id ||
+            context['pedido_id'] != orderId ||
+            context['actor_id'] != actorId ||
+            context['protocolo'] != 2 ||
+            context['regimen_id'] is! String ||
+            !RegExp(
+              r'^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$',
+            ).hasMatch(context['regimen_id'] as String) ||
+            date is! String ||
+            !RegExp(
+              r'(Z|[+-]\d{2}:\d{2})$',
+              caseSensitive: false,
+            ).hasMatch(date) ||
+            DateTime.tryParse(date) == null) {
+          throw const FinalizationClockException();
+        }
+        return {
+          ...frozen,
+          'p_pedido_id': orderId,
+          'p_solicitud_id': id,
+          'p_fecha_fisica': DateTime.parse(date).toUtc().toIso8601String(),
+          'p_regimen_id': context['regimen_id'],
+          'p_protocolo': 2,
+        };
+      }
+      if (physicalDate == null && serverClock == null) {
+        throw StateError(
+          'Se requiere una fecha explícita o la hora del servidor.',
+        );
+      }
+      final date = physicalDate ?? await serverClock!();
+      return {
+        ...frozen,
+        'p_pedido_id': orderId,
+        'p_solicitud_id': id,
+        'p_fecha_fisica': date.toUtc().toIso8601String(),
+      };
+    });
   }
 
-  Future<void> clear(String orderId) async {
-    if (!await preferences.remove(_key(orderId))) {
-      throw StateError('No se pudo cerrar la solicitud local');
+  Future<void> acknowledge(String orderId) =>
+      database.withKeyLock(key(orderId), () async {
+        database.acknowledge(key(orderId));
+      });
+
+  void markForReview(String orderId, String code) =>
+      database.review(key(orderId), code);
+
+  /// Imports operational requests atomically. Retains all legacy preferences.
+  /// Full-file parsing is supplied separately so malformed files fail closed.
+  Future<void> migrateLegacy(
+    Future<Map<String, Object?>> Function() readLegacy,
+  ) => database.withKeyLock(key('__legacy_import__'), () async {
+    final id = LocalOutbox.digest(jsonEncode([projectUrl, actorId]));
+    if (database.legacyImported(id)) return;
+    importLegacyValues(await readLegacy(), migrationId: id);
+  });
+
+  void importLegacyValues(Map<String, Object?> values, {String? migrationId}) {
+    final prefix = 'preventa_v1:${Uri.encodeComponent(projectUrl)}:$actorId:';
+    final imported = <OutboxKey, Map<String, dynamic>>{};
+    try {
+      for (final entry in values.entries) {
+        final name = entry.key.startsWith('flutter.')
+            ? entry.key.substring(8)
+            : entry.key;
+        if (!name.startsWith(prefix)) continue;
+        if (entry.value is! String) throw const FormatException();
+        final payload = Map<String, dynamic>.from(
+          jsonDecode(entry.value as String) as Map,
+        );
+        final order = name.substring(prefix.length);
+        final id = payload['p_solicitud_id'];
+        if (order.isEmpty ||
+            payload['p_pedido_id'] != order ||
+            id is! String ||
+            !RegExp(
+              r'^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$',
+            ).hasMatch(id) ||
+            payload['p_fecha_fisica'] is! String ||
+            DateTime.tryParse(payload['p_fecha_fisica'] as String) == null ||
+            payload.keys.any(
+              (k) =>
+                  !allowedInput.contains(k) &&
+                  !{
+                    'p_pedido_id',
+                    'p_solicitud_id',
+                    'p_fecha_fisica',
+                  }.contains(k),
+            )) {
+          throw const FormatException();
+        }
+        final duplicate = imported.entries.where(
+          (entry) => entry.key.order == order,
+        );
+        if (duplicate.isNotEmpty &&
+            jsonEncode(duplicate.single.value) != jsonEncode(payload)) {
+          throw const FormatException('Conflicting legacy aliases');
+        }
+        if (duplicate.isEmpty) imported[key(order)] = payload;
+      }
+      database.importLegacy(imported, migrationId: migrationId);
+    } catch (_) {
+      throw const LocalOutboxException(
+        'Las solicitudes antiguas están dañadas o contradicen la cola local. Se conservaron; requiere revisión antes de continuar.',
+      );
     }
   }
 
-  static String _uuid() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    bytes[6] = (bytes[6] & 15) | 64;
-    bytes[8] = (bytes[8] & 63) | 128;
-    final hex = bytes.map((v) => v.toRadixString(16).padLeft(2, '0')).join();
-    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
-        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  static Map<String, Object?> parseLegacyFile(String bytes) {
+    try {
+      if (bytes.trim().isEmpty) throw const FormatException();
+      final decoded = jsonDecode(bytes);
+      if (decoded is! Map) throw const FormatException();
+      return Map<String, Object?>.from(decoded);
+    } catch (_) {
+      throw const LocalOutboxException(
+        'El archivo de preferencias antiguo está dañado. No se importó ni restableció.',
+      );
+    }
   }
 }
+
+class FinalizationClockException implements Exception {
+  const FinalizationClockException();
+  @override
+  String toString() =>
+      'No se pudo obtener la hora y el contexto de Stock del servidor. La gestión no se envió. Revisá la conexión y volvé a intentar.';
+}
+
+Future<Map<String, dynamic>> prepareCurrentFinalization(
+  SupabaseClient client,
+  FinalizationRequestStore store,
+  String orderId,
+  Map<String, dynamic> input, {
+  AppConfig? config,
+}) async {
+  (config ?? appConfig).requireV2Client(client.rest.url);
+  _requireScope(client, store);
+  return store.prepare(
+    orderId,
+    input,
+    serverContext: (id) async {
+      try {
+        final raw = await client
+            .rpc(
+              'preparar_finalizacion_contexto',
+              params: {'p_solicitud_id': id, 'p_pedido_id': orderId},
+            )
+            .timeout(const Duration(seconds: 20));
+        if (raw is! Map) throw const FormatException();
+        return Map<String, dynamic>.from(raw);
+      } on PostgrestException catch (error) {
+        if (error.code == 'PT409') rethrow;
+        throw const FinalizationClockException();
+      } catch (_) {
+        throw const FinalizationClockException();
+      }
+    },
+  );
+}
+
+bool isFinalizationDateError(PostgrestException error) =>
+    error.code == 'PT422' &&
+    error.message.toLowerCase().contains('fecha o solicitud inválida');
+
+Future<LocalOutbox>? _openingDatabase;
 
 Future<FinalizationRequestStore> finalizationStore(
   SupabaseClient client,
@@ -95,53 +224,183 @@ Future<FinalizationRequestStore> finalizationStore(
   appConfig.requireV2Client(client.rest.url);
   final actor = client.auth.currentUser?.id;
   if (actor == null) throw StateError('Sesión requerida');
-  return FinalizationRequestStore(
-    await SharedPreferences.getInstance(),
-    client.rest.url,
-    actor,
-  );
+  final support = await getApplicationSupportDirectory();
+  LocalOutbox db;
+  try {
+    db = await (_openingDatabase ??= LocalOutbox.open(
+      p.join(support.path, 'stock_v2_outbox_testing'),
+    ));
+  } catch (_) {
+    _openingDatabase = null;
+    rethrow;
+  }
+  final store = FinalizationRequestStore(db, client.rest.url, actor);
+  await store.migrateLegacy(() async {
+    if (Platform.isWindows) {
+      final legacy = File(p.join(support.path, 'shared_preferences.json'));
+      return await legacy.exists()
+          ? FinalizationRequestStore.parseLegacyFile(
+              await legacy.readAsString(),
+            )
+          : <String, Object?>{};
+    }
+    if (Platform.isAndroid) {
+      // Explicit legacy backend/file: Async defaults to DataStore, which would
+      // miss requests previously saved by the original SharedPreferences API.
+      return SharedPreferencesAsync(
+        options: const SharedPreferencesAsyncAndroidOptions(
+          backend: SharedPreferencesAndroidBackendLibrary.SharedPreferences,
+          originalSharedPreferencesOptions:
+              AndroidSharedPreferencesStoreOptions(
+                fileName: 'FlutterSharedPreferences',
+              ),
+        ),
+      ).getAll();
+    }
+    throw const LocalOutboxException(
+      'Cola local habilitada únicamente para Windows y Android.',
+    );
+  });
+  return store;
 }
 
-/// A missing committed row does not prove that an in-flight transaction aborted.
-/// Retry always submits the same durable parameters.
+void _requireScope(SupabaseClient client, FinalizationRequestStore store) {
+  final scope = store.projectUrl.replaceFirst(RegExp(r'/$'), '');
+  if (scope != client.rest.url.replaceFirst(RegExp(r'/$'), '') ||
+      (client.auth.currentUser != null &&
+          client.auth.currentUser!.id != store.actorId)) {
+    throw const LocalOutboxException(
+      'La solicitud pertenece a otro proyecto o usuario. No se envió.',
+    );
+  }
+}
+
+void _validateResult(
+  Map<String, dynamic> result,
+  Map<String, dynamic> payload,
+) {
+  if ((result.containsKey('pedido_id') &&
+          result['pedido_id'] != payload['p_pedido_id']) ||
+      (result.containsKey('solicitud_id') &&
+          result['solicitud_id'] != payload['p_solicitud_id']) ||
+      !{
+        'entregado',
+        'parcial',
+        'no_entregado',
+      }.contains(result['resultado_entrega'])) {
+    throw const LocalOutboxException(
+      'La confirmación recibida no coincide con la solicitud. Se conserva para revisión.',
+    );
+  }
+}
+
 Future<Map<String, dynamic>> reconcileFinalization(
   SupabaseClient client,
   Map<String, dynamic> payload, {
+  required FinalizationRequestStore store,
   bool retry = false,
   AppConfig? config,
 }) async {
   (config ?? appConfig).requireV2Client(client.rest.url);
-  final status = Map<String, dynamic>.from(
-    await client.rpc(
-          'consultar_finalizacion_solicitud',
-          params: {'p_solicitud_id': payload['p_solicitud_id']},
-        )
-        as Map,
+  _requireScope(client, store);
+  // Freeze caller data; only the exact committed payload may be submitted.
+  final frozen = Map<String, dynamic>.from(
+    jsonDecode(jsonEncode(payload)) as Map,
   );
-  if (status['estado'] == 'confirmada') {
-    return Map<String, dynamic>.from(status['resultado'] as Map);
+  final order = frozen['p_pedido_id'];
+  if (order is! String) {
+    throw const LocalOutboxException('Solicitud local inválida.');
   }
-  if (!retry) return status;
-  if (status['estado'] != 'inexistente') {
-    throw StateError('Respuesta de recuperación no reconocida.');
-  }
-  return Map<String, dynamic>.from(
-    await client.rpc('finalizar_gestion_pedido_v2', params: payload) as Map,
-  );
+  final key = store.key(order);
+  return store.database.withKeyLock(key, () async {
+    store.database.requirePersisted(key, frozen);
+    final saved = store.database.read(key)!;
+    if (saved.result != null) {
+      _validateResult(saved.result!, frozen);
+      return saved.result!;
+    }
+    final status = Map<String, dynamic>.from(
+      await client
+              .rpc(
+                'consultar_finalizacion_solicitud',
+                params: {'p_solicitud_id': frozen['p_solicitud_id']},
+              )
+              .timeout(const Duration(seconds: 20))
+          as Map,
+    );
+    if (status['estado'] != 'confirmada') {
+      if (status['estado'] != 'inexistente') {
+        throw const LocalOutboxException(
+          'Estado de recuperación no reconocido. Se conserva la solicitud.',
+        );
+      }
+      if (!retry) return status;
+    }
+    // A lookup by UUID does not validate this local request's content. V2 is
+    // authoritative: identical retries return the original result without effects.
+    // Keep the same interprocess lock and recheck the exact committed payload.
+    store.database.requirePersisted(key, frozen);
+    Map<String, dynamic> result;
+    try {
+      result = Map<String, dynamic>.from(
+        await client
+                .rpc(
+                  frozen.containsKey('p_regimen_id') ||
+                          frozen.containsKey('p_protocolo')
+                      ? 'finalizar_gestion_pedido_contexto'
+                      : 'finalizar_gestion_pedido_v2',
+                  params: frozen,
+                )
+                .timeout(const Duration(seconds: 20))
+            as Map,
+      );
+    } on PostgrestException catch (error) {
+      final detail = '${error.message} ${error.details ?? ''}'.toLowerCase();
+      if (error.code == 'PT409' &&
+          (detail.contains('solicitud_incompatible') ||
+              detail.contains('regimen_incompatible') ||
+              detail.contains('contexto_regimen_requerido'))) {
+        try {
+          store.database.review(
+            key,
+            detail.contains('solicitud_incompatible')
+                ? 'solicitud_incompatible'
+                : 'regimen_incompatible',
+          );
+        } on LocalOutboxException {
+          throw const LocalOutboxException(
+            'La solicitud tiene contenido incompatible y requiere revisión. No se pudo guardar la marca local; no se confirmó ni se creó otra solicitud.',
+          );
+        }
+      }
+      rethrow;
+    }
+    _validateResult(result, frozen);
+    store.database.confirm(key, frozen, result);
+    return store.database.read(key)!.result!;
+  });
 }
 
 String finalizationErrorMessage(PostgrestException error) {
   final detail = '${error.details ?? ''} ${error.message}'.toLowerCase();
+  if (detail.contains('stock_en_mantenimiento')) {
+    return 'Las operaciones de Stock están pausadas. La solicitud se conserva para recuperar o reintentar cuando administración habilite el servicio.';
+  }
+  if (detail.contains('regimen_incompatible') ||
+      detail.contains('contexto_regimen_requerido') ||
+      detail.contains('regimen_inconsistente')) {
+    return 'La solicitud corresponde a un régimen de Stock anterior o no compatible. Se conserva sin confirmar y requiere revisión; no cambies su fecha ni crees otra.';
+  }
   if (detail.contains('stock_insuficiente') ||
       detail.contains('stock insuficiente')) {
-    return 'Stock insuficiente. Revisá las cantidades antes de entregar.';
+    return 'Stock insuficiente. La solicitud se conserva para revisión; no inicies otra gestión.';
   }
   if (detail.contains('no inicializado') ||
       detail.contains('stock_no_inicializado')) {
-    return 'El producto todavía no tiene stock inicial. Consultá al administrador.';
+    return 'El producto todavía no tiene stock inicial. La solicitud se conserva para revisión.';
   }
   if (detail.contains('solicitud_incompatible')) {
-    return 'Esta solicitud ya tiene otro contenido. Revisá su resultado; no crees otra.';
+    return 'Esta solicitud ya tiene otro contenido. Se conserva sin confirmar y requiere revisión; no crees otra.';
   }
   if (detail.contains('actualizacion_requerida')) {
     return 'Actualizá la aplicación para continuar con esta operación.';
@@ -149,8 +408,11 @@ String finalizationErrorMessage(PostgrestException error) {
   if (detail.contains('operacion_ya_finalizada')) {
     return 'El pedido ya fue finalizado. Revisá la operación guardada.';
   }
+  if (isFinalizationDateError(error)) {
+    return 'La fecha de la solicitud no fue aceptada por el servidor. La solicitud se conserva para revisión; no inicies otra gestión.';
+  }
   if (error.code == 'PT422') {
-    return 'Revisá cantidades, facturación, motivo y pago. La gestión no se guardó.';
+    return 'El servidor rechazó cantidades, facturación, motivo o pago. La solicitud se conserva para revisión.';
   }
   return 'No se pudo confirmar la gestión. La solicitud se conserva para revisar o reintentar.';
 }

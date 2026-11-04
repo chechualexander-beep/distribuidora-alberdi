@@ -1,214 +1,270 @@
-import 'package:distribuidora_alberdi/core/app_config.dart';
+import 'dart:async';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:distribuidora_alberdi/features/orders/finalization_request.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'helpers/outbox_fixture.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => SharedPreferences.setMockInitialValues({}));
-  test('persistence rejects non-operational secrets and credentials', () async {
-    final store = FinalizationRequestStore(
-      await SharedPreferences.getInstance(),
-      'testing',
-      'admin',
-    );
+  test('rejects secrets before persistence', () async {
+    final store = memoryStore();
     await expectLater(
-      store.prepare('order', {'token': 'fixture-never-save'}),
+      store.prepare('fake', {'token': 'never-save'}),
       throwsArgumentError,
     );
     expect(store.pendingOrderIds, isEmpty);
   });
-
   test(
-    'lost response then restart reconciles committed result without repeating RPC',
+    'frozen snapshot survives caller mutations and later preparations',
     () async {
-      final prefs = await SharedPreferences.getInstance();
-      final store = FinalizationRequestStore(prefs, 'testing', 'admin');
-      final request = await store.prepare('order', {
-        'p_originales': [
-          {'detalle_id': 'detail', 'cantidad_entregada': 5},
-        ],
-        'p_agregados': [],
-        'p_tipo_pago': 'completo',
-        'p_importe_pago': 50,
-      }, physicalDate: DateTime.utc(2026, 1));
-      Map<String, dynamic>? committed;
-      var effects = 0;
-      final transport = MockClient((req) async {
-        if (req.url.path.endsWith('consultar_finalizacion_solicitud')) {
-          return http.Response(
-            jsonEncode(
-              committed == null
-                  ? {'estado': 'inexistente'}
-                  : {'estado': 'confirmada', 'resultado': committed},
-            ),
-            200,
-            headers: {'content-type': 'application/json'},
-            request: req,
-          );
-        }
-        expect(jsonDecode(req.body), request);
-        if (committed == null) {
-          effects++;
-          committed = {
-            'resultado_entrega': 'entregado',
-            'solicitud_id': request['p_solicitud_id'],
-          };
-        }
-        throw http.ClientException('Simulated connection lost after commit');
-      });
-      final first = SupabaseClient(
-        'https://blcgugdeluzxvpwqkhjq.supabase.co',
-        'test-key',
-        httpClient: transport,
+      final store = memoryStore();
+      final gate = Completer<DateTime>();
+      final input = operational();
+      final pending = store.prepare(
+        'fake',
+        input,
+        serverClock: () => gate.future,
       );
-      try {
-        await expectLater(
-          _reconcile(first, request, retry: true),
-          throwsA(isA<Object>()),
-        );
-        final restart = FinalizationRequestStore(prefs, 'testing', 'admin');
-        final second = SupabaseClient(
-          'https://blcgugdeluzxvpwqkhjq.supabase.co',
-          'test-key',
-          httpClient: transport,
-        );
-        try {
-          final result = await _reconcile(
-            second,
-            restart.read('order')!,
-            retry: true,
-          );
-          expect(result, committed);
-          expect(effects, 1);
-          expect(restart.read('order'), request);
-          await restart.clear('order');
-          expect(restart.read('order'), isNull);
-        } finally {
-          await second.dispose();
-        }
-      } finally {
-        await first.dispose();
-      }
+      input['p_originales'][0]['cantidad_entregada'] = 999;
+      gate.complete(DateTime.utc(2026));
+      final payload = await pending;
+      payload['p_importe_pago'] = 999;
+      final again = await store.prepare(
+        'fake',
+        operational(amount: 999),
+        physicalDate: DateTime.utc(2030),
+      );
+      expect(again['p_originales'][0]['cantidad_entregada'], 2);
+      expect(again['p_importe_pago'], 200);
+      expect(again['p_fecha_fisica'], '2026-01-01T00:00:00.000Z');
     },
   );
+  test('concurrent preparations acquire one UUID and clock', () async {
+    final store = memoryStore();
+    final gate = Completer<DateTime>();
+    var clocks = 0;
+    Future<DateTime> clock() {
+      clocks++;
+      return gate.future;
+    }
 
-  test('inexistent reconciliation retries exact durable parameters', () async {
-    final prefs = await SharedPreferences.getInstance();
-    final store = FinalizationRequestStore(prefs, 'testing', 'admin');
-    final request = await store.prepare('order', {'p_tipo_pago': 'sin_pago'});
-    var writes = 0;
-    final client = SupabaseClient(
-      'https://blcgugdeluzxvpwqkhjq.supabase.co',
-      'test-key',
-      httpClient: MockClient((req) async {
-        if (req.url.path.endsWith('consultar_finalizacion_solicitud')) {
-          return http.Response(
-            '{"estado":"inexistente"}',
-            200,
-            headers: {'content-type': 'application/json'},
-            request: req,
+    final a = store.prepare('fake', operational(), serverClock: clock);
+    final b = store.prepare(
+      'fake',
+      operational(amount: 999),
+      serverClock: clock,
+    );
+    await Future<void>.delayed(Duration.zero);
+    gate.complete(DateTime.utc(2026));
+    final results = await Future.wait([a, b]);
+    expect(results[0], results[1]);
+    expect(clocks, 1);
+  });
+  test(
+    'lost commit response recovers once, preserving payload and receipt',
+    () async {
+      final store = memoryStore();
+      final payload = await store.prepare(
+        'fake',
+        operational(),
+        physicalDate: DateTime.utc(2026),
+      );
+      Map<String, dynamic>? confirmed;
+      var writes = 0;
+      final client = mockClient((request) async {
+        if (request.url.path.endsWith('consultar_finalizacion_solicitud')) {
+          return jsonResponse(
+            request,
+            confirmed == null
+                ? {'estado': 'inexistente'}
+                : {'estado': 'confirmada', 'resultado': confirmed},
           );
         }
+        expect(jsonDecode(request.body), payload);
+        if (confirmed != null) return jsonResponse(request, confirmed);
         writes++;
-        expect(jsonDecode(req.body), request);
-        return http.Response(
-          '{"resultado_entrega":"entregado"}',
-          200,
-          headers: {'content-type': 'application/json'},
-          request: req,
-        );
-      }),
-    );
-    try {
-      expect(await _reconcile(client, request), {'estado': 'inexistente'});
-      expect(writes, 0);
-      final restart = FinalizationRequestStore(prefs, 'testing', 'admin');
-      expect(await _reconcile(client, restart.read('order')!, retry: true), {
-        'resultado_entrega': 'entregado',
+        confirmed = receipt(payload);
+        throw http.ClientException('Injected lost response after commit');
       });
-      expect(writes, 1);
-    } finally {
-      await client.dispose();
-    }
-  });
-
-  test(
-    'restart recovers same UUID, physical date and immutable full request',
-    () async {
-      final prefs = await SharedPreferences.getInstance();
-      final store = FinalizationRequestStore(
-        prefs,
-        'https://blcgugdeluzxvpwqkhjq.supabase.co',
-        'actor',
+      await expectLater(
+        reconcile(client, store, payload),
+        throwsA(isA<Exception>()),
       );
-      final input = <String, dynamic>{
-        'p_originales': [
-          {'detalle_id': 'detail', 'cantidad_entregada': 5},
-        ],
-        'p_agregados': [],
-        'p_estado': 'en_reparto',
-        'p_tipo_pago': 'completo',
-        'p_importe_pago': 50,
-        'p_medio_pago': 'Efectivo',
-        'p_motivo_no_entrega': null,
-      };
-      final first = await store.prepare(
-        'order',
-        input,
-        physicalDate: DateTime.utc(2026, 1),
+      final restarted = FinalizationRequestStore(
+        store.database,
+        fixtureScope,
+        'admin',
       );
       expect(
-        first['p_solicitud_id'],
-        matches(
-          RegExp(
-            r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
-          ),
+        await reconcile(client, restarted, restarted.read('fake')!),
+        confirmed,
+      );
+      await restarted.acknowledge('fake');
+      expect(restarted.pendingOrderIds, isEmpty);
+      expect(await reconcile(client, restarted, payload), confirmed);
+      expect(writes, 1);
+      expect(
+        await restarted.prepare('fake', {}, physicalDate: DateTime.utc(2030)),
+        payload,
+      );
+    },
+  );
+  test('unsaved or changed payload cannot reach any RPC', () async {
+    final store = memoryStore();
+    var calls = 0;
+    final client = mockClient((r) async {
+      calls++;
+      throw StateError('Forbidden');
+    });
+    await expectLater(
+      reconcile(client, store, {'p_pedido_id': 'fake'}),
+      throwsA(isA<LocalOutboxException>()),
+    );
+    final payload = await store.prepare(
+      'fake',
+      operational(),
+      physicalDate: DateTime.utc(2026),
+    );
+    await expectLater(
+      reconcile(client, store, {...payload, 'p_importe_pago': 999}),
+      throwsA(isA<LocalOutboxException>()),
+    );
+    expect(calls, 0);
+  });
+  test('concurrent dispatches serialize and reuse confirmed result', () async {
+    final store = memoryStore();
+    final payload = await store.prepare(
+      'fake',
+      operational(),
+      physicalDate: DateTime.utc(2026),
+    );
+    var writes = 0, queries = 0;
+    final client = mockClient((r) async {
+      if (r.url.path.endsWith('consultar_finalizacion_solicitud')) {
+        queries++;
+        return jsonResponse(r, {'estado': 'inexistente'});
+      }
+      writes++;
+      await Future<void>.delayed(Duration.zero);
+      return jsonResponse(r, receipt(payload));
+    });
+    final results = await Future.wait([
+      reconcile(client, store, payload),
+      reconcile(client, store, payload),
+    ]);
+    expect(results[0], results[1]);
+    expect(writes, 1);
+    expect(queries, 1);
+  });
+  test(
+    'query only never dispatches; unknown status blocks; no legacy fallback',
+    () async {
+      final store = memoryStore();
+      final payload = await store.prepare(
+        'fake',
+        operational(),
+        physicalDate: DateTime.utc(2026),
+      );
+      var status = 'inexistente';
+      var calls = 0;
+      final client = mockClient((r) async {
+        calls++;
+        expect(r.url.path, endsWith('consultar_finalizacion_solicitud'));
+        return jsonResponse(r, {'estado': status});
+      });
+      expect(await reconcile(client, store, payload, retry: false), {
+        'estado': 'inexistente',
+      });
+      status = 'desconocido';
+      await expectLater(
+        reconcile(client, store, payload),
+        throwsA(isA<LocalOutboxException>()),
+      );
+      expect(calls, 2);
+    },
+  );
+  test(
+    'confirmation with another identity is rejected and request retained',
+    () async {
+      final store = memoryStore();
+      final payload = await store.prepare(
+        'fake',
+        operational(),
+        physicalDate: DateTime.utc(2026),
+      );
+      final client = mockClient(
+        (r) async => jsonResponse(
+          r,
+          r.url.path.endsWith('consultar_finalizacion_solicitud')
+              ? {'estado': 'confirmada'}
+              : {...receipt(payload), 'pedido_id': 'another'},
         ),
       );
-      input['p_importe_pago'] = 999;
-      first['p_importe_pago'] = 999;
-      final restarted = FinalizationRequestStore(
-        prefs,
-        'https://blcgugdeluzxvpwqkhjq.supabase.co',
-        'actor',
+      await expectLater(
+        reconcile(client, store, payload),
+        throwsA(isA<LocalOutboxException>()),
       );
-      final retry = await restarted.prepare('order', {
-        'p_importe_pago': 999,
-      }, physicalDate: DateTime.utc(2030));
-      expect(retry, store.read('order'));
-      expect(retry['p_importe_pago'], 50);
-      expect(retry['p_fecha_fisica'], '2026-01-01T00:00:00.000Z');
-      expect(restarted.pendingOrderIds, ['order']);
-      await restarted.clear('order');
-      expect(restarted.pendingOrderIds, isEmpty);
+      expect(store.database.read(store.key('fake'))!.state, 'prepared');
     },
   );
-
   test(
-    'scope isolates projects and actors; corruption never generates another UUID',
+    'confirmation persistence failure recovers server result without second write',
     () async {
-      final prefs = await SharedPreferences.getInstance();
-      final store = FinalizationRequestStore(prefs, 'testing', 'admin');
-      await store.prepare('order', {});
-      expect(
-        FinalizationRequestStore(prefs, 'production', 'admin').read('order'),
-        isNull,
+      var fail = false;
+      final db = memoryDatabase(
+        fault: (s) {
+          if (fail && s == 'before_commit') throw StateError('Injected');
+        },
       );
-      expect(
-        FinalizationRequestStore(prefs, 'testing', 'other').read('order'),
-        isNull,
+      final store = FinalizationRequestStore(db, fixtureScope, 'admin');
+      final payload = await store.prepare(
+        'fake',
+        operational(),
+        physicalDate: DateTime.utc(2026),
       );
-      await prefs.setString('preventa_v1:testing:admin:order', '{broken');
-      expect(() => store.read('order'), throwsFormatException);
-      await expectLater(store.prepare('order', {}), throwsFormatException);
+      Map<String, dynamic>? confirmed;
+      var writes = 0;
+      final client = mockClient((r) async {
+        if (r.url.path.endsWith('consultar_finalizacion_solicitud')) {
+          return jsonResponse(
+            r,
+            confirmed == null
+                ? {'estado': 'inexistente'}
+                : {'estado': 'confirmada', 'resultado': confirmed},
+          );
+        }
+        if (confirmed == null) {
+          writes++;
+          confirmed = receipt(payload);
+        }
+        return jsonResponse(r, confirmed);
+      });
+      fail = true;
+      await expectLater(
+        reconcile(client, store, payload),
+        throwsA(isA<LocalOutboxException>()),
+      );
+      fail = false;
+      expect(await reconcile(client, store, payload), confirmed);
+      expect(writes, 1);
     },
   );
-
+  test('review blocks resend without deleting identity or payload', () async {
+    final store = memoryStore();
+    final payload = await store.prepare(
+      'fake',
+      operational(),
+      physicalDate: DateTime.utc(2026),
+    );
+    store.markForReview('fake', 'PT422');
+    final client = mockClient((r) async => throw StateError('Forbidden'));
+    await expectLater(
+      reconcile(client, store, payload),
+      throwsA(isA<LocalOutboxException>()),
+    );
+    expect(store.read('fake'), payload);
+  });
   for (final entry in {
     'stock_insuficiente': 'Stock insuficiente',
     'stock_no_inicializado': 'stock inicial',
@@ -216,31 +272,100 @@ void main() {
     'actualizacion_requerida': 'Actualizá',
     'operacion_ya_finalizada': 'ya fue finalizado',
   }.entries) {
-    test('friendly mapping ${entry.key} without SQL details', () {
+    test('safe error ${entry.key}', () {
       final message = finalizationErrorMessage(
         PostgrestException(
-          message: 'private_function_secret',
+          message: 'private_secret',
           code: 'PT409',
           details: {'codigo': entry.key},
         ),
       );
       expect(message, contains(entry.value));
-      expect(message, isNot(contains('private_function_secret')));
+      expect(message, isNot(contains('private_secret')));
     });
   }
+  for (final scenario in [
+    ('full', 2, 200, 'entregado', <Map<String, dynamic>>[]),
+    ('partial', 1, 100, 'parcial', <Map<String, dynamic>>[]),
+    ('none', 0, 0, 'no_entregado', <Map<String, dynamic>>[]),
+    (
+      'substitution',
+      0,
+      3000,
+      'parcial',
+      [
+        {
+          'producto_id': 'fake-A',
+          'cantidad_entregada': 2,
+          'tipo_precio': 'normal',
+        },
+      ],
+    ),
+    (
+      'addition',
+      2,
+      1000,
+      'entregado',
+      [
+        {
+          'producto_id': 'fake-C',
+          'cantidad_entregada': 1,
+          'tipo_precio': 'normal',
+        },
+      ],
+    ),
+  ]) {
+    test(
+      'storage preserves commercial payload ${scenario.$1} with operational pendiente',
+      () async {
+        final store = memoryStore();
+        final input = operational(
+          quantity: scenario.$2,
+          amount: scenario.$3,
+          additions: scenario.$5,
+        );
+        final payload = await store.prepare(
+          'fake-${scenario.$1}',
+          input,
+          physicalDate: DateTime.utc(2026),
+        );
+        final client = mockClient((r) async {
+          if (r.url.path.endsWith('consultar_finalizacion_solicitud')) {
+            return jsonResponse(r, {'estado': 'inexistente'});
+          }
+          expect(jsonDecode(r.body), payload);
+          expect(store.read('fake-${scenario.$1}'), payload);
+          return jsonResponse(r, receipt(payload, outcome: scenario.$4));
+        });
+        final result = await reconcile(client, store, payload);
+        expect(result['resultado_entrega'], scenario.$4);
+        expect(payload['p_estado'], 'pendiente');
+        expect(payload['p_originales'], input['p_originales']);
+        expect(payload['p_agregados'], input['p_agregados']);
+        expect(payload['p_importe_pago'], scenario.$3);
+      },
+    );
+  }
+  test(
+    'legacy SQL result contract without optional IDs remains accepted',
+    () async {
+      final store = memoryStore();
+      final payload = await store.prepare(
+        'fake',
+        operational(),
+        physicalDate: DateTime.utc(2026),
+      );
+      final client = mockClient(
+        (r) async => jsonResponse(
+          r,
+          r.url.path.endsWith('consultar_finalizacion_solicitud')
+              ? {'estado': 'confirmada'}
+              : {'resultado_entrega': 'entregado'},
+        ),
+      );
+      expect(await reconcile(client, store, payload), {
+        'resultado_entrega': 'entregado',
+      });
+    },
+  );
 }
-
-Future<Map<String, dynamic>> _reconcile(
-  SupabaseClient client,
-  Map<String, dynamic> payload, {
-  bool retry = false,
-}) => reconcileFinalization(
-  client,
-  payload,
-  retry: retry,
-  config: AppConfig.resolve(
-    environment: 'testing',
-    testingUrl: 'https://blcgugdeluzxvpwqkhjq.supabase.co',
-    testingKey: 'sb_publishable_local_fixture_123456789',
-  ),
-);

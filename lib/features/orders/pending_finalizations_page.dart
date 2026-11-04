@@ -36,6 +36,8 @@ class _PendingFinalizationsPageState extends State<PendingFinalizationsPage> {
     try {
       final store = await finalizationStore(Supabase.instance.client);
       if (mounted) setState(() => _ids = store.pendingOrderIds);
+    } on LocalOutboxException catch (error) {
+      if (mounted) setState(() => _error = error.message);
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'No se pudo leer la recuperación local.');

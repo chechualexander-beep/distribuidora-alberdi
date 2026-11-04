@@ -67,9 +67,10 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
       final result = await reconcileFinalization(
         Supabase.instance.client,
         payload,
+        store: _solicitudes!,
         retry: true,
       );
-      await _solicitudes!.clear(widget.pedido['id'].toString());
+      await _solicitudes!.acknowledge(widget.pedido['id'].toString());
       if (!mounted) return;
       _pendiente = null;
       await showDialog<void>(
@@ -91,13 +92,22 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
     } on PostgrestException catch (error) {
       // These SQL failures definitively rolled back this exact request.
       // Conflicts and transport/server ambiguity remain available for reconciliation.
-      if (error.code == 'PT422' ||
+      if ((error.code == 'PT422' && !isFinalizationDateError(error)) ||
           error.message.toLowerCase().contains('stock insuficiente') ||
           error.message.toLowerCase().contains('no inicializado')) {
-        await _solicitudes!.clear(widget.pedido['id'].toString());
-        _pendiente = null;
+        try {
+          _solicitudes!.markForReview(
+            widget.pedido['id'].toString(),
+            error.code ?? 'server_rejection',
+          );
+        } on LocalOutboxException catch (storageError) {
+          _mostrarMensaje(storageError.message);
+          return;
+        }
       }
       _mostrarMensaje(finalizationErrorMessage(error));
+    } on LocalOutboxException catch (error) {
+      _mostrarMensaje(error.message);
     } catch (_) {
       _mostrarMensaje(
         'No se conoce el resultado. La solicitud quedó guardada; revisá o reintentá con la misma solicitud.',
@@ -886,7 +896,9 @@ cantidad_entregada,
 
       if (appConfig.usesV2For(widget.pedido['tipo_operacion']?.toString())) {
         _solicitudes ??= await finalizationStore(Supabase.instance.client);
-        _pendiente = await _solicitudes!.prepare(
+        _pendiente = await prepareCurrentFinalization(
+          Supabase.instance.client,
+          _solicitudes!,
           widget.pedido['id'].toString(),
           {
             'p_estado': _estado,
@@ -962,6 +974,10 @@ cantidad_entregada,
       if (!mounted) return;
 
       Navigator.of(context).pop(true);
+    } on LocalOutboxException catch (error) {
+      _mostrarMensaje(error.message);
+    } on FinalizationClockException catch (error) {
+      _mostrarMensaje(error.toString());
     } on PostgrestException catch (error) {
       _mostrarMensaje(finalizationErrorMessage(error));
     } catch (_) {

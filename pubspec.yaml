@@ -47,6 +47,11 @@ dependencies:
   image: ^4.9.1
   csv: ^8.0.0
   shared_preferences: ^2.5.5
+  shared_preferences_android: 2.4.27
+  sqlite3: 3.5.2
+  crypto: ^3.0.7
+  path: ^1.9.1
+  path_provider: ^2.1.5
   local_auth: ^3.0.2
 
 dev_dependencies:
@@ -74,6 +79,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo/logo_alberdi.png
+    - assets/fonts/roboto-regular.ttf
+    - assets/fonts/roboto-bold.ttf
+    - assets/fonts/roboto_license.txt
 
   # To add assets to your application, add an assets section, like this:
   # assets:
