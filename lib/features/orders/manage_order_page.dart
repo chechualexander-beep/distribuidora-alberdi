@@ -323,7 +323,15 @@ cantidad_entregada,
 
       if (!mounted) return;
 
+      final admiteOriginalComoAgregado =
+          appConfig.isTesting &&
+          appConfig.directSalesEnabled &&
+          widget.pedido['tipo_operacion'] == 'venta_directa';
       final idsYaIncluidos = _detalles
+          .where(
+            (detalle) =>
+                !admiteOriginalComoAgregado || _esAgregadoEnEntrega(detalle),
+          )
           .map((detalle) => detalle['producto_id']?.toString())
           .whereType<String>()
           .toSet();
@@ -686,6 +694,12 @@ cantidad_entregada,
   }
 
   Future<void> _prepararGestion() async {
+    if (appConfig.blocksOrderOperation(
+      widget.pedido['tipo_operacion']?.toString() ?? '',
+    )) {
+      _mostrarMensaje(AppConfig.directSalesTestingMessage);
+      return;
+    }
     if (_modoEntrega == null) {
       _mostrarMensaje('Seleccioná cómo fue la entrega antes de guardar.');
       return;
@@ -902,25 +916,7 @@ cantidad_entregada,
           widget.pedido['id'].toString(),
           {
             'p_estado': _estado,
-            'p_originales': _detalles
-                .where((d) => !_esAgregadoEnEntrega(d))
-                .map(
-                  (d) => {
-                    'detalle_id': d['id'],
-                    'cantidad_entregada': _cantidadEntregada(d),
-                  },
-                )
-                .toList(),
-            'p_agregados': _detalles
-                .where(_esAgregadoEnEntrega)
-                .map(
-                  (d) => {
-                    'producto_id': d['producto_id'],
-                    'cantidad_entregada': _cantidadEntregada(d),
-                    'tipo_precio': d['tipo_precio'] ?? 'normal',
-                  },
-                )
-                .toList(),
+            ...contextualDeliveryLines(detallesGestion),
             'p_motivo_no_entrega': resultado == 'entregado'
                 ? null
                 : _motivoController.text.trim(),

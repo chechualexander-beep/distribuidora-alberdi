@@ -180,6 +180,28 @@ class FinalizationClockException implements Exception {
       'No se pudo obtener la hora y el contexto de Stock del servidor. La gestión no se envió. Revisá la conexión y volvé a intentar.';
 }
 
+Map<String, dynamic> contextualDeliveryLines(
+  Iterable<Map<String, dynamic>> details,
+) {
+  final originals = <Map<String, dynamic>>[];
+  final additions = <Map<String, dynamic>>[];
+  for (final detail in details) {
+    if (detail['agregado_en_entrega'] == true) {
+      additions.add({
+        'producto_id': detail['producto_id'],
+        'cantidad_entregada': detail['cantidad_entregada'],
+        'tipo_precio': detail['tipo_precio'] ?? 'normal',
+      });
+    } else {
+      originals.add({
+        'detalle_id': detail['id'],
+        'cantidad_entregada': detail['cantidad_entregada'],
+      });
+    }
+  }
+  return {'p_originales': originals, 'p_agregados': additions};
+}
+
 Future<Map<String, dynamic>> prepareCurrentFinalization(
   SupabaseClient client,
   FinalizationRequestStore store,

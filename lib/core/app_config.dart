@@ -19,7 +19,10 @@ class AppConfig {
   // No testing catalog destination has been approved yet.
   bool get catalogEnabled => !isTesting;
   bool get finalizationV2Enabled => isTesting;
-  bool get directSalesEnabled => !isTesting;
+  static const _testingDirectSalesV2 = bool.fromEnvironment(
+    'ENABLE_TESTING_DIRECT_SALES_V2',
+  );
+  bool get directSalesEnabled => !isTesting || _testingDirectSalesV2;
   static const directSalesTestingMessage =
       'Venta directa temporalmente fuera de operación en TESTING. Su integración con Stock V2 está pendiente.';
   bool blocksOrderOperation(String operation) =>
@@ -29,7 +32,7 @@ class AppConfig {
       isTesting ? 'Alberdi TESTING — datos ficticios' : 'Distribuidora Alberdi';
 
   bool usesV2For(String? operation) =>
-      finalizationV2Enabled && operation != 'venta_directa';
+      finalizationV2Enabled && !blocksOrderOperation(operation ?? '');
 
   String catalogPreferenceKey(String suffix) => 'catalogo:$project:$suffix';
 

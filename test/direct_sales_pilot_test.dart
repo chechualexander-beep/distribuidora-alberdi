@@ -11,13 +11,14 @@ AppConfig testingConfig() => AppConfig.resolve(
 );
 
 void main() {
-  test('TESTING blocks only direct sales, retaining V2 order routing', () {
+  const enabled = bool.fromEnvironment('ENABLE_TESTING_DIRECT_SALES_V2');
+  test('TESTING routes direct sales to V2 only with the explicit option', () {
     final config = testingConfig();
-    expect(config.directSalesEnabled, isFalse);
-    expect(config.blocksOrderOperation('venta_directa'), isTrue);
+    expect(config.directSalesEnabled, enabled);
+    expect(config.blocksOrderOperation('venta_directa'), !enabled);
     expect(config.blocksOrderOperation('pedido'), isFalse);
     expect(config.usesV2For('pedido'), isTrue);
-    expect(config.usesV2For('venta_directa'), isFalse);
+    expect(config.usesV2For('venta_directa'), enabled);
   });
 
   test('production retains direct sales and its original legacy routing', () {
@@ -50,14 +51,14 @@ void main() {
     expect(find.text(AppConfig.directSalesTestingMessage), findsOneWidget);
   });
 
-  testWidgets('production selector still permits direct sales', (tester) async {
+  testWidgets('TESTING selector follows the build option', (tester) async {
     String? selected;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: OrderOperationSelector(
             value: 'pedido',
-            allowDirectSales: true,
+            allowDirectSales: testingConfig().directSalesEnabled,
             onChanged: (value) => selected = value,
           ),
         ),
@@ -65,8 +66,11 @@ void main() {
     );
     await tester.tap(find.text('Venta directa'));
     await tester.pump();
-    expect(selected, 'venta_directa');
-    expect(find.text(AppConfig.directSalesTestingMessage), findsNothing);
+    expect(selected, enabled ? 'venta_directa' : isNull);
+    expect(
+      find.text(AppConfig.directSalesTestingMessage),
+      enabled ? findsNothing : findsOneWidget,
+    );
   });
 
   testWidgets('direct navigation to summary cannot send a blocked sale', (
@@ -100,5 +104,5 @@ void main() {
     expect(button.onPressed, isNull);
     expect(find.text(AppConfig.directSalesTestingMessage), findsOneWidget);
     expect(tester.takeException(), isNull);
-  });
+  }, skip: enabled);
 }

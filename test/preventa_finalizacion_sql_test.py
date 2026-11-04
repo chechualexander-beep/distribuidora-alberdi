@@ -97,6 +97,11 @@ def main():
         def stock(p=P1):
             return float(sql(f"select cantidad from stock_actual where producto_id='{p}';"))
 
+        if sys.argv[1:] == ['--venta-directa-contextual']:
+            from venta_directa_contextual_cases import run
+            run(sql, val, count, balance, stock, order)
+            return
+
         def unchanged(pedido, before_events, before_pay, before_stock=None):
             assert sql(f"select resultado_entrega from pedidos where id='{pedido}';")=='pendiente'
             assert float(sql(f"select sum(cantidad_entregada) from pedido_detalles where pedido_id='{pedido}';"))==0
