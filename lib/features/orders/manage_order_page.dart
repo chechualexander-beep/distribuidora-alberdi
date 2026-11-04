@@ -8,14 +8,22 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ManageOrderPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
+  final SupabaseClient? client;
+  final FinalizationRequestStore? requestStore;
 
-  const ManageOrderPage({super.key, required this.pedido});
+  const ManageOrderPage({
+    super.key,
+    required this.pedido,
+    this.client,
+    this.requestStore,
+  });
 
   @override
   State<ManageOrderPage> createState() => _ManageOrderPageState();
 }
 
 class _ManageOrderPageState extends State<ManageOrderPage> {
+  SupabaseClient get _client => widget.client ?? Supabase.instance.client;
   bool _cargando = true;
   bool _guardando = false;
   FinalizationRequestStore? _solicitudes;
@@ -47,7 +55,7 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
   Future<void> _iniciar() async {
     try {
       if (appConfig.usesV2For(widget.pedido['tipo_operacion']?.toString())) {
-        _solicitudes = await finalizationStore(Supabase.instance.client);
+        _solicitudes = widget.requestStore ?? await finalizationStore(_client);
         _pendiente = _solicitudes!.read(widget.pedido['id'].toString());
       }
       if (mounted) await _cargarDetalles();
@@ -125,7 +133,7 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
 
     try {
       try {
-        final origen = await Supabase.instance.client
+        final origen = await _client
             .from('pedidos')
             .select('origen,catalogo_preventista_id,resultado_entrega')
             .eq('id', widget.pedido['id'])
@@ -140,7 +148,7 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
         if (error.code != '42703' && error.code != 'PGRST204') rethrow;
         _esCatalogo = false;
       }
-      final respuesta = await Supabase.instance.client
+      final respuesta = await _client
           .from('pedido_detalles')
           .select('''
             id,
@@ -160,7 +168,6 @@ cantidad_entregada,
               precio_normal,
               precio_promo,
               precio_interior,
-              costo,
               comision_normal,
               comision_promo,
               comision_interior
@@ -274,7 +281,6 @@ cantidad_entregada,
         'cantidad': 0,
         'cantidad_facturada': 0,
         'precio_unitario': precio,
-        'costo_unitario': producto?['costo'],
         'tipo_precio': lista,
         'agregado_en_entrega_local': true,
         'excedente_local': true,

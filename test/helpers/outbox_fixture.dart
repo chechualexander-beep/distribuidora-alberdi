@@ -56,11 +56,13 @@ http.Response jsonResponse(
   request: request,
 );
 SupabaseClient mockClient(
-  Future<http.Response> Function(http.Request) handler,
-) {
+  Future<http.Response> Function(http.Request) handler, {
+  bool autoRefreshToken = true,
+}) {
   final client = SupabaseClient(
     fixtureUrl,
     'fixture-public-key',
+    authOptions: AuthClientOptions(autoRefreshToken: autoRefreshToken),
     httpClient: MockClient(handler),
   );
   addTearDown(client.dispose);
