@@ -1,4 +1,5 @@
 import '../../core/desktop_records.dart';
+import '../../core/app_config.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -29,7 +30,8 @@ class _PriceListPageState extends State<PriceListPage> {
   Map<String, PriceListConfig> _plantillas = {};
   bool _ocupado = false, _plantillasListas = false;
   String? _plantilla;
-  String get _storageKey => 'listas_precios_v1_${widget.usuarioId}';
+  String get _storageKey =>
+      appConfig.localPreferenceKey('listas_precios_v1_${widget.usuarioId}');
   PriceListConfig get _config => PriceListConfig(
     base: _modo == 'personalizada' ? _base : _modo,
     excepciones: _modo == 'personalizada' ? _excepciones : {},

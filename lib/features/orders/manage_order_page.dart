@@ -1,3 +1,5 @@
+import '../../core/app_config.dart';
+import 'finalization_request.dart';
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +17,8 @@ class ManageOrderPage extends StatefulWidget {
 class _ManageOrderPageState extends State<ManageOrderPage> {
   bool _cargando = true;
   bool _guardando = false;
+  FinalizationRequestStore? _solicitudes;
+  Map<String, dynamic>? _pendiente;
   bool _esCatalogo = false;
   bool _catalogoConPreventista = false;
   String? _error;
@@ -35,7 +39,70 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
     _motivoController.text =
         widget.pedido['motivo_no_entrega']?.toString() ?? '';
 
-    _cargarDetalles();
+    _iniciar();
+  }
+
+  Future<void> _iniciar() async {
+    try {
+      if (appConfig.usesV2For(widget.pedido['tipo_operacion']?.toString())) {
+        _solicitudes = await finalizationStore(Supabase.instance.client);
+        _pendiente = _solicitudes!.read(widget.pedido['id'].toString());
+      }
+      if (mounted) await _cargarDetalles();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _cargando = false;
+          _error =
+              'No se pudo recuperar la solicitud local. No inicies otra gestión.';
+        });
+      }
+    }
+  }
+
+  Future<void> _enviarPendiente() async {
+    final payload = _pendiente;
+    if (payload == null) return;
+    try {
+      final result = await reconcileFinalization(
+        Supabase.instance.client,
+        payload,
+        retry: true,
+      );
+      await _solicitudes!.clear(widget.pedido['id'].toString());
+      if (!mounted) return;
+      _pendiente = null;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Gestión confirmada'),
+          content: Text(
+            'Resultado: ${_nombreResultado(result['resultado_entrega'].toString())}',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ACEPTAR'),
+            ),
+          ],
+        ),
+      );
+      if (mounted) Navigator.pop(context, true);
+    } on PostgrestException catch (error) {
+      // These SQL failures definitively rolled back this exact request.
+      // Conflicts and transport/server ambiguity remain available for reconciliation.
+      if (error.code == 'PT422' ||
+          error.message.toLowerCase().contains('stock insuficiente') ||
+          error.message.toLowerCase().contains('no inicializado')) {
+        await _solicitudes!.clear(widget.pedido['id'].toString());
+        _pendiente = null;
+      }
+      _mostrarMensaje(finalizationErrorMessage(error));
+    } catch (_) {
+      _mostrarMensaje(
+        'No se conoce el resultado. La solicitud quedó guardada; revisá o reintentá con la misma solicitud.',
+      );
+    }
   }
 
   Future<void> _cargarDetalles() async {
@@ -596,6 +663,19 @@ cantidad_entregada,
 
   Future<void> _guardarGestion() async {
     if (_guardando) return;
+    setState(() => _guardando = true);
+    try {
+      if (_pendiente != null) {
+        await _enviarPendiente();
+      } else {
+        await _prepararGestion();
+      }
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Future<void> _prepararGestion() async {
     if (_modoEntrega == null) {
       _mostrarMensaje('Seleccioná cómo fue la entrega antes de guardar.');
       return;
@@ -760,10 +840,6 @@ cantidad_entregada,
       return;
     }
 
-    setState(() {
-      _guardando = true;
-    });
-
     try {
       final detallesGestion = _detalles.map((detalle) {
         final esAgregado = _esAgregadoEnEntrega(detalle);
@@ -808,6 +884,43 @@ cantidad_entregada,
         medioPago = medioPagoCompleto;
       }
 
+      if (appConfig.usesV2For(widget.pedido['tipo_operacion']?.toString())) {
+        _solicitudes ??= await finalizationStore(Supabase.instance.client);
+        _pendiente = await _solicitudes!.prepare(
+          widget.pedido['id'].toString(),
+          {
+            'p_estado': _estado,
+            'p_originales': _detalles
+                .where((d) => !_esAgregadoEnEntrega(d))
+                .map(
+                  (d) => {
+                    'detalle_id': d['id'],
+                    'cantidad_entregada': _cantidadEntregada(d),
+                  },
+                )
+                .toList(),
+            'p_agregados': _detalles
+                .where(_esAgregadoEnEntrega)
+                .map(
+                  (d) => {
+                    'producto_id': d['producto_id'],
+                    'cantidad_entregada': _cantidadEntregada(d),
+                    'tipo_precio': d['tipo_precio'] ?? 'normal',
+                  },
+                )
+                .toList(),
+            'p_motivo_no_entrega': resultado == 'entregado'
+                ? null
+                : _motivoController.text.trim(),
+            'p_tipo_pago': tipoPago,
+            'p_importe_pago': importePago,
+            'p_medio_pago': medioPago,
+          },
+        );
+        if (mounted) setState(() {});
+        await _enviarPendiente();
+        return;
+      }
       await Supabase.instance.client.rpc(
         'finalizar_gestion_pedido',
         params: {
@@ -850,15 +963,9 @@ cantidad_entregada,
 
       Navigator.of(context).pop(true);
     } on PostgrestException catch (error) {
-      _mostrarMensaje('No se pudo guardar: ${error.message}');
+      _mostrarMensaje(finalizationErrorMessage(error));
     } catch (_) {
       _mostrarMensaje('Ocurrió un error al guardar la gestión.');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _guardando = false;
-        });
-      }
     }
   }
 
@@ -912,7 +1019,7 @@ cantidad_entregada,
                   Text(_error!, textAlign: TextAlign.center),
                   const SizedBox(height: 12),
                   ElevatedButton(
-                    onPressed: _cargarDetalles,
+                    onPressed: _iniciar,
                     child: const Text('Reintentar'),
                   ),
                 ],
@@ -923,6 +1030,33 @@ cantidad_entregada,
       );
     }
 
+    if (_pendiente != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Gestión por confirmar')),
+        body: DesktopForm(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Hay una solicitud guardada. Sus cantidades, pago y fecha física se conservarán exactamente al reintentar.',
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _guardando ? null : _guardarGestion,
+                  child: Text(
+                    _guardando
+                        ? 'CONSULTANDO…'
+                        : 'REVISAR / REINTENTAR SOLICITUD',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final resultado = _resultadoEntrega();
     final totalEntregadoActual = _totalEntregadoActual();
     final esVentaDirecta =

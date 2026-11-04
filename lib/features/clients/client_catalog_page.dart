@@ -1,3 +1,4 @@
+import '../../core/app_config.dart';
 import '../../core/desktop_records.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -49,6 +50,7 @@ class _ClientCatalogPageState extends State<ClientCatalogPage> {
   }
 
   Future<void> _load() async {
+    if (!appConfig.catalogEnabled) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -101,16 +103,19 @@ class _ClientCatalogPageState extends State<ClientCatalogPage> {
           );
         }
         _url.text =
-            prefs.getString('catalogo_url') ??
+            prefs.getString(appConfig.catalogPreferenceKey('url')) ??
             const String.fromEnvironment(
               'CATALOGO_URL',
               defaultValue: 'https://distribuidora-alberdi.pages.dev',
             );
-        final stored = prefs.getString('catalogo_link_$_id');
+        final stored = prefs.getString(
+          appConfig.catalogPreferenceKey('link:$_id'),
+        );
         // Solo se conserva localmente; otro dispositivo deberá renovar el enlace.
         _link =
             _hasToken &&
-                prefs.getString('catalogo_hash_$_id') == config?['token_hash']
+                prefs.getString(appConfig.catalogPreferenceKey('hash:$_id')) ==
+                    config?['token_hash']
             ? stored
             : null;
       });
@@ -131,6 +136,7 @@ class _ClientCatalogPageState extends State<ClientCatalogPage> {
   }
 
   Uri? _catalogUri() {
+    if (!appConfig.catalogEnabled) return null;
     final uri = Uri.tryParse(_url.text.trim());
     if (uri == null ||
         !uri.hasAuthority ||
@@ -149,7 +155,7 @@ class _ClientCatalogPageState extends State<ClientCatalogPage> {
   }
 
   Future<void> _save({bool renew = false, bool? active}) async {
-    if (_saving) return;
+    if (!appConfig.catalogEnabled || _saving) return;
     if (_base == null) {
       _message('Elegí la lista base antes de continuar.');
       return;
@@ -215,8 +221,18 @@ class _ClientCatalogPageState extends State<ClientCatalogPage> {
       // La URL recién generada queda visible aunque falle el almacenamiento local.
       try {
         final prefs = await SharedPreferences.getInstance();
-        if (uri != null) await prefs.setString('catalogo_url', uri.toString());
-        if (_link != null) await prefs.setString('catalogo_link_$_id', _link!);
+        if (uri != null) {
+          await prefs.setString(
+            appConfig.catalogPreferenceKey('url'),
+            uri.toString(),
+          );
+        }
+        if (_link != null) {
+          await prefs.setString(
+            appConfig.catalogPreferenceKey('link:$_id'),
+            _link!,
+          );
+        }
         if (token != null && _link != null) {
           final config = await Supabase.instance.client
               .from('catalogos_clientes')
@@ -231,7 +247,7 @@ class _ClientCatalogPageState extends State<ClientCatalogPage> {
             });
           }
           await prefs.setString(
-            'catalogo_hash_$_id',
+            appConfig.catalogPreferenceKey('hash:$_id'),
             config['token_hash'].toString(),
           );
         }
@@ -375,7 +391,24 @@ class _ClientCatalogPageState extends State<ClientCatalogPage> {
   );
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) {
+    if (!appConfig.catalogEnabled) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Catálogo deshabilitado')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'El catálogo está deshabilitado en TESTING hasta disponer de un destino aislado.',
+            ),
+          ),
+        ),
+      );
+    }
+    return _buildCatalog(context);
+  }
+
+  Widget _buildCatalog(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Catálogo del cliente')),
     body: DesktopForm(
       child: _loading

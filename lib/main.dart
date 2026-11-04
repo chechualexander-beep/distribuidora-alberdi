@@ -1,3 +1,7 @@
+import 'core/app_config.dart';
+import 'core/app_bootstrap.dart';
+import 'core/environment_frame.dart';
+import 'core/environment_auth_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'core/session_lock.dart';
@@ -19,28 +23,44 @@ import 'features/admin/admin_page.dart';
 final _navigatorKey = GlobalKey<NavigatorState>();
 final _localAuthentication = LocalAuthentication();
 final _lockNavigation = SessionLockNavigation();
-Future<void> main() async {
+Future<void> main() => startApplication();
+
+Future<void> startApplication({bool testingEntrypoint = false}) async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (!Platform.isWindows) {
-    await Firebase.initializeApp();
+  late final AppConfig config;
+  try {
+    config = await prepareApplication(
+      resolveConfig: () =>
+          AppConfig.fromCompileTime(testingEntrypoint: testingEntrypoint),
+      initializeFirebase: () async {
+        if (!Platform.isWindows) await Firebase.initializeApp();
+      },
+      initializeSupabase: (config) async {
+        await Supabase.initialize(
+          url: config.supabaseUrl,
+          publishableKey: config.supabaseKey,
+          authOptions: authOptionsFor(config),
+        );
+      },
+    );
+  } on FormatException {
+    // Never render configuration values or exceptions from external libraries.
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: SafeArea(
+            child: Center(
+              child: Text(
+                'Inicio bloqueado. Revisá la configuración del entorno.',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return;
   }
-
-  const bool useTesting = bool.fromEnvironment(
-    'USE_TESTING',
-    defaultValue: false,
-  );
-
-  const String productionUrl = 'https://vmbncsqapqdyffscwfwo.supabase.co';
-  const String productionKey = 'sb_publishable_w_nz47b753qQkzv2pr7lhA_Yl4eZsTB';
-
-  const String testingUrl = String.fromEnvironment('SUPABASE_TESTING_URL');
-  const String testingKey = String.fromEnvironment('SUPABASE_TESTING_KEY');
-
-  await Supabase.initialize(
-    url: useTesting ? testingUrl : productionUrl,
-    publishableKey: useTesting ? testingKey : productionKey,
-  );
-
+  activateAppConfig(config);
   runApp(const DistribuidoraAlberdiApp());
 }
 
@@ -52,50 +72,12 @@ class DistribuidoraAlberdiApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: _navigatorKey,
       navigatorObservers: [_lockNavigation],
-      builder: (context, child) {
-        if (Platform.isWindows && MediaQuery.sizeOf(context).width >= 900) {
-          final theme = Theme.of(context);
-          return Theme(
-            data: theme.copyWith(
-              visualDensity: VisualDensity.compact,
-              iconTheme: theme.iconTheme.copyWith(size: 20),
-              listTileTheme: theme.listTileTheme.copyWith(dense: true),
-              inputDecorationTheme: theme.inputDecorationTheme.copyWith(
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-            ),
-            child: child!,
-          );
-        }
-        if (!Platform.isAndroid) return child!;
-        final auth = Supabase.instance.client.auth;
-        return StreamBuilder<AuthState>(
-          stream: auth.onAuthStateChange,
-          builder: (context, snapshot) => SessionLock(
-            navigation: _lockNavigation,
-            userId: auth.currentUser?.id,
-            authenticate: () => _localAuthentication.authenticate(
-              localizedReason:
-                  'Verificá tu identidad para continuar en Alberdi',
-              persistAcrossBackgrounding: true,
-            ),
-            signOut: () async {
-              await auth.signOut();
-              _navigatorKey.currentState?.pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-                (_) => false,
-              );
-            },
-            child: child!,
-          ),
-        );
-      },
+      builder: (context, child) => EnvironmentFrame(
+        config: appConfig,
+        child: _buildPlatformContent(context, child!),
+      ),
       debugShowCheckedModeBanner: false,
-      title: 'Distribuidora Alberdi',
+      title: appConfig.title,
       locale: const Locale('es', 'AR'),
       supportedLocales: const [Locale('es', 'AR')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
@@ -108,6 +90,48 @@ class DistribuidoraAlberdiApp extends StatelessWidget {
       themeMode: Platform.isWindows ? ThemeMode.dark : ThemeMode.light,
 
       home: const SplashPage(),
+    );
+  }
+
+  Widget _buildPlatformContent(BuildContext context, Widget child) {
+    if (Platform.isWindows && MediaQuery.sizeOf(context).width >= 900) {
+      final theme = Theme.of(context);
+      return Theme(
+        data: theme.copyWith(
+          visualDensity: VisualDensity.compact,
+          iconTheme: theme.iconTheme.copyWith(size: 20),
+          listTileTheme: theme.listTileTheme.copyWith(dense: true),
+          inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
+          ),
+        ),
+        child: child,
+      );
+    }
+    if (!Platform.isAndroid) return child;
+    final auth = Supabase.instance.client.auth;
+    return StreamBuilder<AuthState>(
+      stream: auth.onAuthStateChange,
+      builder: (context, snapshot) => SessionLock(
+        navigation: _lockNavigation,
+        userId: auth.currentUser?.id,
+        authenticate: () => _localAuthentication.authenticate(
+          localizedReason: 'Verificá tu identidad para continuar en Alberdi',
+          persistAcrossBackgrounding: true,
+        ),
+        signOut: () async {
+          await auth.signOut();
+          _navigatorKey.currentState?.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const LoginPage()),
+            (_) => false,
+          );
+        },
+        child: child,
+      ),
     );
   }
 }
@@ -329,7 +353,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _configurarNotificaciones() async {
-    if (!Platform.isAndroid) return;
+    if (!appConfig.notificationsEnabled || !Platform.isAndroid) return;
 
     final messaging = FirebaseMessaging.instance;
 

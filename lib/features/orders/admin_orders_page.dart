@@ -1,9 +1,11 @@
+import '../../core/app_config.dart';
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'manage_order_page.dart';
+import 'pending_finalizations_page.dart';
 
 class AdminOrdersPage extends StatefulWidget {
   const AdminOrdersPage({super.key});
@@ -356,6 +358,22 @@ productos (
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestión de reparto'),
+        actions: [
+          if (appConfig.finalizationV2Enabled)
+            IconButton(
+              tooltip: 'Solicitudes guardadas / recuperación',
+              icon: const Icon(Icons.restore),
+              onPressed: () async {
+                await Navigator.push<void>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PendingFinalizationsPage(),
+                  ),
+                );
+                if (mounted) await _cargarPedidos();
+              },
+            ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
@@ -495,9 +513,7 @@ productos (
                   _mostrarVentaDirecta
                       ? 'Ventas directas pendientes'
                       : _filtrarPorFecha
-                      ? 'Entregas: ${_formatearFecha(
-                              _fechaSeleccionada.toIso8601String(),
-                            )}'
+                      ? 'Entregas: ${_formatearFecha(_fechaSeleccionada.toIso8601String())}'
                       : 'Preventas pendientes',
                 ),
                 if (!_mostrarVentaDirecta)

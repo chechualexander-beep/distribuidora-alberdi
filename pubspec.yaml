@@ -50,6 +50,8 @@ dependencies:
   local_auth: ^3.0.2
 
 dev_dependencies:
+  # HTTP fixtures for finalization recovery; same version already in the lockfile.
+  http: 1.6.0
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.4
