@@ -3,7 +3,10 @@ import 'package:distribuidora_alberdi/features/balances/balance_repository.dart'
 class FakeBalanceRepository implements BalanceRepository {
   bool admin = true, capable = true, validSession = true, failReads = false;
   bool loseResponse = false;
+  @override
+  String? capabilityIssue;
   int debt = 10000, calls = 0, accountReads = 0;
+  num noteAmount = 10, appliedCredit = 20, favor = 0;
   final saved = <String, Map<String, dynamic>>{};
 
   @override
@@ -27,7 +30,7 @@ class FakeBalanceRepository implements BalanceRepository {
       'cliente_id': id,
       'nombre_comercio': 'Cliente QA',
       'saldo_pendiente': debt / 100,
-      'saldo_a_favor': 0,
+      'saldo_a_favor': favor,
       'cantidad_pedidos_con_saldo': debt == 0 ? 0 : 2,
     };
   }
@@ -51,8 +54,8 @@ class FakeBalanceRepository implements BalanceRepository {
               'fecha_finalizacion': '2026-11-05T01:00:00Z',
               'total_entregado': 150,
               'total_pagado': 20,
-              'total_notas_credito': 10,
-              'credito_aplicado': 20,
+              'total_notas_credito': noteAmount,
+              'credito_aplicado': appliedCredit,
               'saldo_pendiente': debt / 100,
             },
           ];

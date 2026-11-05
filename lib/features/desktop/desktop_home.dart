@@ -135,8 +135,6 @@ class _DesktopHomeState extends State<DesktopHome> {
                     children: [
                       link('Inicio', Icons.home_outlined),
                       link('Clientes', Icons.people_outline),
-                      if (widget.isAdmin)
-                        link('Saldos', Icons.account_balance_wallet_outlined),
                       link('Productos', Icons.inventory_2_outlined),
                       link('Pedidos', Icons.receipt_long_outlined),
                       link('Mis comisiones', Icons.payments_outlined),
@@ -154,6 +152,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                             style: TextStyle(fontSize: 11, letterSpacing: 1),
                           ),
                         ),
+                        link('Saldos', Icons.account_balance_wallet_outlined),
                         link(
                           'Preparación y reparto',
                           Icons.local_shipping_outlined,

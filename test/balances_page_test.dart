@@ -120,6 +120,31 @@ void main() {
     },
   );
 
+  testWidgets('oculta importes cero y conserva los ajustes positivos', (
+    tester,
+  ) async {
+    repo.noteAmount = 0;
+    repo.appliedCredit = 0;
+    repo.favor = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ClientBalancePage(clientId: 'client', repository: repo),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Notas internas:'), findsNothing);
+    expect(find.textContaining('Crédito aplicado:'), findsNothing);
+    expect(find.textContaining('Saldo a favor:'), findsNothing);
+    repo.noteAmount = 10;
+    repo.appliedCredit = 20;
+    repo.favor = 15;
+    await tester.tap(find.byTooltip('Actualizar cuenta'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining(r'Notas internas: $10.00'), findsOneWidget);
+    expect(find.textContaining(r'Crédito aplicado: $20.00'), findsOneWidget);
+    expect(find.textContaining(r'Saldo a favor: $15.00'), findsOneWidget);
+  });
+
   for (final amount in ['25', '100']) {
     testWidgets(
       'cobro $amount confirma, muestra imputaciones y actualiza cuenta',

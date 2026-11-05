@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/app_config.dart';
 import '../../core/payment_money.dart';
@@ -57,51 +55,56 @@ class BalanceRepository {
     }
   }
 
-  /// Read-only OpenAPI capability check under the current actor. Failure keeps
-  /// payments disabled, while balances remain available for consultation.
+  String? capabilityIssue;
+
+  /// Administrative read-only RPC through the authenticated SDK. A failed or
+  /// incompatible response never enables payments.
   Future<bool> paymentsAvailable() async {
-    final http = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    capabilityIssue = null;
     try {
       await requireAdmin();
-      final session = client.auth.currentSession!;
-      final request = await http.getUrl(
-        Uri.parse('${config.supabaseUrl}/rest/v1/'),
-      );
-      final headers = {
-        ...client.headers,
-        'Authorization': 'Bearer ${session.accessToken}',
-        'Accept': 'application/openapi+json',
-        'Accept-Profile': 'public',
-      };
-      headers.forEach((name, value) => request.headers.set(name, value));
-      final response = await request.close().timeout(
-        const Duration(seconds: 10),
-      );
-      if (!sessionMatches || response.statusCode != 200) return false;
-      final bodyText = await response
-          .transform(utf8.decoder)
-          .join()
+      final session = client.auth.currentSession;
+      if (!sessionMatches || session == null || session.user.id != actor) {
+        capabilityIssue = 'La sesión cambió. Volvé a abrir la cuenta.';
+        return false;
+      }
+      final response = await client
+          .rpc(
+            'obtener_capacidad_cobros_contextuales',
+            params: const {},
+            get: true,
+          )
+          .setHeader('Authorization', 'Bearer ${session.accessToken}')
           .timeout(const Duration(seconds: 10));
-      final doc = jsonDecode(bodyText) as Map;
-      final operation =
-          doc['paths']?['/rpc/registrar_pago_cliente_contextual']?['post'];
-      final parameters = operation?['parameters'] as List?;
-      if (parameters == null) return false;
-      final body = parameters.where((p) => p['in'] == 'body').firstOrNull;
-      final schema = body?['schema'] as Map?;
-      final properties = schema?['properties'] as Map?;
-      const keys = [
-        'p_solicitud_id',
-        'p_cliente_id',
-        'p_importe',
-        'p_medio_pago',
-        'p_observacion',
-      ];
-      return properties != null && keys.every(properties.containsKey);
-    } catch (_) {
+      if (!sessionMatches) {
+        capabilityIssue = 'La sesión cambió. Volvé a abrir la cuenta.';
+        return false;
+      }
+      if (response is! Map<String, dynamic> ||
+          response['capacidad'] != 'cobros_contextuales' ||
+          response['version'] != 1 ||
+          response['disponible'] != true ||
+          response['actor_id'] != actor ||
+          response['rpc'] != 'registrar_pago_cliente_contextual') {
+        capabilityIssue =
+            'El servidor no confirma una versión compatible de cobros.';
+        return false;
+      }
+      return true;
+    } on PostgrestException catch (error) {
+      capabilityIssue = switch (error.code) {
+        'PGRST202' =>
+          'La comprobación de cobros todavía no está instalada o visible en el servidor.',
+        'PT403' ||
+        '42501' => 'Cobros disponibles solo para administración activa.',
+        _ =>
+          'No se pudo consultar la capacidad de cobros. Verificá la conexión y volvé a intentar.',
+      };
       return false;
-    } finally {
-      http.close(force: true);
+    } catch (_) {
+      capabilityIssue =
+          'No se pudo confirmar la capacidad de cobros o la sesión. Volvé a intentar.';
+      return false;
     }
   }
 

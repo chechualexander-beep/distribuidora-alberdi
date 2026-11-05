@@ -270,7 +270,10 @@ class _ClientBalancePageState extends State<ClientBalancePage> {
               Text(
                 'Saldo pendiente: ${paymentMoney(account!['saldo_pendiente'])}',
               ),
-              Text('Saldo a favor: ${paymentMoney(account!['saldo_a_favor'])}'),
+              if (paymentCents(account!['saldo_a_favor']) > 0)
+                Text(
+                  'Saldo a favor: ${paymentMoney(account!['saldo_a_favor'])}',
+                ),
               const Text(
                 'Deudas de operaciones finalizadas · Todos los períodos',
               ),
@@ -304,9 +307,14 @@ class _ClientBalancePageState extends State<ClientBalancePage> {
                         Text(
                           'Entregado: ${paymentMoney(row['total_entregado'])} · Pagado: ${paymentMoney(row['total_pagado'])}',
                         ),
-                        Text(
-                          'Notas internas: ${paymentMoney(row['total_notas_credito'])} · Crédito aplicado: ${paymentMoney(row['credito_aplicado'])}',
-                        ),
+                        if (paymentCents(row['total_notas_credito']) > 0)
+                          Text(
+                            'Notas internas: ${paymentMoney(row['total_notas_credito'])}',
+                          ),
+                        if (paymentCents(row['credito_aplicado']) > 0)
+                          Text(
+                            'Crédito aplicado: ${paymentMoney(row['credito_aplicado'])}',
+                          ),
                         Text('Saldo: ${paymentMoney(row['saldo_pendiente'])}'),
                       ],
                     ),

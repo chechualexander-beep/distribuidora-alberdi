@@ -112,6 +112,11 @@ def main():
             run(sql, val, count, balance, stock, order)
             return
 
+        if sys.argv[1:] == ['--capacidad-cobros']:
+            from capacidad_cobros_contextuales_cases import run
+            run(sql, val, count, balance, stock, order)
+            return
+
         def unchanged(pedido, before_events, before_pay, before_stock=None):
             assert sql(f"select resultado_entrega from pedidos where id='{pedido}';")=='pendiente'
             assert float(sql(f"select sum(cantidad_entregada) from pedido_detalles where pedido_id='{pedido}';"))==0

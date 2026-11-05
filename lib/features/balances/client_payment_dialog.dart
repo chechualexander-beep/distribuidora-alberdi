@@ -82,7 +82,7 @@ class _ClientPaymentDialogState extends State<ClientPaymentDialog> {
           message = 'El pago requiere revisión. La solicitud se conserva.';
         } else if (!capable) {
           message =
-              'Cobros deshabilitados: no se pudo verificar la RPC contextual del servidor.';
+              'Cobros deshabilitados: ${widget.repository.capabilityIssue ?? 'No se pudo verificar la capacidad contextual del servidor.'}';
         }
       });
     } catch (_) {
@@ -142,7 +142,14 @@ class _ClientPaymentDialogState extends State<ClientPaymentDialog> {
       }
       if (saved == null) {
         if (!await widget.repository.paymentsAvailable()) {
-          throw StateError('RPC contextual no disponible.');
+          if (mounted) {
+            setState(() {
+              available = false;
+              message =
+                  'Cobros deshabilitados: ${widget.repository.capabilityIssue ?? 'No se pudo verificar la capacidad contextual del servidor.'}';
+            });
+          }
+          return;
         }
         final account = await widget.repository.account(widget.clientId);
         final debt = paymentCents(account['saldo_pendiente']);
@@ -174,7 +181,14 @@ class _ClientPaymentDialogState extends State<ClientPaymentDialog> {
         );
       } else if (saved.result == null &&
           !await widget.repository.paymentsAvailable()) {
-        throw StateError('RPC contextual no disponible.');
+        if (mounted) {
+          setState(() {
+            available = false;
+            message =
+                'Cobros deshabilitados: ${widget.repository.capabilityIssue ?? 'No se pudo verificar la capacidad contextual del servidor.'}';
+          });
+        }
+        return;
       }
       if (mounted) setState(() => request = saved);
       final confirmed = await store!.send(

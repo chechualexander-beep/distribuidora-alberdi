@@ -34,6 +34,10 @@ void main() {
   ) async {
     await openHome(tester, admin: true);
     expect(find.text('Saldos'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Saldos')).dy,
+      greaterThan(tester.getTopLeft(find.text('ADMINISTRACIÓN')).dy),
+    );
     final menu = find.ancestor(
       of: find.text('Saldos'),
       matching: find.byType(Scrollable),
