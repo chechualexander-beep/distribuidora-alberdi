@@ -19,7 +19,7 @@ class CommercialSummaryCard extends StatelessWidget {
   final String note;
 
   // Conservar centavos permite conciliar el total con el desglose visible.
-  String _money(double value) {
+  static String money(double value) {
     final parts = value.toStringAsFixed(2).split('.');
     final integer = parts.first.replaceAllMapped(
       RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
@@ -60,7 +60,7 @@ class CommercialSummaryCard extends StatelessWidget {
               FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
-                  _money(total),
+                  money(total),
                   style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -83,7 +83,7 @@ class CommercialSummaryCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        _money(entry.value),
+                        money(entry.value),
                         textAlign: TextAlign.right,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
