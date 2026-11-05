@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'edit_client_page.dart';
 import 'client_catalog_page.dart';
 import 'credit_account_page.dart';
+import '../balances/balance_repository.dart';
+import '../balances/balances_page.dart';
+import '../balances/client_payment_dialog.dart';
 import 'client_filters.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,10 +23,6 @@ class ClientDetailPage extends StatefulWidget {
 }
 
 class _ClientDetailPageState extends State<ClientDetailPage> {
-  final TextEditingController _importePagoController = TextEditingController();
-  String? _medioPago;
-  final TextEditingController _observacionPagoController =
-      TextEditingController();
   bool _cargandoCompras = true;
   String? _errorCompras;
   List<Map<String, dynamic>> _pedidosPendientes = [];
@@ -32,6 +31,7 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
   bool _cargandoSaldo = true;
   bool _esAdministrador = false;
   String? _errorSaldo;
+  String? _errorHistorial;
 
   double _totalCompras = 0;
   double _totalPagado = 0;
@@ -47,8 +47,6 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
 
   @override
   void dispose() {
-    _importePagoController.dispose();
-    _observacionPagoController.dispose();
     super.dispose();
   }
 
@@ -167,9 +165,14 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
 
       setState(() {
         _historialPagos = List<Map<String, dynamic>>.from(respuesta);
+        _errorHistorial = null;
       });
     } catch (_) {
-      // Por ahora no mostramos error en pantalla.
+      if (mounted) {
+        setState(
+          () => _errorHistorial = 'No se pudo cargar el historial de cobros.',
+        );
+      }
     }
   }
 
@@ -321,6 +324,24 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
+            if (_esAdministrador)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+                label: const Text('Ver saldo / Registrar pago'),
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ClientBalancePage(
+                        clientId: widget.cliente['id'].toString(),
+                      ),
+                    ),
+                  );
+                  if (mounted) {
+                    await _cargarSaldoPendiente();
+                    await _cargarHistorialPagos();
+                  }
+                },
+              ),
             if (_esAdministrador)
               OutlinedButton.icon(
                 icon: const Icon(Icons.shopping_bag_outlined),
@@ -653,202 +674,22 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) {
-                                    return AlertDialog(
-                                      title: const Text('Registrar pago'),
-                                      content: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            'Saldo pendiente total: '
-                                            '\$${_saldoPendiente.toStringAsFixed(0)}',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-
-                                          const SizedBox(height: 12),
-
-                                          const SizedBox(height: 16),
-                                          TextField(
-                                            controller: _importePagoController,
-                                            keyboardType:
-                                                const TextInputType.numberWithOptions(
-                                                  decimal: true,
-                                                ),
-                                            decoration: const InputDecoration(
-                                              labelText: 'Importe',
-                                              prefixText: r'$ ',
-                                              border: OutlineInputBorder(),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 16),
-                                          DropdownButtonFormField<String>(
-                                            decoration: const InputDecoration(
-                                              labelText: 'Medio de pago',
-                                              border: OutlineInputBorder(),
-                                            ),
-                                            items: const [
-                                              DropdownMenuItem(
-                                                value: 'Efectivo',
-                                                child: Text('Efectivo'),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: 'Transferencia',
-                                                child: Text('Transferencia'),
-                                              ),
-                                            ],
-                                            initialValue: _medioPago,
-                                            onChanged: (value) {
-                                              setState(() {
-                                                _medioPago = value;
-                                              });
-                                            },
-                                          ),
-                                          const SizedBox(height: 16),
-
-                                          TextFormField(
-                                            readOnly: true,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Fecha de pago',
-                                              border: OutlineInputBorder(),
-                                              suffixIcon: Icon(
-                                                Icons.calendar_today_outlined,
-                                              ),
-                                            ),
-                                            controller: TextEditingController(
-                                              text:
-                                                  '${DateTime.now().day.toString().padLeft(2, '0')}/'
-                                                  '${DateTime.now().month.toString().padLeft(2, '0')}/'
-                                                  '${DateTime.now().year}',
-                                            ),
-                                          ),
-                                          const SizedBox(height: 16),
-
-                                          TextField(
-                                            controller:
-                                                _observacionPagoController,
-                                            maxLines: 2,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Observación',
-                                              hintText:
-                                                  'Ej: transfiere el resto mañana',
-                                              border: OutlineInputBorder(),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context),
-                                          child: const Text('CANCELAR'),
-                                        ),
-
-                                        if (_esAdministrador)
-                                          FilledButton(
-                                            onPressed: () async {
-                                              final importe = double.tryParse(
-                                                _importePagoController.text
-                                                    .trim(),
-                                              );
-
-                                              if (importe == null ||
-                                                  importe <= 0) {
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Ingresá un importe válido',
-                                                    ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
-
-                                              if (_medioPago == null) {
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Seleccioná un medio de pago',
-                                                    ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
-
-                                              try {
-                                                await Supabase.instance.client.rpc(
-                                                  'registrar_pago_cliente',
-                                                  params: {
-                                                    'p_cliente_id':
-                                                        widget.cliente['id'],
-                                                    'p_importe': importe,
-                                                    'p_medio_pago': _medioPago,
-                                                    'p_observacion':
-                                                        _observacionPagoController
-                                                            .text
-                                                            .trim()
-                                                            .isEmpty
-                                                        ? null
-                                                        : _observacionPagoController
-                                                              .text
-                                                              .trim(),
-                                                  },
-                                                );
-
-                                                if (!context.mounted) return;
-
-                                                Navigator.pop(context);
-
-                                                _importePagoController.clear();
-                                                _observacionPagoController
-                                                    .clear();
-
-                                                setState(() {
-                                                  _medioPago = null;
-                                                });
-
-                                                await _cargarSaldoPendiente();
-                                                await _cargarHistorialPagos();
-                                                if (!context.mounted) return;
-
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Pago registrado correctamente',
-                                                    ),
-                                                  ),
-                                                );
-                                              } catch (_) {
-                                                if (!context.mounted) return;
-
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'No se pudo registrar el pago',
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                            },
-                                            child: const Text('GUARDAR PAGO'),
-                                          ),
-                                      ],
+                              onPressed: () => showClientPayment(
+                                context,
+                                BalanceRepository(Supabase.instance.client),
+                                widget.cliente['id'].toString(),
+                                comercio,
+                                () async {
+                                  await _cargarSaldoPendiente();
+                                  await _cargarHistorialPagos();
+                                  if (_errorSaldo != null ||
+                                      _errorHistorial != null) {
+                                    throw StateError(
+                                      'Falta actualizar el saldo.',
                                     );
-                                  },
-                                );
-                              },
+                                  }
+                                },
+                              ),
                               icon: const Icon(Icons.payments_outlined),
                               label: const Text('REGISTRAR PAGO'),
                             ),
@@ -859,6 +700,7 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                 ),
               ),
 
+            if (_errorHistorial != null) Text(_errorHistorial!),
             if (_historialPagos.isNotEmpty) ...[
               const SizedBox(height: 20),
 

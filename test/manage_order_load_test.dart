@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'helpers/outbox_fixture.dart';
+import 'helpers/balance_fixture.dart';
 
 void main() {
   for (final operation in ['venta_directa', 'pedido']) {
@@ -72,6 +73,7 @@ void main() {
           addTearDown(tester.view.resetPhysicalSize);
           addTearDown(tester.view.resetDevicePixelRatio);
           final config = fixtureConfig();
+          final requests = memoryStore();
           activateAppConfig(config);
           expect(config.usesV2For(operation), isTrue);
           await tester.pumpWidget(
@@ -80,12 +82,14 @@ void main() {
               home: ManageOrderPage(
                 pedido: {
                   'id': 'fixture-pedido',
+                  'cliente_id': 'client',
                   'tipo_operacion': operation,
                   'resultado_entrega': 'pendiente',
                   'facturado': operation == 'pedido',
                 },
                 client: client,
-                requestStore: memoryStore(),
+                requestStore: requests,
+                balanceRepository: FakeBalanceRepository(),
               ),
             ),
           );
@@ -113,6 +117,24 @@ void main() {
           expect(tester.widget<TextField>(quantity).controller!.text, '1');
           await tester.enterText(quantity, '2');
           await tester.pumpAndSettle();
+          await tester.tap(find.byTooltip('Ver saldo / Registrar pago'));
+          await tester.pumpAndSettle();
+          expect(find.text('Saldo del cliente'), findsOneWidget);
+          await tester.pageBack();
+          await tester.pumpAndSettle();
+          expect(tester.widget<TextField>(quantity).controller!.text, '2');
+          await requests.prepare(
+            'fixture-pedido',
+            operational(),
+            physicalDate: DateTime.utc(2026, 11, 5),
+          );
+          await tester.tap(find.byTooltip('Ver saldo / Registrar pago'));
+          await tester.pumpAndSettle();
+          expect(find.textContaining('Solo consulta mientras'), findsOneWidget);
+          expect(find.text('Registrar pago'), findsNothing);
+          await tester.pageBack();
+          await tester.pumpAndSettle();
+          expect(tester.widget<TextField>(quantity).controller!.text, '2');
           final breakdown = find.textContaining('1 adicionales a');
           if (operation == 'venta_directa') {
             expect(breakdown, findsOneWidget);

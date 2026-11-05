@@ -33,6 +33,16 @@ void main() {
     tester,
   ) async {
     await openHome(tester, admin: true);
+    expect(find.text('Saldos'), findsOneWidget);
+    final menu = find.ancestor(
+      of: find.text('Saldos'),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Resumen comercial'),
+      200,
+      scrollable: menu,
+    );
     expect(find.text('Administrar productos'), findsOneWidget);
     expect(find.text('Resumen comercial'), findsOneWidget);
     expect(find.text('Preparación y reparto'), findsOneWidget);
@@ -62,6 +72,7 @@ void main() {
   ) async {
     await openHome(tester, admin: false);
     expect(find.text('Stock'), findsNothing);
+    expect(find.text('Saldos'), findsNothing);
     expect(find.text('Administrar productos'), findsNothing);
     expect(find.byType(StockPage), findsNothing);
     expect(tester.takeException(), isNull);

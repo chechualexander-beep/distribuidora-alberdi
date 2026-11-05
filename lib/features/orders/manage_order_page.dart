@@ -1,5 +1,7 @@
 import '../../core/app_config.dart';
 import 'delivery_quantity.dart';
+import '../balances/balance_repository.dart';
+import '../balances/balances_page.dart';
 import 'finalization_request.dart';
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
@@ -10,12 +12,14 @@ class ManageOrderPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
   final SupabaseClient? client;
   final FinalizationRequestStore? requestStore;
+  final BalanceRepository? balanceRepository;
 
   const ManageOrderPage({
     super.key,
     required this.pedido,
     this.client,
     this.requestStore,
+    this.balanceRepository,
   });
 
   @override
@@ -39,6 +43,45 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
 
   final Map<String, TextEditingController> _entregadosControllers = {};
   final TextEditingController _motivoController = TextEditingController();
+
+  Future<void> _openBalances() async {
+    if (_guardando) return;
+    try {
+      var clientId = widget.pedido['cliente_id']?.toString();
+      if (clientId == null) {
+        final row = await _client
+            .from('pedidos')
+            .select('cliente_id')
+            .eq('id', widget.pedido['id'])
+            .single();
+        clientId = row['cliente_id'].toString();
+      }
+      final pending =
+          _pendiente != null ||
+          _solicitudes?.read(widget.pedido['id'].toString()) != null;
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ClientBalancePage(
+            clientId: clientId!,
+            readOnly: pending,
+            repository: widget.balanceRepository ?? BalanceRepository(_client),
+          ),
+        ),
+      );
+    } catch (_) {
+      _mostrarMensaje('No se pudo abrir la cuenta del cliente.');
+    }
+  }
+
+  List<Widget> get _balanceActions => [
+    IconButton(
+      tooltip: 'Ver saldo / Registrar pago',
+      onPressed: _guardando ? null : _openBalances,
+      icon: const Icon(Icons.account_balance_wallet_outlined),
+    ),
+  ];
 
   @override
   void initState() {
@@ -1163,7 +1206,10 @@ cantidad_entregada,
 
     if (_pendiente != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Gestión por confirmar')),
+        appBar: AppBar(
+          title: const Text('Gestión por confirmar'),
+          actions: _balanceActions,
+        ),
         body: DesktopForm(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -1208,7 +1254,10 @@ cantidad_entregada,
         esVentaDirecta && !facturado && resultadoGuardado == 'pendiente';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Gestionar pedido')),
+      appBar: AppBar(
+        title: const Text('Gestionar pedido'),
+        actions: _balanceActions,
+      ),
       body: DesktopForm(
         child: ListView(
           padding: const EdgeInsets.all(16),

@@ -13,6 +13,7 @@ import '../commissions/commission_history_page.dart';
 import '../admin/commercial_summary_page.dart';
 import '../stock/stock_models.dart';
 import '../stock/stock_page.dart';
+import '../balances/balances_page.dart';
 
 class DesktopHome extends StatefulWidget {
   const DesktopHome({
@@ -45,6 +46,7 @@ class _DesktopHomeState extends State<DesktopHome> {
     'Liquidaciones' => const CommissionHistoryPage(),
     'Administrar productos' => const AdminProductsPage(),
     'Stock' when widget.isAdmin && enableStock => const StockPage(),
+    'Saldos' when widget.isAdmin => const BalancesPage(),
     'Resumen comercial' => const CommercialSummaryPage(),
     _ => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -133,6 +135,8 @@ class _DesktopHomeState extends State<DesktopHome> {
                     children: [
                       link('Inicio', Icons.home_outlined),
                       link('Clientes', Icons.people_outline),
+                      if (widget.isAdmin)
+                        link('Saldos', Icons.account_balance_wallet_outlined),
                       link('Productos', Icons.inventory_2_outlined),
                       link('Pedidos', Icons.receipt_long_outlined),
                       link('Mis comisiones', Icons.payments_outlined),
