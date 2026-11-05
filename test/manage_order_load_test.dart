@@ -19,6 +19,25 @@ void main() {
         detailReads = 0;
         client = mockClient((request) async {
           expect(request.method, 'GET');
+          final clientScoped = request.url.queryParameters['cliente_id'];
+          if (clientScoped != null) {
+            expect(clientScoped, 'eq.client');
+            return jsonResponse(request, []);
+          }
+          if (request.url.pathSegments.last == 'clientes') {
+            expect(request.url.queryParameters['id'], 'eq.client');
+            return jsonResponse(request, [
+              {
+                'id': 'client',
+                'nombre_comercio': 'Comercio QA',
+                'direccion': 'Calle de prueba 123',
+                if (operation == 'venta_directa') ...{
+                  'latitud': -34.6,
+                  'longitud': -58.4,
+                },
+              },
+            ]);
+          }
           expect(
             request.url.queryParameters['id'] ??
                 request.url.queryParameters['pedido_id'],
@@ -117,6 +136,41 @@ void main() {
           expect(tester.widget<TextField>(quantity).controller!.text, '1');
           await tester.enterText(quantity, '2');
           await tester.pumpAndSettle();
+          final controller = tester.widget<TextField>(quantity).controller;
+          final link = find.text('Ver ficha');
+          await tester.ensureVisible(link);
+          final scrollable = find
+              .descendant(
+                of: find.byType(ManageOrderPage),
+                matching: find.byType(Scrollable),
+              )
+              .first;
+          final offset = tester
+              .state<ScrollableState>(scrollable)
+              .position
+              .pixels;
+          await tester.tap(link);
+          await tester.pumpAndSettle();
+          expect(find.text('Ficha del cliente'), findsOneWidget);
+          expect(find.text('Calle de prueba 123'), findsOneWidget);
+          expect(
+            find.text('ABRIR EN MAPA'),
+            operation == 'venta_directa' ? findsOneWidget : findsNothing,
+          );
+          expect(find.text('Nuevo pedido'), findsNothing);
+          expect(find.text('Ver saldo / Registrar pago'), findsNothing);
+          await tester.pageBack();
+          await tester.pumpAndSettle();
+          expect(
+            tester.state<ScrollableState>(scrollable).position.pixels,
+            offset,
+          );
+          expect(detailReads, 1);
+          expect(
+            tester.widget<TextField>(quantity).controller,
+            same(controller),
+          );
+          expect(controller!.text, '2');
           await tester.tap(find.byTooltip('Ver saldo / Registrar pago'));
           await tester.pumpAndSettle();
           expect(find.text('Saldo del cliente'), findsOneWidget);

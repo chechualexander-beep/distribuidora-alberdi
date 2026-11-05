@@ -6,17 +6,21 @@ import 'package:share_plus/share_plus.dart';
 import 'order_products_page.dart';
 import 'correct_operation_page.dart';
 import 'credit_notes_page.dart';
+import 'order_whatsapp_button.dart';
 
 class OrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
 
-  const OrderDetailPage({super.key, required this.pedido});
+  final SupabaseClient? client;
+
+  const OrderDetailPage({super.key, required this.pedido, this.client});
 
   @override
   State<OrderDetailPage> createState() => _OrderDetailPageState();
 }
 
 class _OrderDetailPageState extends State<OrderDetailPage> {
+  SupabaseClient get _client => widget.client ?? Supabase.instance.client;
   bool _cargando = true;
   String? _error;
   bool _esAdministrador = false;
@@ -26,6 +30,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   Map<String, dynamic>? _saldoNeto;
   String? _observacion;
   String? _fechaEntrega;
+  String? _clienteId;
   List<Map<String, dynamic>> _pagos = [];
   Set<String> _detalleIdsAgregadosEnCorreccion = {};
 
@@ -42,12 +47,12 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     });
 
     try {
-      final usuarioActual = Supabase.instance.client.auth.currentUser;
+      final usuarioActual = _client.auth.currentUser;
 
       bool esAdministrador = false;
 
       if (usuarioActual != null) {
-        final usuarioRespuesta = await Supabase.instance.client
+        final usuarioRespuesta = await _client
             .from('usuarios')
             .select('rol, activo')
             .eq('id', usuarioActual.id)
@@ -57,13 +62,13 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             usuarioRespuesta?['rol']?.toString() == 'administrador' &&
             usuarioRespuesta?['activo'] == true;
       }
-      final pedidoRespuesta = await Supabase.instance.client
+      final pedidoRespuesta = await _client
           .from('pedidos')
-          .select('observacion, fecha_entrega, resultado_entrega')
+          .select('observacion, fecha_entrega, resultado_entrega, cliente_id')
           .eq('id', widget.pedido['id'])
           .single();
 
-      final respuesta = await Supabase.instance.client
+      final respuesta = await _client
           .from('pedido_detalles')
           .select('''
             id,
@@ -83,7 +88,7 @@ productos (
             )
             ''')
           .eq('pedido_id', widget.pedido['id']);
-      final pagosRespuesta = await Supabase.instance.client
+      final pagosRespuesta = await _client
           .from('pedido_pagos')
           .select('''
       importe,
@@ -92,7 +97,7 @@ productos (
       observacion
       ''')
           .eq('pedido_id', widget.pedido['id']);
-      final saldoNeto = await Supabase.instance.client
+      final saldoNeto = await _client
           .from('saldos_pendientes_pedidos')
           .select()
           .eq('pedido_id', widget.pedido['id'])
@@ -100,7 +105,7 @@ productos (
       final idsAgregadosEnCorreccion = <String>{};
 
       if (esAdministrador) {
-        final correccionesRespuesta = await Supabase.instance.client
+        final correccionesRespuesta = await _client
             .from('correcciones_operacion')
             .select('detalles_antes, detalles_despues')
             .eq('pedido_id', widget.pedido['id'])
@@ -143,6 +148,7 @@ productos (
         _pagos = List<Map<String, dynamic>>.from(pagosRespuesta);
         _saldoNeto = saldoNeto;
         _observacion = pedidoRespuesta['observacion']?.toString();
+        _clienteId = pedidoRespuesta['cliente_id']?.toString();
         _fechaEntrega = pedidoRespuesta['fecha_entrega']?.toString();
         _resultadoEntregaActual = pedidoRespuesta['resultado_entrega']
             ?.toString();
@@ -209,7 +215,7 @@ productos (
     return '$dia/$mes/$anio $hora:$minuto';
   }
 
-  Future<void> _compartirPedidoConfirmado() async {
+  String _textoPedidoConfirmado() {
     final cliente = widget.pedido['clientes'] as Map<String, dynamic>?;
 
     final nombreCliente =
@@ -265,7 +271,11 @@ productos (
     buffer.writeln();
     buffer.writeln('Gracias por su compra.');
 
-    await SharePlus.instance.share(ShareParams(text: buffer.toString()));
+    return buffer.toString();
+  }
+
+  Future<void> _compartirPedidoConfirmado() async {
+    await SharePlus.instance.share(ShareParams(text: _textoPedidoConfirmado()));
   }
 
   @override
@@ -430,7 +440,7 @@ productos (
 
                 if (confirmar != true) return;
                 try {
-                  await Supabase.instance.client.rpc(
+                  await _client.rpc(
                     'eliminar_pedido_pendiente',
                     params: {'p_pedido_id': widget.pedido['id']},
                   );
@@ -478,6 +488,13 @@ productos (
             onPressed: _detalles.isEmpty ? null : _compartirPedidoConfirmado,
             icon: const Icon(Icons.share_outlined),
             tooltip: 'Compartir pedido',
+          ),
+          OrderWhatsAppButton(
+            clientId: _clienteId,
+            client: _client,
+            message: _textoPedidoConfirmado,
+            enabled: !_cargando && _error == null && _detalles.isNotEmpty,
+            compact: true,
           ),
         ],
       ),

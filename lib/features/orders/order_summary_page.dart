@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'order_whatsapp_button.dart';
+
 class OrderSummaryPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
   final List<Map<String, dynamic>> productos;
@@ -16,6 +18,7 @@ class OrderSummaryPage extends StatefulWidget {
   final DateTime fechaEntrega;
   final String tipoOperacion;
   final String? pedidoId;
+  final SupabaseClient? client;
 
   const OrderSummaryPage({
     super.key,
@@ -28,6 +31,7 @@ class OrderSummaryPage extends StatefulWidget {
     required this.fechaEntrega,
     required this.tipoOperacion,
     this.pedidoId,
+    this.client,
   });
 
   @override
@@ -35,6 +39,7 @@ class OrderSummaryPage extends StatefulWidget {
 }
 
 class _OrderSummaryPageState extends State<OrderSummaryPage> {
+  SupabaseClient get _client => widget.client ?? Supabase.instance.client;
   bool _guardando = false;
   // Reintentar tras una desconexión no duplica el pedido.
   late final String _solicitudId = _nuevoId();
@@ -147,7 +152,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
     return '\$${buffer.toString().split('').reversed.join()}';
   }
 
-  Future<void> _compartirPedido() async {
+  String _textoPedido() {
     final buffer = StringBuffer();
 
     final nombreCliente =
@@ -175,7 +180,11 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
     buffer.writeln();
     buffer.writeln('Gracias por su compra.');
 
-    await SharePlus.instance.share(ShareParams(text: buffer.toString()));
+    return buffer.toString();
+  }
+
+  Future<void> _compartirPedido() async {
+    await SharePlus.instance.share(ShareParams(text: _textoPedido()));
   }
 
   Future<void> _confirmarPedido() async {
@@ -185,7 +194,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
       return;
     }
 
-    final usuario = Supabase.instance.client.auth.currentUser;
+    final usuario = _client.auth.currentUser;
 
     if (usuario == null) {
       _mostrarMensaje('No hay una sesión iniciada.');
@@ -218,7 +227,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
       }).toList();
 
       if (widget.pedidoId != null) {
-        await Supabase.instance.client.rpc(
+        await _client.rpc(
           'actualizar_pedido_activo',
           params: {
             'p_pedido_id': widget.pedidoId,
@@ -234,7 +243,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
           },
         );
       } else {
-        await Supabase.instance.client.rpc(
+        await _client.rpc(
           'crear_pedido_interno',
           params: {
             'p_id': _solicitudId,
@@ -265,6 +274,11 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
               'Total: ${_formatearPrecio(_totalPedido)}',
             ),
             actions: [
+              OrderWhatsAppButton(
+                clientId: widget.cliente['id']?.toString(),
+                client: _client,
+                message: _textoPedido,
+              ),
               FilledButton(
                 onPressed: () {
                   Navigator.of(context).pop();

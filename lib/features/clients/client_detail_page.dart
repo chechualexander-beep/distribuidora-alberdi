@@ -1,8 +1,10 @@
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
+import '../../core/whatsapp_link.dart';
 import 'package:flutter/material.dart';
 
 import 'edit_client_page.dart';
+import '../orders/new_order_page.dart';
 import 'client_catalog_page.dart';
 import 'credit_account_page.dart';
 import '../balances/balance_repository.dart';
@@ -16,13 +18,23 @@ import 'package:share_plus/share_plus.dart';
 class ClientDetailPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
 
-  const ClientDetailPage({super.key, required this.cliente});
+  final SupabaseClient? client;
+  final bool soloConsulta;
+
+  const ClientDetailPage({
+    super.key,
+    required this.cliente,
+    this.client,
+    this.soloConsulta = false,
+  });
 
   @override
   State<ClientDetailPage> createState() => _ClientDetailPageState();
 }
 
 class _ClientDetailPageState extends State<ClientDetailPage> {
+  SupabaseClient get _client => widget.client ?? Supabase.instance.client;
+  bool _puedeCrearPedido = false;
   bool _cargandoCompras = true;
   String? _errorCompras;
   List<Map<String, dynamic>> _pedidosPendientes = [];
@@ -42,7 +54,7 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
     _cargarUltimasCompras();
     _cargarSaldoPendiente();
     _cargarHistorialPagos();
-    _cargarRolUsuario();
+    if (!widget.soloConsulta) _cargarRolUsuario();
   }
 
   @override
@@ -51,21 +63,27 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
   }
 
   Future<void> _cargarRolUsuario() async {
-    final usuarioId = Supabase.instance.client.auth.currentUser?.id;
+    final usuarioId = _client.auth.currentUser?.id;
 
     if (usuarioId == null) return;
 
     try {
-      final usuario = await Supabase.instance.client
+      final usuario = await _client
           .from('usuarios')
-          .select('rol')
+          .select('rol,activo')
           .eq('id', usuarioId)
           .single();
 
       if (!mounted) return;
 
       setState(() {
-        _esAdministrador = usuario['rol']?.toString() == 'administrador';
+        _esAdministrador = usuario['rol'] == 'administrador';
+        _puedeCrearPedido =
+            usuario['activo'] == true &&
+            widget.cliente['activo'] == true &&
+            (_esAdministrador ||
+                (usuario['rol'] == 'preventista' &&
+                    widget.cliente['preventista_id'] == usuarioId));
       });
     } catch (_) {
       if (!mounted) return;
@@ -84,7 +102,7 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
         throw Exception('Cliente sin ID');
       }
 
-      final saldoCentral = await Supabase.instance.client
+      final saldoCentral = await _client
           .from('saldos_pendientes_clientes')
           .select('''
       total_entregado,
@@ -96,7 +114,7 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
           .eq('cliente_id', clienteId)
           .maybeSingle();
 
-      final saldos = await Supabase.instance.client
+      final saldos = await _client
           .from('saldos_pendientes_pedidos')
           .select()
           .eq('cliente_id', clienteId)
@@ -149,7 +167,7 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
         throw Exception('Cliente sin ID');
       }
 
-      final respuesta = await Supabase.instance.client
+      final respuesta = await _client
           .from('cobros_cliente')
           .select('''
           id,
@@ -184,7 +202,7 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
         throw Exception('Cliente sin ID');
       }
 
-      final respuesta = await Supabase.instance.client
+      final respuesta = await _client
           .from('pedidos')
           .select('''
               id,
@@ -306,6 +324,9 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
   @override
   Widget build(BuildContext context) {
     final comercio = _texto(widget.cliente['nombre_comercio']);
+    final whatsapp = normalizeArgentineWhatsApp(
+      widget.cliente['telefono']?.toString(),
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ficha del cliente')),
@@ -324,6 +345,21 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
+            if (_puedeCrearPedido && !widget.soloConsulta)
+              Align(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.add),
+                  label: const Text('Nuevo pedido'),
+                  onPressed: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => NewOrderPage(
+                        clienteId: widget.cliente['id'] as String,
+                        client: _client,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             if (_esAdministrador)
               OutlinedButton.icon(
                 icon: const Icon(Icons.account_balance_wallet_outlined),
@@ -352,21 +388,22 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                   ),
                 ),
               ),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.account_balance_wallet_outlined),
-              label: const Text('Créditos y reintegros'),
-              onPressed: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CreditAccountPage(
-                      clienteId: widget.cliente['id'].toString(),
-                      esAdministrador: _esAdministrador,
+            if (!widget.soloConsulta)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+                label: const Text('Créditos y reintegros'),
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CreditAccountPage(
+                        clienteId: widget.cliente['id'].toString(),
+                        esAdministrador: _esAdministrador,
+                      ),
                     ),
-                  ),
-                );
-                if (mounted) await _cargarSaldoPendiente();
-              },
-            ),
+                  );
+                  if (mounted) await _cargarSaldoPendiente();
+                },
+              ),
             const SizedBox(height: 30),
 
             _DatoCliente(
@@ -392,6 +429,14 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
               titulo: 'Teléfono',
               valor: _texto(widget.cliente['telefono']),
             ),
+            if (whatsapp != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => openWhatsApp(context, whatsapp),
+                  child: const Text('Abrir WhatsApp'),
+                ),
+              ),
 
             _DatoCliente(
               icono: Icons.map_outlined,
@@ -424,79 +469,87 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                   'normal' => 'Normal',
                   _ => 'Sin preferencia',
                 }),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () async {
-                  final seleccion = await showModalBottomSheet<String>(
-                    context: context,
-                    builder: (context) {
-                      return SafeArea(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const ListTile(
-                              title: Text(
-                                'Lista de precios habitual',
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                trailing: widget.soloConsulta
+                    ? null
+                    : const Icon(Icons.chevron_right),
+                onTap: widget.soloConsulta
+                    ? null
+                    : () async {
+                        final seleccion = await showModalBottomSheet<String>(
+                          context: context,
+                          builder: (context) {
+                            return SafeArea(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const ListTile(
+                                    title: Text(
+                                      'Lista de precios habitual',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  ListTile(
+                                    title: const Text('Normal'),
+                                    onTap: () =>
+                                        Navigator.pop(context, 'normal'),
+                                  ),
+                                  ListTile(
+                                    title: const Text('Promo'),
+                                    onTap: () =>
+                                        Navigator.pop(context, 'promo'),
+                                  ),
+                                  ListTile(
+                                    title: const Text('Interior'),
+                                    onTap: () =>
+                                        Navigator.pop(context, 'interior'),
+                                  ),
+                                  ListTile(
+                                    title: const Text('Sin preferencia'),
+                                    onTap: () => Navigator.pop(context, ''),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+
+                        if (seleccion == null) return;
+                        try {
+                          await _client
+                              .from('clientes')
+                              .update({
+                                'tipo_precio_habitual': seleccion.isEmpty
+                                    ? null
+                                    : seleccion,
+                              })
+                              .eq('id', widget.cliente['id']);
+
+                          if (!mounted) return;
+
+                          setState(() {
+                            widget.cliente['tipo_precio_habitual'] =
+                                seleccion.isEmpty ? null : seleccion;
+                          });
+
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Lista habitual actualizada'),
+                            ),
+                          );
+                        } catch (_) {
+                          if (!mounted) return;
+
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'No se pudo actualizar la lista habitual',
                               ),
                             ),
-                            ListTile(
-                              title: const Text('Normal'),
-                              onTap: () => Navigator.pop(context, 'normal'),
-                            ),
-                            ListTile(
-                              title: const Text('Promo'),
-                              onTap: () => Navigator.pop(context, 'promo'),
-                            ),
-                            ListTile(
-                              title: const Text('Interior'),
-                              onTap: () => Navigator.pop(context, 'interior'),
-                            ),
-                            ListTile(
-                              title: const Text('Sin preferencia'),
-                              onTap: () => Navigator.pop(context, ''),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-
-                  if (seleccion == null) return;
-                  try {
-                    await Supabase.instance.client
-                        .from('clientes')
-                        .update({
-                          'tipo_precio_habitual': seleccion.isEmpty
-                              ? null
-                              : seleccion,
-                        })
-                        .eq('id', widget.cliente['id']);
-
-                    if (!mounted) return;
-
-                    setState(() {
-                      widget.cliente['tipo_precio_habitual'] = seleccion.isEmpty
-                          ? null
-                          : seleccion;
-                    });
-
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Lista habitual actualizada'),
-                      ),
-                    );
-                  } catch (_) {
-                    if (!mounted) return;
-
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'No se pudo actualizar la lista habitual',
-                        ),
-                      ),
-                    );
-                  }
-                },
+                          );
+                        }
+                      },
               ),
             ),
             const SizedBox(height: 24),
@@ -676,7 +729,7 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                             child: FilledButton.icon(
                               onPressed: () => showClientPayment(
                                 context,
-                                BalanceRepository(Supabase.instance.client),
+                                BalanceRepository(_client),
                                 widget.cliente['id'].toString(),
                                 comercio,
                                 () async {
@@ -959,24 +1012,25 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
               }),
             const SizedBox(height: 28),
 
-            SizedBox(
-              height: 52,
-              child: FilledButton.icon(
-                onPressed: () async {
-                  final actualizado = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(
-                      builder: (_) => EditClientPage(cliente: widget.cliente),
-                    ),
-                  );
+            if (!widget.soloConsulta)
+              SizedBox(
+                height: 52,
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    final actualizado = await Navigator.of(context).push<bool>(
+                      MaterialPageRoute(
+                        builder: (_) => EditClientPage(cliente: widget.cliente),
+                      ),
+                    );
 
-                  if (actualizado == true && context.mounted) {
-                    Navigator.of(context).pop(true);
-                  }
-                },
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('EDITAR CLIENTE'),
+                    if (actualizado == true && context.mounted) {
+                      Navigator.of(context).pop(true);
+                    }
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('EDITAR CLIENTE'),
+                ),
               ),
-            ),
           ],
         ),
       ),

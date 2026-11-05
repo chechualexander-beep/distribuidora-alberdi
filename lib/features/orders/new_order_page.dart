@@ -11,17 +11,22 @@ import 'order_detail_page.dart';
 import '../clients/new_client_page.dart';
 
 class NewOrderPage extends StatefulWidget {
-  const NewOrderPage({super.key});
+  const NewOrderPage({super.key, this.clienteId, this.client});
+
+  final String? clienteId;
+  final SupabaseClient? client;
 
   @override
   State<NewOrderPage> createState() => _NewOrderPageState();
 }
 
 class _NewOrderPageState extends State<NewOrderPage> {
+  SupabaseClient get _client => widget.client ?? Supabase.instance.client;
   bool _cargando = true;
   String? _error;
 
   List<Map<String, dynamic>> _clientes = [];
+  bool _usarClienteInicial = true;
   Map<String, dynamic>? _clienteSeleccionado;
   List<Map<String, dynamic>> _ultimosPedidos = [];
   String _tipoOperacion = 'pedido';
@@ -39,13 +44,14 @@ class _NewOrderPageState extends State<NewOrderPage> {
   }
 
   Future<void> _cargarClientes() async {
+    final clienteId = _usarClienteInicial ? widget.clienteId : null;
     setState(() {
       _cargando = true;
       _error = null;
     });
 
     try {
-      final supabase = Supabase.instance.client;
+      final supabase = _client;
       final user = supabase.auth.currentUser;
 
       if (user == null) {
@@ -54,13 +60,24 @@ class _NewOrderPageState extends State<NewOrderPage> {
 
       final usuario = await supabase
           .from('usuarios')
-          .select('rol')
+          .select('rol,activo')
           .eq('id', user.id)
           .single();
 
       final String rol = usuario['rol']?.toString() ?? '';
 
-      dynamic consulta = supabase
+      if (usuario['activo'] != true ||
+          (rol != 'administrador' && rol != 'preventista')) {
+        if (mounted) {
+          setState(() {
+            _error = 'Tu usuario no tiene permiso para crear pedidos.';
+            _cargando = false;
+          });
+        }
+        return;
+      }
+
+      var consulta = supabase
           .from('clientes')
           .select(
             'id, nombre_comercio, propietario, direccion, localidad, tipo_precio_habitual',
@@ -69,6 +86,19 @@ class _NewOrderPageState extends State<NewOrderPage> {
 
       if (rol != 'administrador') {
         consulta = consulta.eq('preventista_id', user.id);
+      }
+
+      if (clienteId != null) {
+        final cliente = await consulta.eq('id', clienteId).maybeSingle();
+        if (!mounted) return;
+        setState(() {
+          _cargando = false;
+          if (cliente == null) {
+            _error = 'El cliente no está disponible para crear pedidos.';
+          }
+        });
+        if (cliente != null) _seleccionarCliente(cliente);
+        return;
       }
 
       final respuesta = await consulta.order('nombre_comercio');
@@ -89,6 +119,15 @@ class _NewOrderPageState extends State<NewOrderPage> {
     }
   }
 
+  void _seleccionarCliente(Map<String, dynamic> cliente) {
+    setState(() {
+      _clienteSeleccionado = cliente;
+      _ultimosPedidos = [];
+    });
+    _cargarSaldoCliente(cliente);
+    _cargarUltimosPedidos(cliente);
+  }
+
   Future<void> _cargarSaldoCliente(Map<String, dynamic> cliente) async {
     try {
       setState(() {
@@ -103,7 +142,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
         throw Exception('Cliente sin ID');
       }
 
-      final saldoCentral = await Supabase.instance.client
+      final saldoCentral = await _client
           .from('saldos_pendientes_clientes')
           .select('''
           saldo_pendiente,
@@ -122,7 +161,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
           ) ??
           0;
 
-      if (!mounted) return;
+      if (!mounted || _clienteSeleccionado != cliente) return;
 
       setState(() {
         _deudaCliente = deuda;
@@ -130,7 +169,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
         _cargandoSaldoCliente = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || _clienteSeleccionado != cliente) return;
 
       setState(() {
         _deudaCliente = 0;
@@ -148,7 +187,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
         return;
       }
 
-      final respuesta = await Supabase.instance.client
+      final respuesta = await _client
           .from('pedidos')
           .select('id, total, created_at, fecha_entrega')
           .eq('cliente_id', clienteId)
@@ -160,7 +199,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
       for (final pedido in pedidosCargados) {
         final pedidoId = pedido['id'];
 
-        final detalles = await Supabase.instance.client
+        final detalles = await _client
             .from('pedido_detalles')
             .select('tipo_precio')
             .eq('pedido_id', pedidoId);
@@ -198,13 +237,13 @@ class _NewOrderPageState extends State<NewOrderPage> {
         }
       }
 
-      if (!mounted) return;
+      if (!mounted || _clienteSeleccionado != cliente) return;
 
       setState(() {
         _ultimosPedidos = pedidosCargados;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || _clienteSeleccionado != cliente) return;
 
       setState(() {
         _ultimosPedidos = [];
@@ -299,6 +338,10 @@ class _NewOrderPageState extends State<NewOrderPage> {
                       _clienteSeleccionado = null;
                       _busqueda = '';
                     });
+                    if (_usarClienteInicial && widget.clienteId != null) {
+                      _usarClienteInicial = false;
+                      _cargarClientes();
+                    }
                   },
                   icon: const Icon(Icons.swap_horiz),
                 ),
@@ -383,6 +426,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
                                   MaterialPageRoute(
                                     builder: (_) => ClientDetailPage(
                                       cliente: _clienteSeleccionado!,
+                                      client: _client,
                                     ),
                                   ),
                                 );
@@ -680,11 +724,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
                     ),
                     DesktopField('Localidad', (r) => r['localidad']),
                   ],
-                  onOpen: (cliente) {
-                    setState(() => _clienteSeleccionado = cliente);
-                    _cargarSaldoCliente(cliente);
-                    _cargarUltimosPedidos(cliente);
-                  },
+                  onOpen: _seleccionarCliente,
                 )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -718,13 +758,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
                           ].join(' • '),
                         ),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          setState(() {
-                            _clienteSeleccionado = cliente;
-                          });
-                          _cargarSaldoCliente(cliente);
-                          _cargarUltimosPedidos(cliente);
-                        },
+                        onTap: () => _seleccionarCliente(cliente),
                       ),
                     );
                   },

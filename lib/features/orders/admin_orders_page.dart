@@ -4,17 +4,21 @@ import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../clients/client_detail_link.dart';
 import 'manage_order_page.dart';
 import 'pending_finalizations_page.dart';
 
 class AdminOrdersPage extends StatefulWidget {
-  const AdminOrdersPage({super.key});
+  const AdminOrdersPage({super.key, this.client});
+
+  final SupabaseClient? client;
 
   @override
   State<AdminOrdersPage> createState() => _AdminOrdersPageState();
 }
 
 class _AdminOrdersPageState extends State<AdminOrdersPage> {
+  SupabaseClient get _client => widget.client ?? Supabase.instance.client;
   bool _cargando = true;
   String? _error;
 
@@ -39,7 +43,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     });
 
     try {
-      var consulta = Supabase.instance.client
+      var consulta = _client
           .from('pedidos')
           .select('''
       id,
@@ -92,7 +96,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
       final Map<String, Map<String, dynamic>> productosAgrupados = {};
 
       if (idsPedidos.isNotEmpty) {
-        final detallesRespuesta = await Supabase.instance.client
+        final detallesRespuesta = await _client
             .from('pedido_detalles')
             .select('''
         pedido_id,
@@ -597,7 +601,27 @@ productos (
                 },
               ),
               fields: [
-                DesktopField('Cliente', recordClient, width: 220),
+                DesktopField(
+                  'Cliente',
+                  (pedido) => SizedBox(
+                    width: 260,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            recordClient(pedido),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        ClientDetailLink(
+                          clientId: pedido['cliente_id']?.toString(),
+                          client: _client,
+                        ),
+                      ],
+                    ),
+                  ),
+                  width: 260,
+                ),
                 DesktopField(
                   'Dirección',
                   (r) => (r['clientes'] as Map?)?['direccion'],
@@ -861,6 +885,10 @@ productos (
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                      ),
+                      ClientDetailLink(
+                        clientId: pedido['cliente_id']?.toString(),
+                        client: _client,
                       ),
                       Text(
                         _formatearPrecio(_totalPedidoParaReparto(pedido)),

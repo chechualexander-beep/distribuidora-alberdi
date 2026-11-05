@@ -2,6 +2,7 @@ import '../../core/app_config.dart';
 import 'delivery_quantity.dart';
 import '../balances/balance_repository.dart';
 import '../balances/balances_page.dart';
+import '../clients/client_detail_link.dart';
 import 'finalization_request.dart';
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
@@ -1270,12 +1271,23 @@ cantidad_entregada,
                   children: [
                     const Text('Cliente', style: TextStyle(color: Colors.grey)),
                     const SizedBox(height: 4),
-                    Text(
-                      clienteNombre,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            clienteNombre,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        ClientDetailLink(
+                          clientId: widget.pedido['cliente_id']?.toString(),
+                          client: _client,
+                          enabled: !_guardando,
+                        ),
+                      ],
                     ),
                     if (widget.pedido['tipo_operacion']?.toString() ==
                         'venta_directa') ...[
