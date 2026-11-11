@@ -486,10 +486,10 @@ void main() {
           AppConfig.resolve(
             productionKey: 'sb_publishable_local_fixture_123456789',
           ).usesV2For('pedido'),
-          isFalse,
+          isTrue,
         );
         expect(_config().usesV2For('pedido'), isTrue);
-        expect(_config().usesV2For('venta_directa'), isFalse);
+        expect(_config().usesV2For('venta_directa'), isTrue);
       } finally {
         await productionClient.dispose();
         await testingClient.dispose();

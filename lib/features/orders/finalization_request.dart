@@ -250,7 +250,7 @@ Future<FinalizationRequestStore> finalizationStore(
   LocalOutbox db;
   try {
     db = await (_openingDatabase ??= LocalOutbox.open(
-      p.join(support.path, 'stock_v2_outbox_testing'),
+      p.join(support.path, 'stock_v2_outbox_${appConfig.environment.name}'),
     ));
   } catch (_) {
     _openingDatabase = null;

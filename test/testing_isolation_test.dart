@@ -75,7 +75,7 @@ void main() {
     },
   );
 
-  testWidgets('production recovery screen cannot access V2 or storage', (
+  testWidgets('production recovery screen is available since 1.0.8', (
     tester,
   ) async {
     activateAppConfig(AppConfig.resolve(productionKey: fixtureKey));
@@ -85,7 +85,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text('Recuperación V2 disponible únicamente en TESTING.'),
-      findsOneWidget,
+      findsNothing,
     );
     expect(tester.takeException(), isNull);
   });

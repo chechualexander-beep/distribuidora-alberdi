@@ -18,11 +18,10 @@ class AppConfig {
   bool get notificationsEnabled => !isTesting;
   // No testing catalog destination has been approved yet.
   bool get catalogEnabled => !isTesting;
-  bool get finalizationV2Enabled => isTesting;
-  static const _testingDirectSalesV2 = bool.fromEnvironment(
-    'ENABLE_TESTING_DIRECT_SALES_V2',
-  );
-  bool get directSalesEnabled => !isTesting || _testingDirectSalesV2;
+  // 1.0.8: cierres, venta directa, cobros y devoluciones por el circuito V2
+  // en ambos entornos. Stock V2 puede estar apagado (régimen OFF).
+  bool get finalizationV2Enabled => true;
+  bool get directSalesEnabled => true;
   static const directSalesTestingMessage =
       'Venta directa temporalmente fuera de operación en TESTING. Su integración con Stock V2 está pendiente.';
   bool blocksOrderOperation(String operation) =>
@@ -128,13 +127,13 @@ class AppConfig {
     if (!finalizationV2Enabled ||
         uri == null ||
         uri.scheme != 'https' ||
-        uri.host != '$testingProject.supabase.co' ||
+        uri.host != '$project.supabase.co' ||
         uri.hasPort ||
         uri.userInfo.isNotEmpty ||
         uri.hasQuery ||
         uri.hasFragment ||
         !{'/rest/v1', '/rest/v1/'}.contains(uri.path)) {
-      throw StateError('Finalización V2 disponible únicamente en TESTING.');
+      throw StateError('El cliente Supabase no corresponde al entorno activo.');
     }
   }
 }

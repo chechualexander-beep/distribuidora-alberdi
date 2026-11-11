@@ -11,7 +11,8 @@ AppConfig testingConfig() => AppConfig.resolve(
 );
 
 void main() {
-  const enabled = bool.fromEnvironment('ENABLE_TESTING_DIRECT_SALES_V2');
+  // 1.0.8: venta directa V2 habilitada en todos los entornos.
+  const enabled = true;
   test('TESTING routes direct sales to V2 only with the explicit option', () {
     final config = testingConfig();
     expect(config.directSalesEnabled, enabled);
@@ -21,13 +22,13 @@ void main() {
     expect(config.usesV2For('venta_directa'), enabled);
   });
 
-  test('production retains direct sales and its original legacy routing', () {
+  test('production keeps direct sales and routes them through V2', () {
     final config = AppConfig.resolve(
       productionKey: 'sb_publishable_local_fixture_123456789',
     );
     expect(config.directSalesEnabled, isTrue);
     expect(config.blocksOrderOperation('venta_directa'), isFalse);
-    expect(config.usesV2For('venta_directa'), isFalse);
+    expect(config.usesV2For('venta_directa'), isTrue);
   });
 
   testWidgets('pilot selector refuses direct sales and explains why', (

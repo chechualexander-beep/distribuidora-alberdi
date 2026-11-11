@@ -20,15 +20,15 @@ String fixtureJwt(String role, String project) {
 }
 
 void main() {
-  test('production preserves its own URL, key and legacy routing', () {
+  test('production preserves its own URL and key and routes through V2', () {
     final config = AppConfig.resolve(productionKey: fixtureKey);
     expect(config.environment, AppEnvironment.production);
     expect(config.supabaseUrl, 'https://vmbncsqapqdyffscwfwo.supabase.co');
     expect(config.supabaseKey, fixtureKey);
     expect(config.notificationsEnabled, isTrue);
     expect(config.catalogEnabled, isTrue);
-    expect(config.usesV2For('pedido'), isFalse);
-    expect(config.usesV2For('venta_directa'), isFalse);
+    expect(config.usesV2For('pedido'), isTrue);
+    expect(config.usesV2For('venta_directa'), isTrue);
   });
 
   test('dedicated testing entrypoint needs no production configuration', () {
@@ -42,7 +42,7 @@ void main() {
     expect(config.notificationsEnabled, isFalse);
     expect(config.catalogEnabled, isFalse);
     expect(config.usesV2For('pedido'), isTrue);
-    expect(config.usesV2For('venta_directa'), isFalse);
+    expect(config.usesV2For('venta_directa'), isTrue);
   });
 
   test('explicit and historical testing defines select the same project', () {
