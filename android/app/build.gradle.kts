@@ -108,8 +108,7 @@ tasks.configureEach {
             check(defines["APP_ENV"] == "testing" &&
                 defines["SUPABASE_TESTING_URL"] == "https://blcgugdeluzxvpwqkhjq.supabase.co" &&
                 defines["SUPABASE_TESTING_KEY"]?.matches(Regex("sb_publishable_[A-Za-z0-9_-]{16,}")) == true &&
-                defines["ENABLE_TESTING_DIRECT_SALES_V2"] == "true" &&
-                defines["ENABLE_STOCK"] == "true" &&
+                // 1.0.8: TESTING replica produccion (Stock oculto, venta directa V2 siempre).
                 defines["ENABLE_INTERNAL_BOLETAS"] == "false" &&
                 defines["USE_TESTING"] in listOf(null, "true")) {
                 "Invalid Android TESTING profile."
