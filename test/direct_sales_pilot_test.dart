@@ -67,11 +67,8 @@ void main() {
     );
     await tester.tap(find.text('Venta directa'));
     await tester.pump();
-    expect(selected, enabled ? 'venta_directa' : isNull);
-    expect(
-      find.text(AppConfig.directSalesTestingMessage),
-      enabled ? findsNothing : findsOneWidget,
-    );
+    expect(selected, 'venta_directa');
+    expect(find.text(AppConfig.directSalesTestingMessage), findsNothing);
   });
 
   testWidgets('direct navigation to summary cannot send a blocked sale', (

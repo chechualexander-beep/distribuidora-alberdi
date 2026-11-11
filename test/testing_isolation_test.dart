@@ -144,7 +144,7 @@ void main() {
   });
 
   test(
-    'V2 rejects production configuration or a foreign client before HTTP',
+    'V2 rejects a foreign client or another project\'s request before HTTP',
     () async {
       var requests = 0;
       final client = SupabaseClient(
@@ -156,9 +156,14 @@ void main() {
         }),
       );
       try {
-        for (final config in [
-          testingConfig(),
-          AppConfig.resolve(productionKey: fixtureKey),
+        // TESTING config with a production client: foreign client.
+        // Production config with a TESTING request: another project's request.
+        for (final (config, matcher) in [
+          (testingConfig(), throwsStateError),
+          (
+            AppConfig.resolve(productionKey: fixtureKey),
+            throwsA(isA<LocalOutboxException>()),
+          ),
         ]) {
           await expectLater(
             reconcileFinalization(
@@ -172,7 +177,7 @@ void main() {
               retry: true,
               config: config,
             ),
-            throwsStateError,
+            matcher,
           );
         }
         expect(requests, 0);
