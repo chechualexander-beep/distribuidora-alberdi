@@ -47,7 +47,9 @@ administración ya no puede cerrar entregas (`contexto_regimen_requerido`).
 
 ## Día de la actualización (fuera de horario)
 
-1. Aprobada de antemano en Play Console la 1.0.8+16 (sin liberar).
+1. Aprobada de antemano en Play Console la 1.0.8+16 (sin liberar). Se compila con
+   `flutter build appbundle --flavor production` (desde 1.0.8 Android tiene dos
+   variantes: `production` y `qa`, esta última es la app de prueba "testing").
 2. Avisar a los preventistas que no carguen nada durante ~30 minutos.
 3. Respaldo fresco: `Paso1-respaldo-y-lectura.ps1` (y copiar al pendrive).
 4. Vista previa: `supabase db push --db-url <prod> --dry-run` → deben figurar
