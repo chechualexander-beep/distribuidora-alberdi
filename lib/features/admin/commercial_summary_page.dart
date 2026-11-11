@@ -185,7 +185,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
     _loadPeriod();
   }
 
-  Future<void> _selectPeriod(int period) async {
+  Future<void> _selectPeriod(BuildContext context, int period) async {
     if (period == 2) {
       final now = widget.nowArgentina();
       final range = await showDateRangePicker(
@@ -203,6 +203,28 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final inherited = Theme.of(context);
+    // The Android route opens this page directly under the app's light theme.
+    final theme = inherited.brightness == Brightness.dark
+        ? inherited
+        : ThemeData(
+            useMaterial3: inherited.useMaterial3,
+            platform: inherited.platform,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: inherited.colorScheme.primary,
+              brightness: Brightness.dark,
+            ),
+          );
+    return Theme(
+      data: theme,
+      child: Material(
+        color: theme.colorScheme.surface,
+        child: Builder(builder: _buildContent),
+      ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final amounts = _amounts;
     final theme = Theme.of(context);
     return ListView(
@@ -219,14 +241,15 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
               ButtonSegment(value: 2, label: Text('Personalizado')),
             ],
             selected: {_period},
-            onSelectionChanged: (selection) => _selectPeriod(selection.single),
+            onSelectionChanged: (selection) =>
+                _selectPeriod(context, selection.single),
           ),
         ),
         if (_period == 2)
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
-              onPressed: () => _selectPeriod(2),
+              onPressed: () => _selectPeriod(context, 2),
               child: Text(
                 '${MaterialLocalizations.of(context).formatCompactDate(_custom!.start)}'
                 ' – ${MaterialLocalizations.of(context).formatCompactDate(_custom!.end)}',
@@ -262,6 +285,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
               runSpacing: gap,
               children: [
                 _indicator(
+                  context,
                   width,
                   'VENTAS EFECTIVAS',
                   Icons.inventory_2_outlined,
@@ -269,6 +293,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
                   'Valor de lo entregado en el período.',
                 ),
                 _indicator(
+                  context,
                   width,
                   'RECAUDACIÓN',
                   Icons.payments_outlined,
@@ -276,6 +301,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
                   'Cobros del período, incluso de deudas anteriores.',
                 ),
                 _indicator(
+                  context,
                   width,
                   'TOTAL POR COBRAR',
                   Icons.account_balance_wallet_outlined,
@@ -287,6 +313,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
                   debt: true,
                 ),
                 _indicator(
+                  context,
                   width,
                   'RESULTADO COMERCIAL',
                   Icons.trending_up,
@@ -299,13 +326,14 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
         ),
         if (amounts != null) ...[
           const SizedBox(height: 16),
-          ..._details(amounts),
+          ..._details(context, amounts),
         ],
       ],
     );
   }
 
   Widget _indicator(
+    BuildContext context,
     double width,
     String title,
     IconData icon,
@@ -318,6 +346,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
     return SizedBox(
       width: width,
       child: Card(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
         margin: EdgeInsets.zero,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 178),
@@ -374,7 +403,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
     );
   }
 
-  List<Widget> _details(Map<String, double> data) {
+  List<Widget> _details(BuildContext context, Map<String, double> data) {
     double amount(String key) => data[key]!;
     final hasAdjustments = [
       'notas_credito',
@@ -384,6 +413,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
     ].any((key) => amount(key) != 0);
     return [
       _section(
+        context,
         'Ventas',
         [
           MapEntry('Preventa entregada', amount('entrega_preventa')),
@@ -395,6 +425,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
         'La mercadería se cuenta al finalizar la entrega e incluye productos agregados. La facturación es un dato aparte, por fecha de boleta.',
       ),
       _section(
+        context,
         'Cobros',
         [
           MapEntry('Aplicado a preventas', amount('recaudacion_preventa')),
@@ -410,6 +441,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
         'Se usa la fecha del cobro. Puede corresponder a deudas anteriores. Aplicar crédito existente no genera un cobro nuevo.',
       ),
       _section(
+        context,
         'Costos y rentabilidad',
         [
           MapEntry('Costo de mercadería entregada', amount('costo_mercaderia')),
@@ -421,6 +453,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
       ),
       if (hasAdjustments)
         _section(
+          context,
           'Ajustes y devoluciones',
           [
             MapEntry('Notas de crédito internas', amount('notas_credito')),
@@ -438,11 +471,13 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
   }
 
   Widget _section(
+    BuildContext context,
     String title,
     List<MapEntry<String, double>> rows,
     String note,
   ) {
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: ExpansionTile(
         key: PageStorageKey(title),
         title: Text(title),

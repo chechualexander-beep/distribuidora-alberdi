@@ -151,6 +151,17 @@ class _WhatsAppNumberDialog extends StatefulWidget {
 class _WhatsAppNumberDialogState extends State<_WhatsAppNumberDialog> {
   final _form = GlobalKey<FormState>();
   late final _number = TextEditingController(text: widget.previous);
+  bool _confirmedMobile = false;
+
+  bool get _needsMobileConfirmation =>
+      normalizeArgentineWhatsApp(_number.text) == null &&
+      normalizeArgentineWhatsApp(_number.text, nationalMobileConfirmed: true) !=
+          null;
+
+  String? get _normalized => normalizeArgentineWhatsApp(
+    _number.text,
+    nationalMobileConfirmed: _confirmedMobile,
+  );
 
   @override
   void dispose() {
@@ -160,27 +171,44 @@ class _WhatsAppNumberDialogState extends State<_WhatsAppNumberDialog> {
 
   void _confirm({required bool save}) {
     if (!_form.currentState!.validate()) return;
-    Navigator.of(
-      context,
-    ).pop((number: normalizeArgentineWhatsApp(_number.text)!, save: save));
+    Navigator.of(context).pop((number: _normalized!, save: save));
   }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
+    scrollable: true,
     title: const Text('Agregar número de WhatsApp'),
     content: Form(
       key: _form,
-      child: TextFormField(
-        controller: _number,
-        autofocus: true,
-        keyboardType: TextInputType.phone,
-        decoration: const InputDecoration(
-          labelText: 'Celular con código de área',
-          hintText: '+54 9 11 2345-6789',
-        ),
-        validator: (value) => normalizeArgentineWhatsApp(value) == null
-            ? 'Ingresá el celular como +54 9, código de área y número.'
-            : null,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextFormField(
+            controller: _number,
+            autofocus: true,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'Celular con código de área',
+              hintText: '11 2345-6789',
+              helperText: 'Alberdi agrega +54 9 si hace falta.',
+              errorMaxLines: 3,
+            ),
+            onChanged: (_) => setState(() => _confirmedMobile = false),
+            validator: (_) {
+              if (_normalized != null) return null;
+              return _needsMobileConfirmation
+                  ? 'Confirmá que el número es de un celular.'
+                  : 'Ingresá el número completo, incluido el código de área.';
+            },
+          ),
+          if (_needsMobileConfirmation)
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Es un número de celular'),
+              value: _confirmedMobile,
+              onChanged: (value) => setState(() => _confirmedMobile = value!),
+            ),
+        ],
       ),
     ),
     actions: [

@@ -18,6 +18,7 @@ class OrderSummaryPage extends StatefulWidget {
   final DateTime fechaEntrega;
   final String tipoOperacion;
   final String? pedidoId;
+  final String? observacionInicial;
   final SupabaseClient? client;
 
   const OrderSummaryPage({
@@ -31,6 +32,7 @@ class OrderSummaryPage extends StatefulWidget {
     required this.fechaEntrega,
     required this.tipoOperacion,
     this.pedidoId,
+    this.observacionInicial,
     this.client,
   });
 
@@ -58,7 +60,9 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
     ].join('-');
   }
 
-  final TextEditingController _observacionController = TextEditingController();
+  late final _observacionController = TextEditingController(
+    text: widget.observacionInicial,
+  );
 
   @override
   void dispose() {

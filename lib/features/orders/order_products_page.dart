@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'order_summary_page.dart';
+import 'delivery_date_picker.dart';
 
 class OrderProductsPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -15,6 +16,9 @@ class OrderProductsPage extends StatefulWidget {
   final Map<String, double>? preciosIniciales;
   final Map<String, String>? tiposPrecioIniciales;
   final String? pedidoId;
+  final String? observacionInicial;
+  final String? tipoPrecioInicial;
+  final SupabaseClient? client;
 
   const OrderProductsPage({
     super.key,
@@ -25,6 +29,9 @@ class OrderProductsPage extends StatefulWidget {
     this.preciosIniciales,
     this.tiposPrecioIniciales,
     this.pedidoId,
+    this.observacionInicial,
+    this.tipoPrecioInicial,
+    this.client,
   });
 
   @override
@@ -39,6 +46,8 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
 
   String _busqueda = '';
   String _tipoPrecio = 'normal';
+  late DateTime? _fechaEntrega = widget.fechaEntrega;
+  SupabaseClient get _client => widget.client ?? Supabase.instance.client;
 
   final Map<String, int> _cantidades = {};
   final Map<String, double> _preciosFijados = {};
@@ -48,7 +57,9 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   void initState() {
     super.initState();
 
-    final tipoHabitual = widget.cliente['tipo_precio_habitual']?.toString();
+    final tipoHabitual =
+        widget.tipoPrecioInicial ??
+        widget.cliente['tipo_precio_habitual']?.toString();
 
     if (tipoHabitual == 'normal' ||
         tipoHabitual == 'promo' ||
@@ -77,7 +88,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     });
 
     try {
-      final respuesta = await Supabase.instance.client
+      final respuesta = await _client
           .from('productos')
           .select(
             'id, codigo, nombre, descripcion, precio_normal, precio_promo, precio_interior, foto_path',
@@ -203,13 +214,30 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     return '\$${buffer.toString().split('').reversed.join()}';
   }
 
+  Future<void> _elegirFechaEntrega() async {
+    final fecha = await pickDeliveryDate(context, selected: _fechaEntrega);
+    if (mounted && fecha != null) setState(() => _fechaEntrega = fecha);
+  }
+
   void _verPedido() {
-    final fechaEntrega = widget.fechaEntrega;
+    final fechaEntrega = _fechaEntrega;
 
     if (fechaEntrega == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Seleccioná una fecha de entrega antes de continuar.'),
+        ),
+      );
+      return;
+    }
+    if (widget.pedidoId != null &&
+        widget.fechaEntrega == null &&
+        _cantidades.keys.any((id) => !_productos.any((p) => p['id'] == id))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Hay productos del pedido que ya no están disponibles para editar. Podés programar la entrega desde el detalle.',
+          ),
         ),
       );
       return;
@@ -227,6 +255,8 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
           preciosFijados: Map<String, double>.from(_preciosFijados),
           tiposPrecioFijados: Map<String, String>.from(_tiposPrecioFijados),
           pedidoId: widget.pedidoId,
+          observacionInicial: widget.observacionInicial,
+          client: _client,
         ),
       ),
     );
@@ -236,7 +266,28 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Productos del pedido')),
-      body: _construirContenido(),
+      body: Column(
+        children: [
+          if (widget.pedidoId != null && widget.fechaEntrega == null)
+            ListTile(
+              leading: const Icon(Icons.calendar_today_outlined),
+              title: Text(
+                _fechaEntrega == null
+                    ? 'Entrega sin programar'
+                    : MaterialLocalizations.of(
+                        context,
+                      ).formatCompactDate(_fechaEntrega!),
+              ),
+              trailing: TextButton(
+                onPressed: _elegirFechaEntrega,
+                child: Text(
+                  _fechaEntrega == null ? 'Elegir fecha' : 'Cambiar fecha',
+                ),
+              ),
+            ),
+          Expanded(child: _construirContenido()),
+        ],
+      ),
       bottomNavigationBar: _totalUnidades > 0
           ? SafeArea(
               child: Padding(

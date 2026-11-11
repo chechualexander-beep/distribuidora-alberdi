@@ -29,6 +29,22 @@ void main() {
     }
     expect(normalizeArgentineWhatsApp('(0341) 15 234-5678'), '5493412345678');
     expect(normalizeArgentineWhatsApp('02972 15 23-4567'), '5492972234567');
+    for (final entry in {
+      '11 2345-6789': mobile,
+      '(0341) 234-5678': '5493412345678',
+      '2972 23-4567': '5492972234567',
+      '+54 9 11 2345-6789': mobile,
+      '011 15 2345-6789': mobile,
+    }.entries) {
+      expect(
+        normalizeArgentineWhatsApp(entry.key, nationalMobileConfirmed: true),
+        entry.value,
+      );
+    }
+    expect(
+      normalizeArgentineWhatsApp('2345-6789', nationalMobileConfirmed: true),
+      isNull,
+    );
     for (final value in [
       null,
       '',
@@ -192,12 +208,72 @@ void main() {
       await tester.enterText(find.byType(TextFormField), '2345-6789');
       await tester.tap(find.text('Guardar y abrir'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Ingresá el celular como'), findsOneWidget);
+      expect(find.textContaining('Ingresá el número completo'), findsOneWidget);
       await tester.tap(find.text('Cancelar'));
       await tester.pumpAndSettle();
       expect(writes, 0);
       expect(launches, isEmpty);
       expect(find.text('Enviar por WhatsApp'), findsOneWidget);
+    });
+
+    testWidgets(
+      'Acepta entrada incremental nacional con confirmación de móvil',
+      (tester) async {
+        await openOrder(tester);
+        await send(tester);
+        const national = '1123456789';
+        for (var count = 1; count <= national.length; count++) {
+          tester.testTextInput.updateEditingValue(
+            TextEditingValue(
+              text: national.substring(0, count),
+              selection: TextSelection.collapsed(offset: count),
+            ),
+          );
+          await tester.pump();
+        }
+        final field = tester.widget<TextFormField>(find.byType(TextFormField));
+        expect(field.controller!.text, national);
+        await tester.tap(find.text('Usar sin guardar'));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Confirmá que el número es de un celular.'),
+          findsOneWidget,
+        );
+        expect(launches, isEmpty);
+        await tester.tap(find.text('Es un número de celular'));
+        await tester.tap(find.text('Usar sin guardar'));
+        await tester.pumpAndSettle();
+        expect(launches.single.path, '/$mobile');
+        expect(writes, 0);
+      },
+    );
+
+    testWidgets('Pegar un móvil internacional conserva un solo prefijo', (
+      tester,
+    ) async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.getData') {
+          return {'text': '+54 9 11 2345-6789'};
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      await openOrder(tester);
+      await send(tester);
+      final editable = tester.state<EditableTextState>(
+        find.byType(EditableText),
+      );
+      await editable.pasteText(SelectionChangedCause.toolbar);
+      await tester.pumpAndSettle();
+      expect(find.text('Es un número de celular'), findsNothing);
+      await tester.tap(find.text('Usar sin guardar'));
+      await tester.pumpAndSettle();
+      expect(launches.single.path, '/$mobile');
+      expect(writes, 0);
     });
 
     testWidgets('Guarda solo el teléfono una vez y lo reutiliza', (

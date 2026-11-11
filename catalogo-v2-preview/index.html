@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex,nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Catálogo V2 · Distribuidora Alberdi</title>
+  <link rel="stylesheet" href="preview.css">
+  <script src="catalogo-core.js" defer></script>
+  <script src="fixtures.js" defer></script>
+  <script src="preview.js" defer></script>
+</head>
+<body>
+  <header class="brand">
+    <div class="shell brand-inner">
+      <div class="brand-mark" aria-hidden="true">A</div>
+      <div><strong>Distribuidora Alberdi</strong><span>Catálogo mayorista</span></div>
+      <span class="preview-tag">Vista previa</span>
+    </div>
+  </header>
+  <main class="shell">
+    <section id="catalog" aria-label="Catálogo">
+      <div class="welcome">
+        <h1 id="greeting"></h1>
+        <p id="validity"></p>
+      </div>
+      <div class="search-area">
+        <label class="sr-only" for="search">Buscar producto o código</label>
+        <input id="search" type="search" placeholder="Buscá por nombre o código" autocomplete="off">
+      </div>
+      <div id="showcase">
+        <section class="shelf" id="promotions" hidden aria-labelledby="promotions-title">
+          <h2 id="promotions-title">Promociones</h2>
+          <div id="promo-rail" class="rail" tabindex="0" role="region" aria-label="Deslizar promociones"></div>
+        </section>
+        <section class="shelf" id="featured" hidden aria-labelledby="featured-title">
+          <h2 id="featured-title">Destacados</h2>
+          <div id="featured-rail" class="rail compact" tabindex="0" role="region" aria-label="Deslizar destacados"></div>
+        </section>
+      </div>
+      <section id="quick" aria-labelledby="quick-title">
+        <div class="quick-heading"><h2 id="quick-title">Compra rápida</h2><p id="count" role="status"></p></div>
+        <nav id="categories" class="rail categories" aria-label="Categorías"></nav>
+        <div id="products"></div>
+      </section>
+    </section>
+    <section id="review" hidden aria-labelledby="review-title">
+      <button class="secondary back" id="back" type="button">← Volver al catálogo</button>
+      <h1 id="review-title" tabindex="-1">Tu pedido</h1>
+      <p class="muted">Revisá los productos antes de confirmar.</p>
+      <div id="cart-items"></div>
+      <p id="review-total" class="total"></p>
+      <label for="notes">Observaciones (opcional)</label>
+      <textarea id="notes" maxlength="1000" rows="3"></textarea>
+      <p class="muted">Simulación local. La confirmación no envía un pedido.</p>
+      <button class="primary" id="confirm" type="button">Confirmar pedido de prueba</button>
+    </section>
+    <section id="success" hidden aria-labelledby="success-title">
+      <h1 id="success-title" tabindex="-1">Pedido de prueba confirmado</h1>
+      <p>Entrega por coordinar · Simulación local</p>
+      <p id="receipt" role="status"></p>
+      <button class="secondary" id="new-order" type="button">Volver al catálogo</button>
+    </section>
+  </main>
+  <footer id="cart-bar">
+    <button id="open-cart" class="primary shell" type="button">
+      <span id="cart-count">Ver mi pedido</span><strong id="cart-total"></strong>
+    </button>
+  </footer>
+  <template id="quantity-template">
+    <div class="quantity">
+      <button class="minus" type="button">−</button>
+      <output>0</output>
+      <button class="plus" type="button">+</button>
+    </div>
+  </template>
+</body>
+</html>

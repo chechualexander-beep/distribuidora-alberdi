@@ -7,6 +7,7 @@ import 'order_products_page.dart';
 import 'correct_operation_page.dart';
 import 'credit_notes_page.dart';
 import 'order_whatsapp_button.dart';
+import 'delivery_date_picker.dart';
 
 class OrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -30,6 +31,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   Map<String, dynamic>? _saldoNeto;
   String? _observacion;
   String? _fechaEntrega;
+  String? _origen;
+  String? _estadoPedido;
+  bool _programando = false;
   String? _clienteId;
   List<Map<String, dynamic>> _pagos = [];
   Set<String> _detalleIdsAgregadosEnCorreccion = {};
@@ -64,7 +68,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       }
       final pedidoRespuesta = await _client
           .from('pedidos')
-          .select('observacion, fecha_entrega, resultado_entrega, cliente_id')
+          .select(
+            'observacion, fecha_entrega, resultado_entrega, cliente_id, origen, estado',
+          )
           .eq('id', widget.pedido['id'])
           .single();
 
@@ -150,6 +156,8 @@ productos (
         _observacion = pedidoRespuesta['observacion']?.toString();
         _clienteId = pedidoRespuesta['cliente_id']?.toString();
         _fechaEntrega = pedidoRespuesta['fecha_entrega']?.toString();
+        _origen = pedidoRespuesta['origen']?.toString();
+        _estadoPedido = pedidoRespuesta['estado']?.toString();
         _resultadoEntregaActual = pedidoRespuesta['resultado_entrega']
             ?.toString();
         _esAdministrador = esAdministrador;
@@ -274,6 +282,35 @@ productos (
     return buffer.toString();
   }
 
+  Future<void> _programarEntrega() async {
+    if (_programando) return;
+    setState(() => _programando = true);
+    try {
+      final fecha = await pickDeliveryDate(context);
+      if (!mounted || fecha == null) return;
+      await _client.rpc(
+        'programar_entrega_catalogo',
+        params: {
+          'p_pedido_id': widget.pedido['id'],
+          'p_fecha_entrega': fecha.toIso8601String().split('T').first,
+        },
+      );
+      if (mounted) await _cargarDetalles();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se pudo programar la entrega. Actualizá el detalle y verificá el estado del pedido.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _programando = false);
+    }
+  }
+
   Future<void> _compartirPedidoConfirmado() async {
     await SharePlus.instance.share(ShareParams(text: _textoPedidoConfirmado()));
   }
@@ -344,7 +381,10 @@ productos (
                 if (mounted) await _cargarDetalles();
               },
             ),
-          if (!facturado && resultadoEntrega == 'pendiente')
+          if (!facturado &&
+              resultadoEntrega == 'pendiente' &&
+              _estadoPedido != 'cancelado' &&
+              _estadoPedido != 'anulado')
             IconButton(
               onPressed: () {
                 final cliente =
@@ -399,12 +439,19 @@ productos (
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => OrderProductsPage(
-                      cliente: cliente,
+                      cliente: {
+                        ...cliente,
+                        if (_clienteId != null) 'id': _clienteId,
+                      },
                       fechaEntrega: fechaEntrega,
                       tipoOperacion:
                           widget.pedido['tipo_operacion']?.toString() ??
                           'pedido',
                       pedidoId: widget.pedido['id']?.toString(),
+                      observacionInicial: _observacion,
+                      tipoPrecioInicial: widget.pedido['tipo_precio']
+                          ?.toString(),
+                      client: _client,
                       cantidadesIniciales: cantidadesIniciales,
                       preciosIniciales: preciosIniciales,
                       tiposPrecioIniciales: tiposPrecioIniciales,
@@ -550,6 +597,32 @@ productos (
                           ],
                           const SizedBox(height: 12),
                           Text(_formatearFecha(widget.pedido['created_at'])),
+                          if (_origen == 'catalogo') ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _fechaEntrega == null
+                                  ? 'Entrega sin programar'
+                                  : 'Fecha de entrega: $_fechaEntrega',
+                            ),
+                            if (_esAdministrador &&
+                                _fechaEntrega == null &&
+                                resultadoEntrega == 'pendiente' &&
+                                tipoOperacion == 'pedido' &&
+                                _estadoPedido != 'cancelado' &&
+                                _estadoPedido != 'anulado')
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: OutlinedButton.icon(
+                                  onPressed: _programando
+                                      ? null
+                                      : _programarEntrega,
+                                  icon: const Icon(
+                                    Icons.calendar_today_outlined,
+                                  ),
+                                  label: const Text('Asignar fecha de entrega'),
+                                ),
+                              ),
+                          ],
                           const SizedBox(height: 4),
                           if (tipoOperacion == 'venta_directa') ...[
                             const Text(

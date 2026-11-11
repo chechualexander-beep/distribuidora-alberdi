@@ -61,6 +61,50 @@ void expectAmount(String title, String amount) {
 }
 
 void main() {
+  for (final platform in [TargetPlatform.android, TargetPlatform.windows]) {
+    testWidgets('Fondo y tarjetas usan superficies oscuras en $platform', (
+      tester,
+    ) async {
+      final isAndroid = platform == TargetPlatform.android;
+      await tester.binding.setSurfaceSize(Size(isAndroid ? 390 : 1280, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            platform: platform,
+            colorSchemeSeed: Colors.indigo,
+            brightness: isAndroid ? Brightness.light : Brightness.dark,
+          ),
+          home: CommercialSummaryPage(
+            readPeriod: (_, _) async => summary(returns: true),
+            balanceRepository: FakeBalanceRepository(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final title = find.text('Resumen comercial');
+      final theme = Theme.of(tester.element(title));
+      expect(theme.brightness, Brightness.dark);
+      final background = tester.widget<Material>(
+        find.ancestor(of: title, matching: find.byType(Material)).first,
+      );
+      expect(background.color, theme.colorScheme.surface);
+      final tile = find.text('Ventas');
+      await tester.ensureVisible(tile);
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+      expect(find.text('Mercadería entregada'), findsOneWidget);
+      for (final cardWidget in tester.widgetList<Card>(find.byType(Card))) {
+        expect(cardWidget.color, theme.colorScheme.surfaceContainerLow);
+        expect(cardWidget.color!.computeLuminance(), lessThan(0.15));
+      }
+      expect(
+        Theme.of(tester.element(find.text('Mercadería entregada'))).brightness,
+        Brightness.dark,
+      );
+    });
+  }
+
   testWidgets(
     'El desglose conserva diferencias negativas sin reclasificar cobros',
     (tester) async {

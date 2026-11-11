@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Requires an explicit mobile marker. A bare area code and subscriber number
-/// cannot distinguish an Argentine landline from a mobile.
-String? normalizeArgentineWhatsApp(String? value) {
+/// A bare national number is usable only after the user confirms it is mobile.
+String? normalizeArgentineWhatsApp(
+  String? value, {
+  bool nationalMobileConfirmed = false,
+}) {
   final raw = value?.trim() ?? '';
   if (!RegExp(r'^\+?[\d\s().-]+$').hasMatch(raw)) return null;
   final digits = raw.replaceAll(RegExp(r'\D'), '');
@@ -19,9 +21,18 @@ String? normalizeArgentineWhatsApp(String? value) {
   if (withMobileMarker != null && digits.length == 11) return '54$digits';
 
   final local = RegExp(r'^0?(11|[23]\d{2,3})15(\d+)$').firstMatch(digits);
-  if (local == null) return null;
-  final national = '${local[1]}${local[2]}';
-  return national.length == 10 ? '549$national' : null;
+  if (local != null) {
+    final national = '${local[1]}${local[2]}';
+    if (national.length == 10) return '549$national';
+  }
+
+  final national = digits.startsWith('0') ? digits.substring(1) : digits;
+  if (nationalMobileConfirmed &&
+      national.length == 10 &&
+      RegExp(r'^(?:11|[23]\d{2,3})\d+$').hasMatch(national)) {
+    return '549$national';
+  }
+  return null;
 }
 
 Uri whatsAppLink(String number, {String? text}) {

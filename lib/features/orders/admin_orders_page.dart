@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../clients/client_detail_link.dart';
+import 'delivery_date_picker.dart';
 import 'manage_order_page.dart';
+import 'order_detail_page.dart';
 import 'pending_finalizations_page.dart';
 
 class AdminOrdersPage extends StatefulWidget {
@@ -29,6 +31,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   DateTime _fechaSeleccionada = DateTime.now();
   bool _filtrarPorFecha = false;
   bool _mostrarVentaDirecta = false;
+  bool _sinProgramar = false;
 
   @override
   void initState() {
@@ -48,6 +51,9 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
           .select('''
       id,
       cliente_id,
+      fecha_entrega,
+      origen,
+      tipo_precio,
       created_at,
       estado,
       resultado_entrega,
@@ -70,13 +76,19 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
 
       if (_mostrarVentaDirecta) {
         consulta = consulta.eq('tipo_operacion', 'venta_directa');
+      } else if (_sinProgramar) {
+        consulta = consulta
+            .eq('tipo_operacion', 'pedido')
+            .eq('origen', 'catalogo')
+            .isFilter('fecha_entrega', null)
+            .not('estado', 'in', '(cancelado,anulado)');
       } else {
         consulta = consulta
             .eq('tipo_operacion', 'pedido')
             .eq('facturado', true);
       }
 
-      if (_filtrarPorFecha && !_mostrarVentaDirecta) {
+      if (_filtrarPorFecha && !_mostrarVentaDirecta && !_sinProgramar) {
         final fechaFiltro =
             '${_fechaSeleccionada.year.toString().padLeft(4, '0')}-'
             '${_fechaSeleccionada.month.toString().padLeft(2, '0')}-'
@@ -264,12 +276,7 @@ productos (
   }
 
   Future<void> _elegirFecha() async {
-    final fecha = await showDatePicker(
-      context: context,
-      initialDate: _fechaSeleccionada,
-      firstDate: DateTime(2025),
-      lastDate: DateTime(2030),
-    );
+    final fecha = await pickDeliveryDate(context, selected: _fechaSeleccionada);
 
     if (!mounted || fecha == null) return;
 
@@ -287,6 +294,32 @@ productos (
     });
 
     await _cargarPedidos();
+  }
+
+  Future<void> _alternarSinProgramar() async {
+    setState(() {
+      _sinProgramar = !_sinProgramar;
+      _pedidosSeleccionados.clear();
+    });
+    await _cargarPedidos();
+  }
+
+  Future<void> _abrirPedido(Map<String, dynamic> pedido) async {
+    if (_sinProgramar) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => OrderDetailPage(pedido: pedido, client: _client),
+        ),
+      );
+      if (mounted) await _cargarPedidos();
+      return;
+    }
+    final actualizado = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ManageOrderPage(pedido: pedido, client: _client),
+      ),
+    );
+    if (actualizado == true && mounted) await _cargarPedidos();
   }
 
   void _recalcularResumenSeleccionados() {
@@ -363,6 +396,11 @@ productos (
       appBar: AppBar(
         title: const Text('Gestión de reparto'),
         actions: [
+          if (!_mostrarVentaDirecta)
+            TextButton(
+              onPressed: _cargando ? null : _alternarSinProgramar,
+              child: Text(_sinProgramar ? 'Volver a reparto' : 'Sin programar'),
+            ),
           if (appConfig.finalizationV2Enabled)
             IconButton(
               tooltip: 'Solicitudes guardadas / recuperación',
@@ -399,6 +437,7 @@ productos (
               onSelectionChanged: (seleccion) async {
                 setState(() {
                   _mostrarVentaDirecta = seleccion.first;
+                  _sinProgramar = false;
 
                   if (_mostrarVentaDirecta) {
                     _filtrarPorFecha = false;
@@ -451,6 +490,11 @@ productos (
       );
     }
 
+    if (_sinProgramar && _pedidos.isEmpty) {
+      return const Center(
+        child: Text('No hay pedidos de catálogo sin programar.'),
+      );
+    }
     if (_pedidos.isEmpty) {
       return Column(
         children: [
@@ -516,11 +560,13 @@ productos (
                 Text(
                   _mostrarVentaDirecta
                       ? 'Ventas directas pendientes'
+                      : _sinProgramar
+                      ? 'Catálogo · Entregas sin programar'
                       : _filtrarPorFecha
                       ? 'Entregas: ${_formatearFecha(_fechaSeleccionada.toIso8601String())}'
                       : 'Preventas pendientes',
                 ),
-                if (!_mostrarVentaDirecta)
+                if (!_mostrarVentaDirecta && !_sinProgramar)
                   OutlinedButton.icon(
                     onPressed: _filtrarPorFecha
                         ? _verTodosLosPendientes
@@ -628,6 +674,12 @@ productos (
                   width: 200,
                 ),
                 DesktopField('Preventista', recordSeller),
+                if (_sinProgramar)
+                  DesktopField(
+                    'Programación',
+                    (_) => 'Sin programar',
+                    width: 120,
+                  ),
                 DesktopField(
                   'Entrega',
                   (r) => r['resultado_entrega'],
@@ -646,14 +698,13 @@ productos (
                 ),
                 DesktopField('Observación', recordObservation, width: 180),
               ],
-              onOpen: (pedido) async {
-                final result = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(
-                    builder: (_) => ManageOrderPage(pedido: pedido),
-                  ),
-                );
-                if (result == true && mounted) await _cargarPedidos();
-              },
+              actions: _sinProgramar
+                  ? (pedido) => TextButton(
+                      onPressed: () => _abrirPedido(pedido),
+                      child: const Text('Programar'),
+                    )
+                  : null,
+              onOpen: _abrirPedido,
             ),
           ),
         ],
@@ -678,6 +729,8 @@ productos (
                       title: Text(
                         _mostrarVentaDirecta
                             ? 'Ventas directas pendientes'
+                            : _sinProgramar
+                            ? 'Catálogo · Entregas sin programar'
                             : _filtrarPorFecha
                             ? 'Pedidos para el ${_nombreDia(_fechaSeleccionada)} '
                                   '${_fechaSeleccionada.day.toString().padLeft(2, '0')}/'
@@ -692,7 +745,7 @@ productos (
                             ? 'Pendientes de entrega para esta fecha'
                             : 'Preventas cuya entrega todavía no fue gestionada',
                       ),
-                      trailing: _mostrarVentaDirecta
+                      trailing: _mostrarVentaDirecta || _sinProgramar
                           ? null
                           : Row(
                               mainAxisSize: MainAxisSize.min,
@@ -713,7 +766,7 @@ productos (
                                 const Icon(Icons.chevron_right),
                               ],
                             ),
-                      onTap: _mostrarVentaDirecta
+                      onTap: _mostrarVentaDirecta || _sinProgramar
                           ? null
                           : _filtrarPorFecha
                           ? _verTodosLosPendientes
@@ -952,20 +1005,13 @@ productos (
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final actualizado = await Navigator.of(context)
-                            .push<bool>(
-                              MaterialPageRoute(
-                                builder: (_) => ManageOrderPage(pedido: pedido),
-                              ),
-                            );
-
-                        if (actualizado == true) {
-                          await _cargarPedidos();
-                        }
-                      },
+                      onPressed: () => _abrirPedido(pedido),
                       icon: const Icon(Icons.edit_outlined),
-                      label: const Text('GESTIONAR PEDIDO'),
+                      label: Text(
+                        _sinProgramar
+                            ? 'PROGRAMAR ENTREGA'
+                            : 'GESTIONAR PEDIDO',
+                      ),
                     ),
                   ),
                 ],

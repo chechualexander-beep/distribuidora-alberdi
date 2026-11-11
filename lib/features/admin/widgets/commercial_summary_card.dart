@@ -33,6 +33,7 @@ class CommercialSummaryCard extends StatelessWidget {
     return SizedBox(
       width: 280,
       child: Card(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
         clipBehavior: Clip.antiAlias,
         child: ExpansionTile(
           key: PageStorageKey<String>(title),
