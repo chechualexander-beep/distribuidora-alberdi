@@ -101,6 +101,10 @@ def main():
             from venta_directa_contextual_cases import run
             run(sql, val, count, balance, stock, order)
             return
+        if sys.argv[1:] == ['--venta-directa-registro']:
+            from venta_directa_migration_executor_cases import run
+            run(sql, val, count)
+            return
 
         def unchanged(pedido, before_events, before_pay, before_stock=None):
             assert sql(f"select resultado_entrega from pedidos where id='{pedido}';")=='pendiente'
