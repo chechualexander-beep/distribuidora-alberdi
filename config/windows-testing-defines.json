@@ -1,7 +1,6 @@
 {
   "APP_ENV": "testing",
   "SUPABASE_TESTING_URL": "https://blcgugdeluzxvpwqkhjq.supabase.co",
-  "ENABLE_STOCK": "true",
-  "ENABLE_TESTING_DIRECT_SALES_V2": "true",
+  "ENABLE_STOCK": "false",
   "ENABLE_INTERNAL_BOLETAS": "false"
 }

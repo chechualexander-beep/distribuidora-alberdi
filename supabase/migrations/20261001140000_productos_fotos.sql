@@ -4,15 +4,19 @@ alter table public.productos add column foto_path text
 
 -- Solo fotografías de productos; nunca documentos, precios o datos de clientes.
 insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
-values ('productos-fotos','productos-fotos',true,307200,array['image/jpeg']);
+values ('productos-fotos','productos-fotos',true,307200,array['image/jpeg'])
+on conflict (id) do nothing; -- tolera un reset de TESTING (el bucket sobrevive)
 
+drop policy if exists fotos_productos_admin_insert on storage.objects;
 create policy fotos_productos_admin_insert on storage.objects for insert to authenticated
 with check (bucket_id='productos-fotos' and public.es_administrador()
   and name ~ '^[a-f0-9-]{36}/[0-9]+\.jpg$'
   and exists(select 1 from public.productos p where p.id::text=split_part(name,'/',1)));
+drop policy if exists fotos_productos_admin_select on storage.objects;
 create policy fotos_productos_admin_select on storage.objects for select to authenticated
 using (bucket_id='productos-fotos' and public.es_administrador());
 -- Reemplazar crea otra URL. Solo se pueden quitar archivos ya desvinculados.
+drop policy if exists fotos_productos_admin_delete on storage.objects;
 create policy fotos_productos_admin_delete on storage.objects for delete to authenticated
 using (bucket_id='productos-fotos' and public.es_administrador()
   and not exists(select 1 from public.productos p where p.foto_path=name));
