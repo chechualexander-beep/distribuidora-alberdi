@@ -19,6 +19,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'features/admin/admin_page.dart';
+import 'features/balances/balances_page.dart';
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 final _localAuthentication = LocalAuthentication();
@@ -754,6 +755,45 @@ class _HomePageState extends State<HomePage> {
                   },
                 ),
               ),
+
+              // SALDOS (acceso directo en el celular; en Windows está en el menú lateral)
+              if (esAdministrador)
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: Icon(
+                      Icons.account_balance_wallet_outlined,
+                      color: colorPrincipal,
+                      size: 28,
+                    ),
+                    title: Text(
+                      'Saldos',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: colorPrincipal,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        'Saldos de clientes y cobros',
+                        style: TextStyle(fontSize: 13, color: colorSecundario),
+                      ),
+                    ),
+                    trailing: Icon(Icons.chevron_right, color: colorPrincipal),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const BalancesPage()),
+                      );
+                    },
+                  ),
+                ),
 
               // ADMINISTRACIÓN
               if (esAdministrador)
