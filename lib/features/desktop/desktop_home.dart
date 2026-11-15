@@ -14,16 +14,19 @@ import '../admin/commercial_summary_page.dart';
 import '../stock/stock_models.dart';
 import '../stock/stock_page.dart';
 import '../balances/balances_page.dart';
+import '../catalog/general_catalog_page.dart';
 
 class DesktopHome extends StatefulWidget {
   const DesktopHome({
     super.key,
     required this.name,
     required this.isAdmin,
+    this.canGeneralCatalog = false,
     required this.onSignOut,
   });
   final String name;
   final bool isAdmin;
+  final bool canGeneralCatalog;
   final VoidCallback onSignOut;
   @override
   State<DesktopHome> createState() => _DesktopHomeState();
@@ -47,6 +50,9 @@ class _DesktopHomeState extends State<DesktopHome> {
     'Administrar productos' => const AdminProductsPage(),
     'Stock' when widget.isAdmin && enableStock => const StockPage(),
     'Saldos' when widget.isAdmin => const BalancesPage(),
+    'Catálogo general' when widget.canGeneralCatalog => GeneralCatalogPage(
+      isAdmin: widget.isAdmin,
+    ),
     'Resumen comercial' => const CommercialSummaryPage(),
     _ => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -138,6 +144,8 @@ class _DesktopHomeState extends State<DesktopHome> {
                       link('Productos', Icons.inventory_2_outlined),
                       link('Pedidos', Icons.receipt_long_outlined),
                       link('Mis comisiones', Icons.payments_outlined),
+                      if (widget.canGeneralCatalog)
+                        link('Catálogo general', Icons.storefront_outlined),
                       const SizedBox(height: 10),
                       FilledButton.icon(
                         onPressed: _newOrder,

@@ -40,6 +40,10 @@ export function obtenerCatalogo(token) {
   return rpc('obtener_catalogo_cliente', { p_token: token });
 }
 
+export function obtenerCatalogoGeneral(token) {
+  return rpc('obtener_catalogo_general', { p_token: token });
+}
+
 /** pendiente = { p_solicitud_id, p_items, p_observacion }. Reintentar con el mismo UUID no duplica. */
 export async function confirmarPedido(token, pendiente) {
   if (esDemo) {

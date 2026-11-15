@@ -40,11 +40,14 @@ import {
 } from './core.js';
 import {
   adaptarCatalogo,
+  adaptarCatalogoGeneral,
   itemsDelPedido,
-  tokenDesdeHash,
+  enlaceDesdeHash,
   formatearVencimiento,
+  mensajeGeneral,
 } from './alberdi-core.js';
-import { esDemo, baseFotos, obtenerCatalogo, confirmarPedido } from './alberdi.js';
+import { urlWhatsApp } from './core.js';
+import { esDemo, baseFotos, obtenerCatalogo, obtenerCatalogoGeneral, confirmarPedido } from './alberdi.js';
 
 /* ---------- Ayudas para construir el DOM sin innerHTML ---------- */
 
@@ -91,6 +94,9 @@ const estado = {
   categoria: null,
   texto: '',
   // Alberdi
+  modo: 'cliente', // 'cliente' (pedido directo) o 'general' (pedido por WhatsApp al preventista)
+  vendedor: '',
+  codigos: new Map(),
   token: null,
   cliente: '',
   venceAt: null,
@@ -100,7 +106,7 @@ const estado = {
   exito: null,
 };
 
-const CLAVE_TOKEN = 'alberdi:token';
+const CLAVE_ENLACE = 'alberdi:enlace';
 const clavePendiente = () => `alberdi-pendiente:${estado.token ?? 'demo'}`;
 
 function leerSesion(clave) {
@@ -120,15 +126,20 @@ function escribirSesion(clave, valor) {
   }
 }
 
-/** Token del enlace (#token=…). Se guarda en la pestaña y el hash vuelve a las rutas de la vitrina. */
-function leerToken() {
-  const delEnlace = tokenDesdeHash(location.hash);
-  if (delEnlace) {
-    escribirSesion(CLAVE_TOKEN, delEnlace);
+const textoEnlace = ({ tipo, token }) => `${tipo === 'general' ? 'general' : 'token'}=${token}`;
+
+/**
+ * Enlace del hash (#token=… o #general=…). Se guarda en la pestaña y el hash vuelve a las rutas de
+ * la vitrina, así el token no queda a la vista ni en el historial.
+ */
+function leerEnlace() {
+  const delHash = enlaceDesdeHash(location.hash);
+  if (delHash) {
+    escribirSesion(CLAVE_ENLACE, textoEnlace(delHash));
     history.replaceState(null, '', `${location.pathname}${location.search}#/`);
-    return delEnlace;
+    return delHash;
   }
-  return tokenDesdeHash(`token=${leerSesion(CLAVE_TOKEN) ?? ''}`);
+  return enlaceDesdeHash(leerSesion(CLAVE_ENLACE) ?? '');
 }
 
 function guardarPendiente() {
@@ -159,19 +170,37 @@ async function iniciar() {
       const respuesta = await fetch('catalogo.json', { cache: 'no-cache' });
       if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
       json = await respuesta.json();
-      estado.cliente = 'Cliente de prueba';
       estado.precios = new Map((json.productos ?? []).map((p) => [p.id, (p.precio_centavos ?? 0) / 100]));
+      // Demo del catálogo general: abrir con #general=<64 hex> (cualquiera).
+      if (enlaceDesdeHash(location.hash)?.tipo === 'general' || /^general=/.test(leerSesion(CLAVE_ENLACE) ?? '')) {
+        leerEnlace();
+        estado.modo = 'general';
+        estado.vendedor = 'Preventista de prueba';
+        json.comercio.whatsapp = '5493794000000';
+      } else {
+        estado.cliente = 'Cliente de prueba';
+      }
     } else {
-      const token = leerToken();
-      if (!token) {
+      const enlace = leerEnlace();
+      if (!enlace) {
         return mostrarError(app, 'Abrí el enlace que te compartió Distribuidora Alberdi para ver el catálogo.', false);
       }
-      estado.token = token;
-      const adaptado = adaptarCatalogo(await obtenerCatalogo(token), { token });
-      json = adaptado.json;
-      estado.precios = adaptado.precios;
-      estado.cliente = adaptado.cliente;
-      estado.venceAt = adaptado.venceAt;
+      estado.token = enlace.token;
+      if (enlace.tipo === 'general') {
+        const adaptado = adaptarCatalogoGeneral(await obtenerCatalogoGeneral(enlace.token), { token: enlace.token });
+        estado.modo = 'general';
+        json = adaptado.json;
+        estado.precios = adaptado.precios;
+        estado.codigos = adaptado.codigos;
+        estado.vendedor = adaptado.vendedor;
+        estado.venceAt = adaptado.venceAt;
+      } else {
+        const adaptado = adaptarCatalogo(await obtenerCatalogo(enlace.token), { token: enlace.token });
+        json = adaptado.json;
+        estado.precios = adaptado.precios;
+        estado.cliente = adaptado.cliente;
+        estado.venceAt = adaptado.venceAt;
+      }
     }
   } catch (error) {
     console.warn('No se pudo cargar el catálogo:', error);
@@ -179,7 +208,7 @@ async function iniciar() {
     return mostrarError(app);
   }
   try {
-    estado.pendiente = JSON.parse(leerSesion(clavePendiente()) ?? 'null');
+    estado.pendiente = estado.modo === 'cliente' ? JSON.parse(leerSesion(clavePendiente()) ?? 'null') : null;
   } catch {
     estado.pendiente = null;
   }
@@ -220,9 +249,9 @@ async function iniciar() {
 
   window.addEventListener('hashchange', () => {
     // Abrir otro enlace de catálogo en la misma pestaña: se carga ese cliente.
-    const otro = tokenDesdeHash(location.hash);
+    const otro = enlaceDesdeHash(location.hash);
     if (otro) {
-      escribirSesion(CLAVE_TOKEN, otro);
+      escribirSesion(CLAVE_ENLACE, textoEnlace(otro));
       history.replaceState(null, '', `${location.pathname}${location.search}#/`);
       location.reload();
       return;
@@ -467,14 +496,20 @@ function construirInicio(mensajes) {
   refs.horarios = construirHorarios(comercio);
 
   const vence = estado.venceAt ? formatearVencimiento(estado.venceAt) : '';
+  const general = estado.modo === 'general';
   const cabecera = h('header', { clase: 'cabecera' }, [
     h('div', { clase: 'interior' }, [
       h('img', { clase: 'logo', src: 'logo.png', alt: '', width: '240', height: '105' }),
       h('h1', { clase: 'sr-only', texto: comercio.nombre, tabindex: '-1', id: 'titulo-inicio' }),
       estado.cliente && h('p', { clase: 'saludo', texto: `Hola, ${estado.cliente}` }),
+      general && estado.vendedor && h('p', { clase: 'saludo', texto: `Te atiende ${estado.vendedor}` }),
       h('p', {
         clase: 'pastilla',
-        texto: vence ? `Podés hacer tu pedido hasta el ${vence}` : `Precios actualizados el ${formatearFecha(comercio.actualizado)}`,
+        texto: !vence
+          ? `Precios actualizados el ${formatearFecha(comercio.actualizado)}`
+          : general
+            ? `Precios válidos hasta el ${vence}`
+            : `Podés hacer tu pedido hasta el ${vence}`,
       }),
       refs.horarios,
     ]),
@@ -483,7 +518,9 @@ function construirInicio(mensajes) {
   // Línea de confianza, debajo del encabezado (el nombre entra con textContent).
   const confianza = h('p', {
     clase: 'confianza',
-    texto: `Este es el catálogo de ${comercio.nombre}. Tu pedido llega directo a la distribuidora: no hace falta registrarte ni pagar nada ahora.`,
+    texto: general
+      ? `Este es el catálogo de ${comercio.nombre}. Elegí tus productos y mandá el pedido por WhatsApp a tu preventista: no hace falta registrarte ni pagar nada ahora.`
+      : `Este es el catálogo de ${comercio.nombre}. Tu pedido llega directo a la distribuidora: no hace falta registrarte ni pagar nada ahora.`,
   });
 
   // Cartel de reconciliación del carrito (precios cambiados / productos quitados).
@@ -720,7 +757,7 @@ function aplicarFiltro() {
 const SEGUNDOS_DESHACER = 10;
 
 function construirPedido() {
-  const { comercio } = estado.catalogo;
+  const general = estado.modo === 'general';
 
   const volver = h('button', { clase: 'btn-volver', type: 'button', 'aria-label': 'Volver a la vitrina' }, [flechaAtras()]);
   volver.addEventListener('click', volverAInicio);
@@ -735,7 +772,12 @@ function construirPedido() {
     h('h2', { clase: 'seccion-titulo', id: 'titulo-lineas', texto: 'Lo que elegiste' }),
     refs.lineas,
     h('div', { clase: 'total-bloque' }, [h('p', { clase: 'total-etiqueta', texto: 'Total' }), refs.total]),
-    h('p', { clase: 'nota', texto: 'Los precios son los de tu lista. Distribuidora Alberdi confirma disponibilidad y entrega.' }),
+    h('p', {
+      clase: 'nota',
+      texto: general
+        ? 'Precios del catálogo. Tu preventista confirma disponibilidad y entrega.'
+        : 'Los precios son los de tu lista. Distribuidora Alberdi confirma disponibilidad y entrega.',
+    }),
   ]);
 
   // Observaciones.
@@ -745,8 +787,13 @@ function construirPedido() {
     maxlength: '1000',
     placeholder: 'Ej.: entregar después de las 10',
   });
+  if (general) {
+    refs.nombre = h('input', { id: 'nombre', type: 'text', maxlength: '60', autocomplete: 'organization', enterkeyhint: 'next' });
+    for (const campo of [refs.nombre, refs.aclaracion]) campo.addEventListener('input', actualizarBoton);
+  }
   const bloqueDatos = h('section', { clase: 'seccion', 'aria-labelledby': 'titulo-datos' }, [
-    h('h2', { clase: 'seccion-titulo', id: 'titulo-datos', texto: 'Observaciones' }),
+    h('h2', { clase: 'seccion-titulo', id: 'titulo-datos', texto: general ? 'Tus datos' : 'Observaciones' }),
+    general && h('div', { clase: 'campo' }, [h('label', { for: 'nombre', texto: 'Tu nombre o el de tu negocio' }), refs.nombre]),
     h('div', { clase: 'campo' }, [h('label', { for: 'aclaracion', texto: 'Algo que debamos saber (opcional)' }), refs.aclaracion]),
   ]);
 
@@ -765,11 +812,17 @@ function construirPedido() {
   refs.botonDeshacer = botonDeshacer;
 
   refs.error = h('p', { clase: 'aviso-largo', role: 'alert', hidden: true });
-  refs.enviar = h('button', { clase: 'btn-enviar', type: 'button', texto: 'Confirmar pedido' });
-  refs.enviar.addEventListener('click', confirmar);
+  if (general) {
+    refs.enviar = h('a', { clase: 'btn-enviar', target: '_blank', rel: 'noopener noreferrer', texto: 'Enviar pedido por WhatsApp' });
+  } else {
+    refs.enviar = h('button', { clase: 'btn-enviar', type: 'button', texto: 'Confirmar pedido' });
+    refs.enviar.addEventListener('click', confirmar);
+  }
   refs.notaEnvio = h('p', {
     clase: 'nota-envio',
-    texto: 'Tu pedido llega directo a Distribuidora Alberdi. Te confirmamos disponibilidad y entrega.',
+    texto: general
+      ? `Se abre WhatsApp con tu pedido listo para mandarle a ${estado.vendedor || 'tu preventista'}. Vos solo lo enviás.`
+      : 'Tu pedido llega directo a Distribuidora Alberdi. Te confirmamos disponibilidad y entrega.',
   });
   refs.grupoEnvio = h('div', {}, [refs.error, refs.enviar, refs.notaEnvio]);
 
@@ -835,7 +888,37 @@ function actualizarPie() {
   refs.pie.hidden = refs.grupoEnvio.hidden && refs.deshacer.hidden;
 }
 
+/** Catálogo general: arma el mensaje y deja el enlace de WhatsApp listo (o explica qué falta). */
+function actualizarEnlaceWhatsApp() {
+  const lineas = lineasDelPedido(estado.carrito, estado.porId);
+  const nombre = refs.nombre.value.trim();
+  const { texto, excedeLimite } = mensajeGeneral({
+    lineas,
+    codigos: estado.codigos,
+    vendedor: estado.vendedor,
+    nombre,
+    aclaracion: refs.aclaracion.value,
+  });
+  const url = lineas.length && nombre && !excedeLimite ? urlWhatsApp(estado.catalogo.comercio.whatsapp, texto) : null;
+  refs.error.textContent = excedeLimite
+    ? 'Tu pedido es demasiado largo para un solo mensaje de WhatsApp. Mandalo en dos partes.'
+    : 'Escribí tu nombre o el de tu negocio para enviar el pedido.';
+  refs.error.hidden = Boolean(url) || lineas.length === 0;
+  if (url) {
+    refs.enviar.setAttribute('href', url);
+    refs.enviar.removeAttribute('aria-disabled');
+    refs.enviar.removeAttribute('role');
+    refs.enviar.classList.remove('deshabilitado');
+  } else {
+    refs.enviar.removeAttribute('href');
+    refs.enviar.setAttribute('role', 'link');
+    refs.enviar.setAttribute('aria-disabled', 'true');
+    refs.enviar.classList.add('deshabilitado');
+  }
+}
+
 function actualizarBoton() {
+  if (estado.modo === 'general') return actualizarEnlaceWhatsApp();
   refs.enviar.disabled = estado.enviando;
   refs.enviar.textContent = estado.enviando
     ? 'Enviando…'

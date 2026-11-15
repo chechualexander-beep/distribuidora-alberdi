@@ -11,10 +11,24 @@ pedido con cantidades), pero los datos y el pedido van contra Supabase con el en
 - Si se corta internet al confirmar, el pedido queda guardado en esa pestaña y el botón pasa a
   **Reintentar confirmación**: se reenvía con el mismo identificador, así que nunca se duplica.
 
+## Catálogo general (preventista)
+
+- Lo generan el administrador y los preventistas que él habilita (app → **Catálogo general**;
+  el administrador ve ahí los interruptores "Preventistas que pueden generar").
+- Enlace: `https://distribuidora-alberdi.pages.dev/#general=<64 caracteres>`. Un mismo enlace
+  sirve para muchos clientes.
+- Precios: lista base + excepciones por categoría y por producto (igual que el del cliente).
+- Vale 7 días o hasta que se revoque. Quitarle el permiso a un preventista corta sus enlaces.
+- El cliente escribe su nombre o el de su negocio y el pedido sale **por WhatsApp** al número
+  que cargó el preventista (con el código de cada producto). No se crea ningún pedido en Alberdi.
+- El enlace queda guardado solo en el teléfono donde se generó; si se pierde, se genera uno
+  igual y se revoca el anterior.
+
 ## Archivos
 
 - `src/alberdi-core.js`: adaptación pura (respuesta de Supabase → formato Vitrina, errores, fechas).
-- `src/alberdi.js`: llamadas a Supabase (`obtener_catalogo_cliente`, `crear_pedido_catalogo`).
+- `src/alberdi.js`: llamadas a Supabase (`obtener_catalogo_cliente`, `crear_pedido_catalogo`,
+  `obtener_catalogo_general`).
 - `src/config.js`: en el repo queda en modo `demo` (sin red, usa `src/catalogo.json`).
 - `tool/armar.mjs`: arma los sitios publicables en `dist/`.
 

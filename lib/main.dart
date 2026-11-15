@@ -21,6 +21,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'features/admin/admin_page.dart';
 import 'features/balances/balances_page.dart';
+import 'features/catalog/general_catalog_page.dart';
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 final _localAuthentication = LocalAuthentication();
@@ -342,6 +343,7 @@ class _HomePageState extends State<HomePage> {
 
   String? _nombre;
   String? _rol;
+  bool _puedeCatalogoGeneral = false;
   String? _error;
 
   @override
@@ -434,6 +436,7 @@ class _HomePageState extends State<HomePage> {
         _rol = rol;
         _cargandoPerfil = false;
       });
+      _cargarPermisoCatalogoGeneral();
       if (rol == 'administrador') {
         await _configurarNotificaciones();
       }
@@ -444,6 +447,18 @@ class _HomePageState extends State<HomePage> {
         _error = 'No se pudo cargar el perfil del usuario.';
         _cargandoPerfil = false;
       });
+    }
+  }
+
+  /// Opcional: si el servidor todavía no tiene el catálogo general, el acceso no aparece.
+  Future<void> _cargarPermisoCatalogoGeneral() async {
+    try {
+      final puede = await Supabase.instance.client.rpc(
+        'puede_generar_catalogo_general',
+      );
+      if (mounted) setState(() => _puedeCatalogoGeneral = puede == true);
+    } catch (_) {
+      if (mounted) setState(() => _puedeCatalogoGeneral = false);
     }
   }
 
@@ -485,6 +500,7 @@ class _HomePageState extends State<HomePage> {
       return DesktopHome(
         name: _nombre ?? 'Usuario',
         isAdmin: esAdministrador,
+        canGeneralCatalog: _puedeCatalogoGeneral,
         onSignOut: _cerrarSesion,
       );
     }
@@ -787,6 +803,48 @@ class _HomePageState extends State<HomePage> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const BalancesPage()),
+                      );
+                    },
+                  ),
+                ),
+
+              // CATÁLOGO GENERAL (administrador y preventistas habilitados)
+              if (_puedeCatalogoGeneral)
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: Icon(
+                      Icons.storefront_outlined,
+                      color: colorPrincipal,
+                      size: 28,
+                    ),
+                    title: Text(
+                      'Catálogo general',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: colorPrincipal,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        'Un enlace para muchos clientes',
+                        style: TextStyle(fontSize: 13, color: colorSecundario),
+                      ),
+                    ),
+                    trailing: Icon(Icons.chevron_right, color: colorPrincipal),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              GeneralCatalogPage(isAdmin: esAdministrador),
+                        ),
                       );
                     },
                   ),

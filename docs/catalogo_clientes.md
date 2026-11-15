@@ -1,5 +1,7 @@
 # Catálogo web de clientes
 
+> Catálogo general del preventista (enlace para muchos clientes, pedido por WhatsApp): ver `catalogo/docs/ALBERDI.md` y la migración `20261116010000_catalogo_general.sql`.
+
 Primera versión implementada en `catalogo/`, independiente del acceso de empleados. No instala otra aplicación en el teléfono y no requiere publicar el Flutter de administración en la web.
 
 ## Estado de publicación — 1 de octubre de 2026

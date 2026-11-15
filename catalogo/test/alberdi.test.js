@@ -80,3 +80,56 @@ test('fechas en hora argentina', () => {
   assert.equal(formatearVencimiento('nada'), '');
   assert.equal(hoyArgentina(new Date('2026-11-15T02:00:00Z')), '2026-11-14');
 });
+
+import { enlaceDesdeHash, adaptarCatalogoGeneral, mensajeGeneral, MAX_MENSAJE_ALBERDI } from '../src/alberdi-core.js';
+
+test('enlace: cliente (#token=) y general (#general=)', () => {
+  assert.deepEqual(enlaceDesdeHash(`#token=${token}`), { tipo: 'cliente', token });
+  assert.deepEqual(enlaceDesdeHash(`#general=${token}`), { tipo: 'general', token });
+  assert.equal(enlaceDesdeHash('#general=corto'), null);
+  assert.equal(enlaceDesdeHash('#/pedido'), null);
+  assert.equal(tokenDesdeHash(`#general=${token}`), null, 'un enlace general nunca se usa como de cliente');
+});
+
+const general = {
+  nombre: 'Ofertas',
+  vendedor: 'Juan Pérez',
+  whatsapp: '5493794000000',
+  vence_at: '2026-11-22T13:00:00+00:00',
+  productos: respuesta.productos,
+};
+
+test('adaptar general: WhatsApp del preventista, códigos y otro carrito que el del cliente', () => {
+  const r = adaptarCatalogoGeneral(general, { token, hoy: '2026-11-15' });
+  assert.equal(validarCatalogo(r.json).ok, true, 'con WhatsApp no hace falta la opción de Alberdi');
+  assert.equal(r.json.comercio.whatsapp, '5493794000000');
+  assert.match(r.json.comercio.id, /^alberdi-g-[a-f0-9]{16}$/);
+  assert.notEqual(r.json.comercio.id, adaptarCatalogo(respuesta, { token }).json.comercio.id);
+  assert.equal(r.vendedor, 'Juan Pérez');
+  assert.equal(r.codigos.get('p1'), 'TUT1');
+  assert.equal(r.codigos.has('p2'), false);
+  assert.throws(() => adaptarCatalogoGeneral({ ...general, whatsapp: '0379' }, { token }), /WhatsApp/);
+});
+
+test('mensaje general: saludo al preventista, código, total, quién pide y aclaración', () => {
+  const { json, codigos } = adaptarCatalogoGeneral(general, { token, hoy: '2026-11-15' });
+  const [p1, p2] = json.productos;
+  const lineas = [
+    { producto: p1, cantidad: 2, subtotal: 466100 },
+    { producto: p2, cantidad: 1, subtotal: 10000 },
+  ];
+  const { texto, excedeLimite } = mensajeGeneral({
+    lineas, codigos, vendedor: 'Juan Pérez', nombre: '  Kiosco   Lola ', aclaracion: 'Martes\n\n  a la tarde ',
+  });
+  assert.equal(excedeLimite, false);
+  const filas = texto.split('\n');
+  assert.equal(filas[0], 'Hola Juan Pérez, quiero hacer un pedido:');
+  assert.match(filas[1], /^• 2 × Tutuca S\. Cay\. x 1kg \(TUT1\) — \$\s?4\.661$/);
+  assert.match(filas[2], /^• 1 × Sin categoría — \$\s?100$/);
+  assert.match(filas[3], /^Total: \$\s?4\.761$/);
+  assert.equal(filas[4], 'Soy Kiosco Lola.');
+  assert.deepEqual(filas.slice(5), ['Martes', 'a la tarde', 'Catálogo de Distribuidora Alberdi']);
+  const largo = mensajeGeneral({ lineas: Array.from({ length: 80 }, () => lineas[0]), codigos });
+  assert.equal(largo.excedeLimite, largo.texto.length > MAX_MENSAJE_ALBERDI);
+  assert.equal(largo.excedeLimite, true);
+});

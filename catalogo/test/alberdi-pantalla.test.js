@@ -71,3 +71,29 @@ test('con un pedido sin confirmar, el carrito no se cambia y el botón ofrece re
   assert.equal(await navegador.evaluar("document.querySelector('.btn-enviar').textContent"), 'Reintentar confirmación');
   await navegador.evaluar("sessionStorage.clear()");
 });
+
+test('catálogo general: vendedor, nombre obligatorio y pedido por WhatsApp al preventista', opciones, async () => {
+  await navegador.abrir(`${base}#general=${'c'.repeat(64)}`);
+  await esperar(200);
+  assert.equal(await navegador.evaluar('location.hash'), '#/', 'el token no queda a la vista');
+  assert.equal(await navegador.evaluar("document.querySelector('.saludo').textContent"), 'Te atiende Preventista de prueba');
+  assert.match(await navegador.evaluar("document.querySelector('.confianza').textContent"), /por WhatsApp a tu preventista/);
+  await navegador.evaluar("document.querySelectorAll('.btn-mas')[0].click()");
+  await navegador.evaluar("location.hash = '#/pedido'");
+  await esperar(200);
+  const antes = JSON.parse(await navegador.evaluar(`JSON.stringify({
+    texto: document.querySelector('.btn-enviar').textContent,
+    href: document.querySelector('.btn-enviar').getAttribute('href'),
+    error: document.querySelector('[role=alert]:not([hidden])')?.textContent ?? null,
+  })`));
+  assert.equal(antes.texto, 'Enviar pedido por WhatsApp');
+  assert.equal(antes.href, null, 'sin nombre no se puede enviar');
+  assert.match(antes.error, /Escribí tu nombre/);
+  await navegador.evaluar("const n = document.querySelector('#nombre'); n.value = 'Kiosco Lola'; n.dispatchEvent(new Event('input'))");
+  const href = await navegador.evaluar("document.querySelector('.btn-enviar').getAttribute('href')");
+  assert.match(href, /^https:\/\/wa\.me\/5493794000000\?text=/);
+  const texto = decodeURIComponent(href.split('text=')[1]);
+  assert.match(texto, /^Hola Preventista de prueba, quiero hacer un pedido:/);
+  assert.match(texto, /Soy Kiosco Lola\./);
+  await navegador.evaluar('sessionStorage.clear(); localStorage.clear()');
+});
