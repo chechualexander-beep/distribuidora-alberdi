@@ -16,8 +16,11 @@ class AppConfig {
 
   bool get isTesting => environment == AppEnvironment.testing;
   bool get notificationsEnabled => !isTesting;
-  // No testing catalog destination has been approved yet.
-  bool get catalogEnabled => !isTesting;
+  // Cada entorno publica su propio sitio del catálogo (TESTING nunca usa el de producción).
+  bool get catalogEnabled => true;
+  static const productionCatalogUrl = 'https://distribuidora-alberdi.pages.dev';
+  static const testingCatalogUrl = 'https://alberdi-catalogo-testing.pages.dev';
+  String get catalogUrl => isTesting ? testingCatalogUrl : productionCatalogUrl;
   // 1.0.8: cierres, venta directa, cobros y devoluciones por el circuito V2
   // en ambos entornos. Stock V2 puede estar apagado (régimen OFF).
   bool get finalizationV2Enabled => true;

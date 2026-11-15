@@ -1,0 +1,13 @@
+{
+  "name": "alberdi-catalogo",
+  "version": "0.1.0",
+  "description": "Catálogo web de Distribuidora Alberdi (basado en Vitrina). El pedido entra directo a Alberdi.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.cjs",
+    "start:red": "node server.cjs --red",
+    "test": "node --test \"test/*.test.js\"",
+    "armar": "node tool/armar.mjs"
+  }
+}

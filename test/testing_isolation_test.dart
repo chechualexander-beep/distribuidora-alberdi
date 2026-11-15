@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:distribuidora_alberdi/core/app_config.dart';
 import 'package:distribuidora_alberdi/core/environment_frame.dart';
 import 'package:distribuidora_alberdi/core/environment_auth_storage.dart';
-import 'package:distribuidora_alberdi/features/clients/client_catalog_page.dart';
 import 'package:distribuidora_alberdi/features/orders/finalization_request.dart';
 import 'package:distribuidora_alberdi/features/orders/pending_finalizations_page.dart';
 import 'package:flutter/material.dart';
@@ -50,30 +49,18 @@ void main() {
     () => activateAppConfig(AppConfig.resolve(productionKey: fixtureKey)),
   );
 
-  testWidgets(
-    'testing catalog is blocked without initializing any Supabase client',
-    (tester) async {
-      SharedPreferences.setMockInitialValues({
-        'catalogo_url': 'https://distribuidora-alberdi.pages.dev',
-        'catalogo_link_client':
-            'https://distribuidora-alberdi.pages.dev/#token=fixture',
-      });
-      activateAppConfig(testingConfig());
-      await tester.pumpWidget(
-        const MaterialApp(home: ClientCatalogPage(cliente: {'id': 'client'})),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Catálogo deshabilitado'), findsOneWidget);
-      expect(find.text('Ver catálogo'), findsNothing);
-      expect(find.byType(TextField), findsNothing);
-      expect(tester.takeException(), isNull);
-      final prefs = await SharedPreferences.getInstance();
-      expect(
-        prefs.getString('catalogo_url'),
-        'https://distribuidora-alberdi.pages.dev',
-      );
-    },
-  );
+  test('testing catalog uses its own site and never production keys', () {
+    final config = testingConfig();
+    expect(config.catalogEnabled, isTrue);
+    expect(config.catalogUrl, 'https://alberdi-catalogo-testing.pages.dev');
+    expect(config.catalogUrl, isNot(contains('distribuidora-alberdi.pages.dev')));
+    expect(config.catalogPreferenceKey('url'), 'catalogo:blcgugdeluzxvpwqkhjq:url');
+    final production = AppConfig.resolve(productionKey: fixtureKey);
+    expect(
+      production.catalogPreferenceKey('url'),
+      'catalogo:vmbncsqapqdyffscwfwo:url',
+    );
+  });
 
   testWidgets('production recovery screen is available since 1.0.8', (
     tester,

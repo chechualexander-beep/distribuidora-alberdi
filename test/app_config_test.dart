@@ -27,6 +27,7 @@ void main() {
     expect(config.supabaseKey, fixtureKey);
     expect(config.notificationsEnabled, isTrue);
     expect(config.catalogEnabled, isTrue);
+    expect(config.catalogUrl, 'https://distribuidora-alberdi.pages.dev');
     expect(config.usesV2For('pedido'), isTrue);
     expect(config.usesV2For('venta_directa'), isTrue);
   });
@@ -40,7 +41,8 @@ void main() {
     );
     expect(config.isTesting, isTrue);
     expect(config.notificationsEnabled, isFalse);
-    expect(config.catalogEnabled, isFalse);
+    expect(config.catalogEnabled, isTrue);
+    expect(config.catalogUrl, 'https://alberdi-catalogo-testing.pages.dev');
     expect(config.usesV2For('pedido'), isTrue);
     expect(config.usesV2For('venta_directa'), isTrue);
   });

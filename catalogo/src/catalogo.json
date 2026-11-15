@@ -1,0 +1,128 @@
+{
+  "formato": 1,
+  "comercio": {
+    "id": "kiosco-ejemplo",
+    "nombre": "Kiosco de Ejemplo",
+    "whatsapp": "5490000000000",
+    "actualizado": "2026-11-12",
+    "tema": "verde",
+    "horarios": {
+      "lunes": ["08:00-12:00", "17:00-21:00"],
+      "martes": ["08:00-21:00"],
+      "miercoles": ["08:00-21:00"],
+      "jueves": ["08:00-21:00"],
+      "viernes": ["08:00-21:00"],
+      "sabado": ["09:00-14:00"],
+      "domingo": []
+    },
+    "horarios_nota": "Feriados: consultanos por WhatsApp"
+  },
+  "productos": [
+    {
+      "id": "p-001",
+      "nombre": "Alfajor triple",
+      "descripcion": "Chocolate, 70 g",
+      "categoria": "Golosinas",
+      "precio_centavos": 120000,
+      "precio_anterior_centavos": 140000,
+      "unidad": "unidad",
+      "miniatura": "img/p-001.svg",
+      "destacado": false,
+      "visible": true
+    },
+    {
+      "id": "p-002",
+      "nombre": "Chicles de menta",
+      "descripcion": "Paquete de 5 unidades",
+      "categoria": "Golosinas",
+      "precio_centavos": 30000,
+      "unidad": "unidad"
+    },
+    {
+      "id": "p-003",
+      "nombre": "Chocolate con almendras",
+      "descripcion": "Tableta de 100 g",
+      "categoria": "Golosinas",
+      "precio_centavos": 280000,
+      "unidad": "unidad"
+    },
+    {
+      "id": "p-004",
+      "nombre": "Leche entera",
+      "descripcion": "Sachet de 1 litro",
+      "categoria": "Lácteos",
+      "precio_centavos": 160000,
+      "unidad": "unidad"
+    },
+    {
+      "id": "p-005",
+      "nombre": "Queso cremoso",
+      "descripcion": "Se vende por kilo",
+      "categoria": "Lácteos",
+      "precio_centavos": 800000,
+      "unidad": "kg",
+      "miniatura": "img/p-005.svg"
+    },
+    {
+      "id": "p-006",
+      "nombre": "Yogur bebible de frutilla",
+      "descripcion": "Botella de 900 g",
+      "categoria": "Lácteos",
+      "precio_centavos": 210000,
+      "unidad": "unidad"
+    },
+    {
+      "id": "p-007",
+      "nombre": "Agua mineral",
+      "descripcion": "Sin gas, 1,5 litros",
+      "categoria": "Bebidas",
+      "precio_centavos": 90000,
+      "precio_anterior_centavos": 110000,
+      "unidad": "unidad"
+    },
+    {
+      "id": "p-008",
+      "nombre": "Gaseosa cola",
+      "descripcion": "Botella de 2,25 litros",
+      "categoria": "Bebidas",
+      "precio_centavos": 270000,
+      "unidad": "unidad"
+    },
+    {
+      "id": "p-009",
+      "nombre": "Yerba mate suave con palo, paquete de 500 g",
+      "descripcion": "Sabor suave, con palo",
+      "categoria": "Almacén",
+      "precio_centavos": 250000,
+      "unidad": "unidad",
+      "miniatura": "img/p-009.svg",
+      "destacado": true
+    },
+    {
+      "id": "p-010",
+      "nombre": "Fideos tirabuzón",
+      "descripcion": "Paquete de 500 g",
+      "categoria": "Almacén",
+      "precio_centavos": 140000,
+      "unidad": "unidad"
+    },
+    {
+      "id": "p-011",
+      "nombre": "Pan lactal",
+      "descripcion": "Tajado, 550 g",
+      "categoria": "Panadería",
+      "precio_centavos": 190000,
+      "unidad": "unidad",
+      "destacado": true
+    },
+    {
+      "id": "p-012",
+      "nombre": "Papas fritas",
+      "descripcion": "Paquete grande, 150 g",
+      "categoria": "Golosinas",
+      "precio_centavos": 230000,
+      "unidad": "unidad",
+      "destacado": true
+    }
+  ]
+}

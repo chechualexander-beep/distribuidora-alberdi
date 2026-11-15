@@ -20,7 +20,7 @@ La dirección general pide abrir el enlace del cliente: ese comportamiento es in
 ## Puesta en marcha
 
 1. Las siete migraciones de catálogo y acceso ya están aplicadas al proyecto Alberdi. Para una instalación nueva, revisar `supabase migration list --linked` y el `db push --dry-run` antes de enviar migraciones. No cambian precios ni asignan reglas a todos los clientes.
-2. El contenido de `catalogo/` está publicado en Cloudflare Pages. No requiere compilación ni paquetes JavaScript. Para actualizarlo, comprimir `index.html`, `catalogo.css`, `catalogo.js`, `catalogo-core.js` y `_headers` en la raíz del ZIP y crear un nuevo despliegue de producción en el mismo proyecto. El catálogo usa el proyecto indicado en `lib/main.dart`; para pruebas contra otro proyecto hay que cambiar endpoint, clave publicable y `connect-src` tanto en HTML como en `_headers`.
+2. Desde la versión con la cara de Vitrina, el sitio se arma con `node tool/armar.mjs` dentro de `catalogo/` y se sube la carpeta `dist/produccion` (o `dist/testing`) a Cloudflare Pages. Ver `catalogo/docs/ALBERDI.md`.
 3. Compilar/actualizar Alberdi **después de aplicar la migración**, que agrega `pedidos.origen`. En la ficha del cliente, entrar a **Catálogo web del cliente** como administrador.
 4. Seleccionar explícitamente Normal, Promo o Interior como base. Agregar excepciones por categoría y producto. Producto tiene prioridad sobre categoría, y categoría sobre base. Las reglas se guardan en Supabase, independientemente de las plantillas locales de PDF.
 5. Ingresar la dirección HTTPS publicada (sin parámetros ni fragmentos), generar el enlace, abrirlo para revisar precios y copiarlo para enviarlo al cliente. No se envían mensajes automáticamente.

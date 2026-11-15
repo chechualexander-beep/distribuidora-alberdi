@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 84" role="img" aria-label="Queso">
+  <rect width="120" height="84" fill="#E8EAF6"/>
+  <polygon points="22,58 98,58 98,36 22,48" fill="#F2C94C"/>
+  <polygon points="22,48 98,36 80,22 30,32" fill="#F7DC7A"/>
+  <circle cx="44" cy="52" r="3.5" fill="#D9A92B"/>
+  <circle cx="70" cy="50" r="2.5" fill="#D9A92B"/>
+  <circle cx="86" cy="45" r="3" fill="#D9A92B"/>
+</svg>

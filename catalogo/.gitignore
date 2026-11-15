@@ -1,0 +1,7 @@
+node_modules/
+# Catálogo de 500 productos para pruebas de rendimiento (se genera con test/helpers/generar-500.js)
+src/catalogo.500.json
+*.log
+.DS_Store
+Thumbs.db
+dist/

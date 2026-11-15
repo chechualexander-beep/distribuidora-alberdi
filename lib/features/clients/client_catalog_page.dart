@@ -104,10 +104,9 @@ class _ClientCatalogPageState extends State<ClientCatalogPage> {
         }
         _url.text =
             prefs.getString(appConfig.catalogPreferenceKey('url')) ??
-            const String.fromEnvironment(
-              'CATALOGO_URL',
-              defaultValue: 'https://distribuidora-alberdi.pages.dev',
-            );
+            (const String.fromEnvironment('CATALOGO_URL').isNotEmpty
+                ? const String.fromEnvironment('CATALOGO_URL')
+                : appConfig.catalogUrl);
         final stored = prefs.getString(
           appConfig.catalogPreferenceKey('link:$_id'),
         );
@@ -399,7 +398,7 @@ class _ClientCatalogPageState extends State<ClientCatalogPage> {
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'El catálogo está deshabilitado en TESTING hasta disponer de un destino aislado.',
+              'El catálogo no está disponible en este entorno.',
             ),
           ),
         ),
