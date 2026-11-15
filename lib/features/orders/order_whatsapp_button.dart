@@ -29,7 +29,9 @@ class _OrderWhatsAppButtonState extends State<OrderWhatsAppButton> {
   bool _busy = false;
   SupabaseClient get _client => widget.client ?? Supabase.instance.client;
 
-  Future<void> _open() async {
+  /// `otherNumber`: enviar a un número distinto del guardado (por ejemplo, el encargado),
+  /// sin cambiar la ficha del cliente.
+  Future<void> _open({bool otherNumber = false}) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
@@ -53,14 +55,18 @@ class _OrderWhatsAppButtonState extends State<OrderWhatsAppButton> {
         return;
       }
       final previous = customer['telefono'] as String?;
-      var number = normalizeArgentineWhatsApp(previous);
+      var number = otherNumber ? null : normalizeArgentineWhatsApp(previous);
       if (number == null) {
-        final canSave = await _canEdit(actor, customer['preventista_id']);
+        final canSave =
+            !otherNumber && await _canEdit(actor, customer['preventista_id']);
         if (!mounted || _client.auth.currentUser?.id != actor) return;
         final choice = await showDialog<({String number, bool save})>(
           context: context,
-          builder: (_) =>
-              _WhatsAppNumberDialog(previous: previous, canSave: canSave),
+          builder: (_) => _WhatsAppNumberDialog(
+            previous: otherNumber ? null : previous,
+            canSave: canSave,
+            otherNumber: otherNumber,
+          ),
         );
         if (choice == null ||
             !mounted ||
@@ -125,24 +131,48 @@ class _OrderWhatsAppButtonState extends State<OrderWhatsAppButton> {
         widget.enabled && !_busy && (widget.clientId?.isNotEmpty ?? false);
     const label = 'Enviar por WhatsApp';
     if (widget.compact) {
-      return IconButton(
-        tooltip: label,
-        onPressed: available ? _open : null,
-        icon: const Icon(Icons.chat_outlined),
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: label,
+            onPressed: available ? () => _open() : null,
+            icon: const Icon(Icons.chat_outlined),
+          ),
+          IconButton(
+            tooltip: 'Enviar por WhatsApp a otro número',
+            onPressed: available ? () => _open(otherNumber: true) : null,
+            icon: const Icon(Icons.phone_forwarded_outlined),
+          ),
+        ],
       );
     }
-    return TextButton(
-      onPressed: available ? _open : null,
-      child: const Text(label),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextButton(
+          onPressed: available ? () => _open() : null,
+          child: const Text(label),
+        ),
+        TextButton(
+          onPressed: available ? () => _open(otherNumber: true) : null,
+          child: const Text('Otro número'),
+        ),
+      ],
     );
   }
 }
 
 class _WhatsAppNumberDialog extends StatefulWidget {
-  const _WhatsAppNumberDialog({required this.previous, required this.canSave});
+  const _WhatsAppNumberDialog({
+    required this.previous,
+    required this.canSave,
+    this.otherNumber = false,
+  });
 
   final String? previous;
   final bool canSave;
+  final bool otherNumber;
 
   @override
   State<_WhatsAppNumberDialog> createState() => _WhatsAppNumberDialogState();
@@ -151,17 +181,8 @@ class _WhatsAppNumberDialog extends StatefulWidget {
 class _WhatsAppNumberDialogState extends State<_WhatsAppNumberDialog> {
   final _form = GlobalKey<FormState>();
   late final _number = TextEditingController(text: widget.previous);
-  bool _confirmedMobile = false;
 
-  bool get _needsMobileConfirmation =>
-      normalizeArgentineWhatsApp(_number.text) == null &&
-      normalizeArgentineWhatsApp(_number.text, nationalMobileConfirmed: true) !=
-          null;
-
-  String? get _normalized => normalizeArgentineWhatsApp(
-    _number.text,
-    nationalMobileConfirmed: _confirmedMobile,
-  );
+  String? get _normalized => normalizeArgentineWhatsApp(_number.text);
 
   @override
   void dispose() {
@@ -177,7 +198,11 @@ class _WhatsAppNumberDialogState extends State<_WhatsAppNumberDialog> {
   @override
   Widget build(BuildContext context) => AlertDialog(
     scrollable: true,
-    title: const Text('Agregar número de WhatsApp'),
+    title: Text(
+      widget.otherNumber
+          ? 'Enviar a otro número'
+          : 'Agregar número de WhatsApp',
+    ),
     content: Form(
       key: _form,
       child: Column(
@@ -193,21 +218,10 @@ class _WhatsAppNumberDialogState extends State<_WhatsAppNumberDialog> {
               helperText: 'Alberdi agrega +54 9 si hace falta.',
               errorMaxLines: 3,
             ),
-            onChanged: (_) => setState(() => _confirmedMobile = false),
-            validator: (_) {
-              if (_normalized != null) return null;
-              return _needsMobileConfirmation
-                  ? 'Confirmá que el número es de un celular.'
-                  : 'Ingresá el número completo, incluido el código de área.';
-            },
+            validator: (_) => _normalized != null
+                ? null
+                : 'Ingresá el número completo, incluido el código de área.',
           ),
-          if (_needsMobileConfirmation)
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Es un número de celular'),
-              value: _confirmedMobile,
-              onChanged: (value) => setState(() => _confirmedMobile = value!),
-            ),
         ],
       ),
     ),

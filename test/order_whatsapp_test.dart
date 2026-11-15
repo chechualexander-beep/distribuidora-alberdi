@@ -17,42 +17,34 @@ const customer = '108ac3fe-b37e-49cb-b5de-25d5de57ae27';
 const mobile = '5491123456789';
 
 void main() {
-  test('Normaliza celulares argentinos solo con prefijo móvil inequívoco', () {
+  test('Normaliza celulares argentinos: un número nacional completo es celular', () {
     for (final value in [
       '+54 (9) 11 2345-6789',
       '54 9 11 2345 6789',
       '9 11 2345 6789',
       '(011) 15-2345-6789',
       '11 15 2345 6789',
+      '11 2345-6789',
+      '011 2345-6789',
+      '+54 11 2345-6789',
+      '011 15 2345-6789',
     ]) {
       expect(normalizeArgentineWhatsApp(value), mobile, reason: value);
     }
     expect(normalizeArgentineWhatsApp('(0341) 15 234-5678'), '5493412345678');
+    expect(normalizeArgentineWhatsApp('(0341) 234-5678'), '5493412345678');
     expect(normalizeArgentineWhatsApp('02972 15 23-4567'), '5492972234567');
-    for (final entry in {
-      '11 2345-6789': mobile,
-      '(0341) 234-5678': '5493412345678',
-      '2972 23-4567': '5492972234567',
-      '+54 9 11 2345-6789': mobile,
-      '011 15 2345-6789': mobile,
-    }.entries) {
-      expect(
-        normalizeArgentineWhatsApp(entry.key, nationalMobileConfirmed: true),
-        entry.value,
-      );
-    }
-    expect(
-      normalizeArgentineWhatsApp('2345-6789', nationalMobileConfirmed: true),
-      isNull,
-    );
+    expect(normalizeArgentineWhatsApp('2972 23-4567'), '5492972234567');
+    expect(normalizeArgentineWhatsApp('381 458-1234'), '5493814581234');
+    expect(normalizeArgentineWhatsApp('3814581234'), '5493814581234');
+    expect(normalizeArgentineWhatsApp('0381 15 458-1234'), '5493814581234');
+    // Sin código de área no se adivina; tampoco números raros o de otros países.
     for (final value in [
       null,
       '',
       '2345-6789',
+      '458-1234',
       '15-2345-6789',
-      '11 2345-6789',
-      '+54 11 2345-6789',
-      '011 2345-6789',
       '+1 202 555 0100',
       '+54 9 11 2345-6789 / 2345-6700',
       '11 15 2345-6789 int. 2',
@@ -61,6 +53,11 @@ void main() {
     ]) {
       expect(normalizeArgentineWhatsApp(value), isNull, reason: value);
     }
+    // El criterio estricto anterior sigue disponible.
+    expect(
+      normalizeArgentineWhatsApp('11 2345-6789', nationalMobileConfirmed: false),
+      isNull,
+    );
   });
 
   test('El enlace conserva saltos, acentos, signos y el importe', () {
@@ -216,37 +213,56 @@ void main() {
       expect(find.text('Enviar por WhatsApp'), findsOneWidget);
     });
 
-    testWidgets(
-      'Acepta entrada incremental nacional con confirmación de móvil',
-      (tester) async {
-        await openOrder(tester);
-        await send(tester);
-        const national = '1123456789';
-        for (var count = 1; count <= national.length; count++) {
-          tester.testTextInput.updateEditingValue(
-            TextEditingValue(
-              text: national.substring(0, count),
-              selection: TextSelection.collapsed(offset: count),
-            ),
-          );
-          await tester.pump();
-        }
-        final field = tester.widget<TextFormField>(find.byType(TextFormField));
-        expect(field.controller!.text, national);
-        await tester.tap(find.text('Usar sin guardar'));
-        await tester.pumpAndSettle();
-        expect(
-          find.text('Confirmá que el número es de un celular.'),
-          findsOneWidget,
+    testWidgets('Un número nacional se usa sin confirmar que es celular', (
+      tester,
+    ) async {
+      await openOrder(tester);
+      await send(tester);
+      const national = '1123456789';
+      for (var count = 1; count <= national.length; count++) {
+        tester.testTextInput.updateEditingValue(
+          TextEditingValue(
+            text: national.substring(0, count),
+            selection: TextSelection.collapsed(offset: count),
+          ),
         );
-        expect(launches, isEmpty);
-        await tester.tap(find.text('Es un número de celular'));
-        await tester.tap(find.text('Usar sin guardar'));
-        await tester.pumpAndSettle();
-        expect(launches.single.path, '/$mobile');
-        expect(writes, 0);
-      },
-    );
+        await tester.pump();
+      }
+      final field = tester.widget<TextFormField>(find.byType(TextFormField));
+      expect(field.controller!.text, national);
+      expect(find.byType(CheckboxListTile), findsNothing);
+      await tester.tap(find.text('Usar sin guardar'));
+      await tester.pumpAndSettle();
+      expect(launches.single.path, '/$mobile');
+      expect(writes, 0);
+    });
+
+    testWidgets('Un teléfono guardado sin +54 9 se usa directo', (
+      tester,
+    ) async {
+      phone = '11 2345-6789';
+      await openOrder(tester);
+      await send(tester);
+      expect(find.text('Agregar número de WhatsApp'), findsNothing);
+      expect(launches.single.path, '/$mobile');
+      expect(writes, 0);
+    });
+
+    testWidgets('Otro número: no usa ni cambia el teléfono del cliente', (
+      tester,
+    ) async {
+      phone = '+$mobile';
+      await openOrder(tester);
+      await tester.tap(find.text('Otro número'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enviar a otro número'), findsOneWidget);
+      expect(find.text('Guardar y abrir'), findsNothing);
+      await tester.enterText(find.byType(TextFormField), '0381 15 458-1234');
+      await tester.tap(find.text('Usar sin guardar'));
+      await tester.pumpAndSettle();
+      expect(launches.single.path, '/5493814581234');
+      expect(writes, 0);
+    });
 
     testWidgets('Pegar un móvil internacional conserva un solo prefijo', (
       tester,
@@ -269,7 +285,7 @@ void main() {
       );
       await editable.pasteText(SelectionChangedCause.toolbar);
       await tester.pumpAndSettle();
-      expect(find.text('Es un número de celular'), findsNothing);
+      expect(find.byType(CheckboxListTile), findsNothing);
       await tester.tap(find.text('Usar sin guardar'));
       await tester.pumpAndSettle();
       expect(launches.single.path, '/$mobile');
