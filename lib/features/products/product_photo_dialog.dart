@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'product_photo.dart';
@@ -18,25 +19,41 @@ class _ProductPhotoDialogState extends State<ProductPhotoDialog> {
   bool _busy = false;
   String? _error;
 
-  Future<void> _pick() async {
+  /// La cámara solo existe en el celular (Android/iOS); en Windows se elige un archivo.
+  static bool get cameraAvailable =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
+  Future<void> _pick({bool camera = false}) async {
     if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final file = await FilePicker.pickFile(
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
-      );
-      if (file == null) return;
-      if (await file.length() > 20 * 1024 * 1024) {
-        throw const FormatException('La imagen supera los 20 MB.');
+      Uint8List? raw;
+      if (camera) {
+        final shot = await ImagePicker().pickImage(
+          source: ImageSource.camera,
+          maxWidth: 1600,
+          maxHeight: 1600,
+          imageQuality: 90,
+        );
+        raw = await shot?.readAsBytes();
+      } else {
+        final file = await FilePicker.pickFile(
+          type: FileType.custom,
+          allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+        );
+        if (file == null) return;
+        if (await file.length() > 20 * 1024 * 1024) {
+          throw const FormatException('La imagen supera los 20 MB.');
+        }
+        raw = await file.readAsBytes();
       }
-      final bytes = await compute(
-        prepareProductPhoto,
-        await file.readAsBytes(),
-      );
+      if (raw == null) return;
+      final bytes = await compute(prepareProductPhoto, raw);
       if (mounted) {
         setState(() {
           _bytes = bytes;
@@ -87,22 +104,20 @@ class _ProductPhotoDialogState extends State<ProductPhotoDialog> {
               ),
             );
       }
-      await db
-          .from('productos')
-          .update({'foto_path': path})
-          .eq('id', widget.product['id'])
-          .select('foto_path')
-          .single();
-      final oldPath = widget.product['foto_path']?.toString();
+      // Solo cambia la foto (nunca precios ni costos) y queda registrado quién la cambió.
+      // La foto anterior se conserva para poder deshacer el cambio.
+      await db.rpc(
+        'cambiar_foto_producto',
+        params: {'p_producto': widget.product['id'], 'p_foto': path},
+      );
       widget.product['foto_path'] = path;
-      if (oldPath != null && oldPath != path) {
-        try {
-          await db.storage.from(productPhotoBucket).remove([oldPath]);
-        } catch (_) {
-          /* La foto nueva ya está guardada. */
-        }
-      }
       if (mounted) Navigator.pop(context, true);
+    } on PostgrestException catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = error.message;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -147,10 +162,23 @@ class _ProductPhotoDialogState extends State<ProductPhotoDialog> {
                 'La misma foto se verá en Alberdi y en el catálogo web. Se reduce automáticamente al guardarla.',
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _busy ? null : _pick,
-                icon: const Icon(Icons.add_photo_alternate_outlined),
-                label: const Text('Elegir imagen'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  if (cameraAvailable)
+                    FilledButton.tonalIcon(
+                      onPressed: _busy ? null : () => _pick(camera: true),
+                      icon: const Icon(Icons.photo_camera_outlined),
+                      label: const Text('Sacar foto'),
+                    ),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : () => _pick(),
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    label: Text(cameraAvailable ? 'Galería' : 'Elegir imagen'),
+                  ),
+                ],
               ),
               if (_busy) const LinearProgressIndicator(),
               if (_error != null)

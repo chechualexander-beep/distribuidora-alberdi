@@ -1,4 +1,6 @@
 import 'product_photo.dart';
+import 'product_photo_dialog.dart';
+import 'product_photo_review_page.dart';
 import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_table.dart';
 import 'products_desktop_table.dart';
@@ -18,11 +20,46 @@ class _ProductsPageState extends State<ProductsPage> {
 
   List<Map<String, dynamic>> _productos = [];
   String _busqueda = '';
+  bool _soloSinFoto = false;
+  bool _puedeCargarFotos = false;
+  bool _esAdministrador = false;
 
   @override
   void initState() {
     super.initState();
     _cargarProductos();
+    _cargarPermisos();
+  }
+
+  /// Opcional: si el servidor todavía no tiene la carga de fotos, los botones no aparecen.
+  Future<void> _cargarPermisos() async {
+    try {
+      final db = Supabase.instance.client;
+      final fotos = await db.rpc('puede_cargar_fotos') == true;
+      final admin = await db.rpc('es_administrador') == true;
+      if (mounted) {
+        setState(() {
+          _puedeCargarFotos = fotos;
+          _esAdministrador = admin;
+        });
+      }
+    } catch (_) {
+      /* Sin permiso: solo consulta. */
+    }
+  }
+
+  Future<void> _cambiarFoto(Map<String, dynamic> producto) async {
+    final cambio = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ProductPhotoDialog(product: producto),
+    );
+    if (cambio == true && mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Foto guardada. Ya se ve en el catálogo.')),
+      );
+    }
   }
 
   Future<void> _cargarProductos() async {
@@ -71,6 +108,16 @@ class _ProductsPageState extends State<ProductsPage> {
       appBar: AppBar(
         title: const Text('Productos'),
         actions: [
+          if (_esAdministrador)
+            IconButton(
+              tooltip: 'Fotos cargadas por preventistas',
+              icon: const Icon(Icons.photo_library_outlined),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const ProductPhotoReviewPage(),
+                ),
+              ),
+            ),
           if (useDesktopLayout(context))
             IconButton(
               onPressed: _cargarProductos,
@@ -143,10 +190,17 @@ class _ProductsPageState extends State<ProductsPage> {
       final descripcion =
           producto['descripcion']?.toString().toLowerCase() ?? '';
 
+      if (_soloSinFoto &&
+          (producto['foto_path']?.toString() ?? '').isNotEmpty) {
+        return false;
+      }
       return nombre.contains(texto) ||
           codigo.contains(texto) ||
           descripcion.contains(texto);
     }).toList();
+    final sinFoto = _productos
+        .where((p) => (p['foto_path']?.toString() ?? '').isEmpty)
+        .length;
 
     return Column(
       children: [
@@ -165,6 +219,19 @@ class _ProductsPageState extends State<ProductsPage> {
             },
           ),
         ),
+        if (_puedeCargarFotos)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FilterChip(
+                avatar: const Icon(Icons.hide_image_outlined, size: 18),
+                label: Text('Sin foto ($sinFoto)'),
+                selected: _soloSinFoto,
+                onSelected: (valor) => setState(() => _soloSinFoto = valor),
+              ),
+            ),
+          ),
         Expanded(
           child: productosFiltrados.isEmpty
               ? const Center(
@@ -198,9 +265,30 @@ class _ProductsPageState extends State<ProductsPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              ProductPhoto(
-                                path: producto['foto_path']?.toString(),
-                                size: 88,
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  ProductPhoto(
+                                    path: producto['foto_path']?.toString(),
+                                    size: 88,
+                                  ),
+                                  if (_puedeCargarFotos) ...[
+                                    const SizedBox(width: 12),
+                                    OutlinedButton.icon(
+                                      onPressed: () => _cambiarFoto(producto),
+                                      icon: const Icon(
+                                        Icons.photo_camera_outlined,
+                                      ),
+                                      label: Text(
+                                        (producto['foto_path']?.toString() ??
+                                                    '')
+                                                .isEmpty
+                                            ? 'Agregar foto'
+                                            : 'Cambiar foto',
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               const SizedBox(height: 8),
                               Text(
