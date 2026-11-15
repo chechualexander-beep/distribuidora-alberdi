@@ -166,3 +166,24 @@ export function clasificarError({ estado, cuerpo, red = false }) {
   if (estado >= 500 || estado === 408 || estado === 429) return { tipo: 'incierto', mensaje: 'No pudimos confirmar el pedido. Volvé a intentar: no se va a duplicar.' };
   return { tipo: 'definitivo', mensaje };
 }
+
+const TEMA_DE_ALBERDI = Object.freeze({ alberdi: 'alberdi', rojo: 'rojo', azul: 'azul', verde: 'verde', naranja: 'ambar' });
+const normalizarCategoria = (t) => String(t ?? '').trim().toLowerCase();
+
+/**
+ * Aplica la presentación que configura el administrador (obtener_presentacion_catalogo) a un
+ * catálogo ya adaptado: color, orden de categorías (las no listadas van al final, en su orden) y
+ * novedades. Si la presentación falta o es inválida, el catálogo queda como estaba.
+ */
+export function aplicarPresentacion(json, presentacion) {
+  if (!presentacion || typeof presentacion !== 'object') return json;
+  const tema = TEMA_DE_ALBERDI[presentacion.tema] ?? json.comercio.tema;
+  const orden = Array.isArray(presentacion.orden_categorias) ? presentacion.orden_categorias.map(normalizarCategoria) : [];
+  const posicion = new Map(orden.map((c, i) => [c, i]));
+  const novedades = new Set(Array.isArray(presentacion.novedades) ? presentacion.novedades : []);
+  const productos = json.productos
+    .map((p, i) => ({ p, i, o: posicion.get(normalizarCategoria(p.categoria)) ?? orden.length }))
+    .sort((a, b) => a.o - b.o || a.i - b.i)
+    .map(({ p }) => (novedades.has(p.id) ? { ...p, destacado: true } : p));
+  return { ...json, comercio: { ...json.comercio, tema }, productos };
+}

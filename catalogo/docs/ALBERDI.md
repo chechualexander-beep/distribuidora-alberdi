@@ -24,6 +24,15 @@ pedido con cantidades), pero los datos y el pedido van contra Supabase con el en
 - El enlace queda guardado solo en el teléfono donde se generó; si se pierde, se genera uno
   igual y se revoca el anterior.
 
+## Apariencia (administrador)
+
+App → **Catálogo general** → **Apariencia del catálogo**. Vale para todos los catálogos:
+- Color: negro y dorado, rojo, azul, verde o naranja.
+- Novedades: productos marcados a mano, cada uno con fecha de fin (se quitan solos).
+- Orden de las categorías (las nuevas van al final, por nombre).
+
+El sitio la lee con `obtener_presentacion_catalogo()`; si no responde, muestra el estilo de siempre.
+
 ## Archivos
 
 - `src/alberdi-core.js`: adaptación pura (respuesta de Supabase → formato Vitrina, errores, fechas).

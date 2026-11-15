@@ -40,6 +40,11 @@ export function obtenerCatalogo(token) {
   return rpc('obtener_catalogo_cliente', { p_token: token });
 }
 
+/** Color, orden de categorías y novedades (iguales para todos los catálogos). */
+export function obtenerPresentacion() {
+  return rpc('obtener_presentacion_catalogo', {});
+}
+
 export function obtenerCatalogoGeneral(token) {
   return rpc('obtener_catalogo_general', { p_token: token });
 }

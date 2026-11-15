@@ -133,3 +133,26 @@ test('mensaje general: saludo al preventista, código, total, quién pide y acla
   assert.equal(largo.excedeLimite, largo.texto.length > MAX_MENSAJE_ALBERDI);
   assert.equal(largo.excedeLimite, true);
 });
+
+import { aplicarPresentacion } from '../src/alberdi-core.js';
+
+test('presentación: color, orden de categorías y novedades', () => {
+  const json = {
+    formato: 1,
+    comercio: { id: 'x', nombre: 'Distribuidora Alberdi', tema: 'alberdi', actualizado: '2026-11-15' },
+    productos: [
+      { id: 'a', nombre: 'A', categoria: 'Almacén', precio_centavos: 100, unidad: 'unidad' },
+      { id: 'b', nombre: 'B', categoria: 'Snacks', precio_centavos: 100, unidad: 'unidad' },
+      { id: 'c', nombre: 'C', categoria: 'Bebidas', precio_centavos: 100, unidad: 'unidad' },
+      { id: 'd', nombre: 'D', categoria: 'Snacks', precio_centavos: 100, unidad: 'unidad' },
+    ],
+  };
+  const r = aplicarPresentacion(json, { tema: 'naranja', orden_categorias: ['snacks', 'bebidas'], novedades: ['c'] });
+  assert.equal(r.comercio.tema, 'ambar');
+  assert.deepEqual(r.productos.map((p) => p.id), ['b', 'd', 'c', 'a']);
+  assert.equal(r.productos.find((p) => p.id === 'c').destacado, true);
+  assert.equal(json.productos[2].destacado, undefined, 'no modifica el original');
+  assert.equal(validarCatalogo(r, { whatsappOpcional: true }).ok, true);
+  assert.equal(aplicarPresentacion(json, null), json);
+  assert.equal(aplicarPresentacion(json, { tema: 'fucsia' }).comercio.tema, 'alberdi');
+});

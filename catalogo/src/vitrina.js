@@ -45,9 +45,10 @@ import {
   enlaceDesdeHash,
   formatearVencimiento,
   mensajeGeneral,
+  aplicarPresentacion,
 } from './alberdi-core.js';
 import { urlWhatsApp } from './core.js';
-import { esDemo, baseFotos, obtenerCatalogo, obtenerCatalogoGeneral, confirmarPedido } from './alberdi.js';
+import { esDemo, baseFotos, obtenerCatalogo, obtenerCatalogoGeneral, obtenerPresentacion, confirmarPedido } from './alberdi.js';
 
 /* ---------- Ayudas para construir el DOM sin innerHTML ---------- */
 
@@ -186,6 +187,11 @@ async function iniciar() {
         return mostrarError(app, 'Abrí el enlace que te compartió Distribuidora Alberdi para ver el catálogo.', false);
       }
       estado.token = enlace.token;
+      // La presentación es opcional: si no llega, se muestra el catálogo con el estilo de siempre.
+      const presentacion = obtenerPresentacion().catch((error) => {
+        console.warn('Sin presentación del catálogo:', error);
+        return null;
+      });
       if (enlace.tipo === 'general') {
         const adaptado = adaptarCatalogoGeneral(await obtenerCatalogoGeneral(enlace.token), { token: enlace.token });
         estado.modo = 'general';
@@ -201,6 +207,7 @@ async function iniciar() {
         estado.cliente = adaptado.cliente;
         estado.venceAt = adaptado.venceAt;
       }
+      json = aplicarPresentacion(json, await presentacion);
     }
   } catch (error) {
     console.warn('No se pudo cargar el catálogo:', error);

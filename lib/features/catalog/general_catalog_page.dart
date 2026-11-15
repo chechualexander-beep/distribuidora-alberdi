@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_theme.dart';
 import '../../core/desktop_records.dart';
+import 'catalog_appearance_page.dart';
 import 'catalog_rules.dart';
 import 'new_general_catalog_page.dart';
 
@@ -406,6 +407,22 @@ class _GeneralCatalogPageState extends State<GeneralCatalogPage> {
                     ],
                     if (widget.isAdmin) ...[
                       const Divider(height: 36),
+                      Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.palette_outlined),
+                          title: const Text('Apariencia del catálogo'),
+                          subtitle: const Text(
+                            'Color, novedades y orden de categorías (para todos los catálogos)',
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CatalogAppearancePage(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       Text(
                         'Preventistas que pueden generar',
                         style: Theme.of(context).textTheme.titleMedium,
