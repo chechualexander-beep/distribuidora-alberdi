@@ -541,7 +541,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           const SnackBar(
             duration: Duration(seconds: 8),
             content: Text(
-              'No se pudo confirmar por la conexión. Tocá "Completar facturación" cuando vuelva internet: no se factura dos veces.',
+              'Sin conexión: la facturación quedó guardada en esta PC. Cuando vuelva internet tocá COMPLETAR FACTURACIÓN (no se factura dos veces).',
             ),
           ),
         );

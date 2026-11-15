@@ -65,4 +65,46 @@ void main() {
     expect(find.textContaining('Sin conexión'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('al aparecer la franja no se pierden las pantallas abiertas ni su estado', (tester) async {
+    connectionProblem.value = false;
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigator,
+        builder: (context, child) => ConnectionBanner(child: child!),
+        home: const Scaffold(body: Text('inicio')),
+      ),
+    );
+    navigator.currentState!.push(
+      MaterialPageRoute(builder: (_) => const Scaffold(body: _Contador())),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('0'));
+    await tester.pump();
+    expect(find.text('1'), findsOneWidget);
+    for (final offline in [true, false, true]) {
+      connectionProblem.value = offline;
+      await tester.pump();
+      expect(find.text('1'), findsOneWidget, reason: 'offline=$offline');
+    }
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('inicio'), findsOneWidget);
+    connectionProblem.value = false;
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class _Contador extends StatefulWidget {
+  const _Contador();
+  @override
+  State<_Contador> createState() => _ContadorState();
+}
+
+class _ContadorState extends State<_Contador> {
+  int _n = 0;
+  @override
+  Widget build(BuildContext context) =>
+      TextButton(onPressed: () => setState(() => _n++), child: Text('$_n'));
 }

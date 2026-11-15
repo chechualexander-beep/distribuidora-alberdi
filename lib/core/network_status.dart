@@ -48,6 +48,9 @@ class ResilientHttpClient extends http.BaseClient {
 }
 
 /// Franja inferior "Sin conexión" (aparece sola y se va con la próxima consulta que funcione).
+///
+/// La estructura es SIEMPRE la misma (columna con la app arriba y la franja opcional abajo):
+/// si cambiara al aparecer la franja, se perderían las pantallas abiertas.
 class ConnectionBanner extends StatelessWidget {
   const ConnectionBanner({super.key, required this.child});
   final Widget child;
@@ -55,17 +58,17 @@ class ConnectionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
     valueListenable: connectionProblem,
-    builder: (context, offline, _) {
-      if (!offline) return child;
-      return Column(
-        children: [
-          Expanded(
-            child: MediaQuery.removePadding(
-              context: context,
-              removeBottom: true,
-              child: child,
-            ),
+    child: child,
+    builder: (context, offline, app) => Column(
+      children: [
+        Expanded(
+          child: MediaQuery.removePadding(
+            context: context,
+            removeBottom: offline,
+            child: app!,
           ),
+        ),
+        if (offline)
           Material(
             color: const Color(0xFFC05A00),
             child: SafeArea(
@@ -87,9 +90,8 @@ class ConnectionBanner extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      );
-    },
+      ],
+    ),
   );
 }
 
