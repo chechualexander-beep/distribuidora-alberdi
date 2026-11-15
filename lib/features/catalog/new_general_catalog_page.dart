@@ -24,7 +24,8 @@ String get _whatsappKey => appConfig.catalogPreferenceKey('general:whatsapp');
 String generalCatalogLink(String token) {
   const override = String.fromEnvironment('CATALOGO_URL');
   final base = Uri.parse(override.isNotEmpty ? override : appConfig.catalogUrl);
-  return base.replace(fragment: 'general=$token').toString();
+  final site = base.path.isEmpty ? base.replace(path: '/') : base;
+  return site.replace(fragment: 'general=$token').toString();
 }
 
 class NewGeneralCatalogPage extends StatefulWidget {
