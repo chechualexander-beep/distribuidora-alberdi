@@ -325,28 +325,30 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
       appBar: AppBar(title: const Text('Resumen del pedido')),
       body: Column(
         children: [
+          // Compacto: deja más lugar para revisar los productos.
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
             child: Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Row(
                   children: [
-                    const Text('Cliente', style: TextStyle(color: AppColors.gris)),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.cliente['nombre_comercio']?.toString() ??
-                          'Sin nombre',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                    const Icon(Icons.storefront_outlined, color: AppColors.gris),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        widget.cliente['nombre_comercio']?.toString() ??
+                            'Sin nombre',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Cada producto conserva el precio con el que fue agregado.',
-                      style: TextStyle(fontSize: 13, color: AppColors.gris),
                     ),
                   ],
                 ),

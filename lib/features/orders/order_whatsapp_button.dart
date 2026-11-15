@@ -147,8 +147,9 @@ class _OrderWhatsAppButtonState extends State<OrderWhatsAppButton> {
         ],
       );
     }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    // Wrap: en pantallas angostas "Otro número" baja de renglón en vez de desbordar.
+    return Wrap(
+      alignment: WrapAlignment.end,
       children: [
         TextButton(
           onPressed: available ? () => _open() : null,

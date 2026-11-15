@@ -1428,15 +1428,10 @@ cantidad_entregada,
                     numeric: true,
                     width: 110,
                   ),
+                  // Sin comisión: esta pantalla se le muestra al cliente.
                   DesktopField(
-                    'Comisión %',
-                    _porcentajeComision,
-                    numeric: true,
-                    width: 90,
-                  ),
-                  DesktopField(
-                    'Comisión',
-                    (r) => desktopMoney(_importeComision(r)),
+                    'Subtotal',
+                    (r) => desktopMoney(_precio(r) * _cantidadEntregada(r)),
                     numeric: true,
                     width: 120,
                   ),
@@ -1471,9 +1466,7 @@ cantidad_entregada,
                 final pedida = _cantidadPedida(detalle);
                 final noEntregada = _cantidadNoEntregada(detalle);
 
-                final porcentaje = _porcentajeComision(detalle);
-
-                final importe = _importeComision(detalle);
+                final subtotal = _precio(detalle) * _cantidadEntregada(detalle);
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 10),
@@ -1545,11 +1538,10 @@ cantidad_entregada,
                         Text('Precio: ${_formatearPrecio(_precio(detalle))}'),
                         if (_desgloseExcedente(detalle) case final desglose?)
                           Text(desglose),
-                        const SizedBox(height: 4),
-                        Text('Comisión: ${_numeroLimpio(porcentaje)}%'),
+                        // Sin comisión: esta pantalla se le muestra al cliente.
                         const SizedBox(height: 4),
                         Text(
-                          'Comisión generada: ${_formatearPrecio(importe)}',
+                          'Subtotal: ${_formatearPrecio(subtotal)}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ],
