@@ -1,6 +1,8 @@
 import 'core/app_config.dart';
 import 'core/app_theme.dart';
 import 'core/app_bootstrap.dart';
+import 'core/network_status.dart';
+import 'package:http/http.dart' as http;
 import 'core/environment_frame.dart';
 import 'core/environment_auth_storage.dart';
 import 'package:flutter/material.dart';
@@ -43,6 +45,8 @@ Future<void> startApplication({bool testingEntrypoint = false}) async {
           url: config.supabaseUrl,
           publishableKey: config.supabaseKey,
           authOptions: authOptionsFor(config),
+          // Consultas con tiempo máximo: con poca señal, la pantalla ofrece reintentar.
+          httpClient: ResilientHttpClient(http.Client()),
         );
       },
     );
@@ -64,6 +68,7 @@ Future<void> startApplication({bool testingEntrypoint = false}) async {
     return;
   }
   activateAppConfig(config);
+  await loadDataSaver();
   runApp(const DistribuidoraAlberdiApp());
 }
 
@@ -77,7 +82,7 @@ class DistribuidoraAlberdiApp extends StatelessWidget {
       navigatorObservers: [_lockNavigation],
       builder: (context, child) => EnvironmentFrame(
         config: appConfig,
-        child: _buildPlatformContent(context, child!),
+        child: ConnectionBanner(child: _buildPlatformContent(context, child!)),
       ),
       debugShowCheckedModeBanner: false,
       title: appConfig.title,
@@ -543,6 +548,7 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
+          const DataSaverButton(),
           IconButton(
             tooltip: 'Cerrar sesión',
             onPressed: _cerrarSesion,

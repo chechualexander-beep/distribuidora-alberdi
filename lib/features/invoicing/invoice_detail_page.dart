@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 
+import 'atomic_invoice.dart';
 import 'invoice_pdf_service.dart';
 import '../../core/app_config.dart';
 import '../../core/local_outbox.dart';
@@ -40,10 +41,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   bool _billingReady = false;
   bool _billingBusy = false;
   String? _billingError;
+  // Facturación enviada sin respuesta (corte de internet): se completa reenviando la misma.
+  PendingInvoice? _pendingInvoice;
   bool get _readOnly =>
       widget.soloLectura ||
       _document != null ||
       _savedBill != null ||
+      _pendingInvoice != null ||
       !_billingReady ||
       _billingBusy;
   String get _orderId => widget.pedido['id'].toString();
@@ -79,6 +83,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         } else if (_savedBill == null && widget.soloLectura) {
           _document = await _billing!.lookup(_orderId);
         }
+      }
+      if (!widget.soloLectura) {
+        _pendingInvoice = (await AtomicInvoiceStore.open()).read(_orderId);
       }
       if (_document == null) {
         await _cargarDetalles();
@@ -484,104 +491,115 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
+  /// Arma la solicitud con lo que se ve en pantalla (todas las líneas originales,
+  /// las quitadas en 0, y los productos agregados con su precio de lista).
+  PendingInvoice _armarSolicitud() {
+    double cantidad(String id) =>
+        double.tryParse(_cantidadFacturadaControllers[id]?.text ?? '') ?? 0;
+    final originales = [
+      for (final id in _originalIds)
+        {
+          'detalle_id': id,
+          'cantidad_facturada': _detallesQuitados.contains(id)
+              ? 0
+              : cantidad(id),
+        },
+    ];
+    final agregados = [
+      for (final d in _detalles.where(
+        (d) => d['id'].toString().startsWith('nuevo_'),
+      ))
+        if (cantidad(d['id'].toString()) > 0)
+          {
+            'producto_id': d['producto_id'],
+            'tipo_precio': (d['tipo_precio']?.toString().isNotEmpty ?? false)
+                ? d['tipo_precio'].toString().toLowerCase()
+                : 'normal',
+            'cantidad_facturada': cantidad(d['id'].toString()),
+            'precio_unitario':
+                double.tryParse(d['precio_unitario']?.toString() ?? '') ?? 0,
+          },
+    ];
+    return PendingInvoice(newInvoiceRequestId(), originales, agregados);
+  }
+
+  /// Factura en una sola operación del servidor: todo o nada, sin duplicar si se reintenta.
   Future<void> _facturarPedidoLegacy() async {
-    final numeroComprobante =
-        await Supabase.instance.client.rpc('siguiente_numero_comprobante')
-            as String;
-
+    final store = await AtomicInvoiceStore.open();
+    final pendiente = _pendingInvoice ?? _armarSolicitud();
+    if (_pendingInvoice == null) {
+      await store.save(_orderId, pendiente);
+      if (mounted) setState(() => _pendingInvoice = pendiente);
+    }
+    final InvoiceResult resultado;
     try {
-      for (final detalle in _detalles) {
-        final detalleId = detalle['id'].toString();
-
-        if (detalleId.startsWith('nuevo_')) {
-          continue;
-        }
-
-        final cantidadFacturada =
-            double.tryParse(
-              _cantidadFacturadaControllers[detalleId]?.text ?? '',
-            ) ??
-            0;
-
-        await Supabase.instance.client
-            .from('pedido_detalles')
-            .update({'cantidad_facturada': cantidadFacturada})
-            .eq('id', detalleId);
+      resultado = await sendAtomicInvoice(
+        Supabase.instance.client,
+        _orderId,
+        pendiente,
+      );
+    } on UncertainInvoiceException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(seconds: 8),
+            content: Text(
+              'No se pudo confirmar por la conexión. Tocá "Completar facturación" cuando vuelva internet: no se factura dos veces.',
+            ),
+          ),
+        );
       }
-      for (final detalle in _detalles) {
-        final detalleId = detalle['id'].toString();
+      return;
+    } catch (e) {
+      // El servidor rechazó la facturación: no se guardó nada, se puede corregir y volver a facturar.
+      await store.clear(_orderId);
+      if (mounted) setState(() => _pendingInvoice = null);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se facturó: ${e is PostgrestException ? e.message : e}',
+          ),
+        ),
+      );
+      return;
+    }
+    await store.clear(_orderId);
+    if (mounted) setState(() => _pendingInvoice = null);
 
-        if (!detalleId.startsWith('nuevo_')) {
-          continue;
-        }
-
-        final cantidadFacturada =
-            double.tryParse(
-              _cantidadFacturadaControllers[detalleId]?.text ?? '',
-            ) ??
-            0;
-
-        if (cantidadFacturada <= 0) {
-          continue;
-        }
-
-        final precio =
-            double.tryParse(detalle['precio_unitario']?.toString() ?? '') ?? 0;
-
-        await Supabase.instance.client.from('pedido_detalles').insert({
-          'pedido_id': widget.pedido['id'],
-          'producto_id': detalle['producto_id'],
-          'cantidad': cantidadFacturada,
-          'precio_unitario': precio,
-          'subtotal': cantidadFacturada * precio,
-          'tipo_precio': detalle['tipo_precio'],
-          'cantidad_facturada': cantidadFacturada,
-        });
-      }
-      for (final detalleId in _detallesQuitados) {
-        await Supabase.instance.client
-            .from('pedido_detalles')
-            .update({'cantidad_facturada': 0})
-            .eq('id', detalleId);
-      }
-      await Supabase.instance.client
-          .from('pedidos')
-          .update({
-            'facturado': true,
-            'fecha_facturacion': DateTime.now().toUtc().toIso8601String(),
-            'numero_comprobante': numeroComprobante,
-          })
-          .eq('id', widget.pedido['id']);
-      final pedidoFacturado = Map<String, dynamic>.from(widget.pedido);
-      pedidoFacturado['numero_comprobante'] = numeroComprobante;
-      pedidoFacturado['fecha_facturacion'] = DateTime.now()
-          .toUtc()
-          .toIso8601String();
-
+    // La boleta se imprime con lo que quedó guardado en el servidor.
+    await _cargarDetalles();
+    final pedidoFacturado = Map<String, dynamic>.from(widget.pedido)
+      ..['numero_comprobante'] = resultado.number
+      ..['fecha_facturacion'] = resultado.date;
+    try {
       final pdfBytes = await InvoicePdfService.generarBoleta(
         pedido: pedidoFacturado,
         detalles: _detalles,
       );
-
       await Printing.layoutPdf(
         onLayout: (_) async => pdfBytes,
-        name: 'Boleta_$numeroComprobante',
+        name: 'Boleta_${resultado.number}',
         format: PdfPageFormat.a5,
       );
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pedido facturado correctamente.')),
-      );
-
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo facturar el pedido: $e')),
-      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Pedido facturado (comprobante ${resultado.number}), pero no se pudo imprimir. Reimprimilo desde Facturas realizadas.',
+            ),
+          ),
+        );
+      }
     }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Pedido facturado: comprobante ${resultado.number}.'),
+      ),
+    );
+    Navigator.of(context).pop(true);
   }
 
   String _formatearFecha(dynamic fecha) {
@@ -697,6 +715,18 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (_pendingInvoice != null)
+          const Card(
+            color: Color(0xFFFFF3E0),
+            child: ListTile(
+              leading: Icon(Icons.sync_problem_outlined, color: Color(0xFFC05A00)),
+              title: Text('Facturación sin confirmar'),
+              subtitle: Text(
+                'Se cortó la conexión mientras se facturaba. Tocá "Completar facturación": '
+                'se envía lo mismo y nunca se factura dos veces.',
+              ),
+            ),
+          ),
         if (_savedBill != null && _savedBill!.result == null)
           Card(
             child: Padding(
@@ -1032,8 +1062,14 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               onPressed: _billingBusy || !_billingReady
                   ? null
                   : _facturarPedido,
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('FACTURAR'),
+              icon: Icon(
+                _pendingInvoice != null
+                    ? Icons.sync_problem_outlined
+                    : Icons.check_circle_outline,
+              ),
+              label: Text(
+                _pendingInvoice != null ? 'COMPLETAR FACTURACIÓN' : 'FACTURAR',
+              ),
             ),
           ),
         ],

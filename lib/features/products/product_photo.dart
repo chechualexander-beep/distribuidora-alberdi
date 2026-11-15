@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+
+import '../../core/network_status.dart';
 import 'package:image/image.dart' as img;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -78,6 +80,32 @@ class ProductPhoto extends StatelessWidget {
         : Supabase.instance.client.storage
               .from(productPhotoBucket)
               .getPublicUrl(path!);
+    // Ahorro de datos: la foto no se descarga; se ve solo si se toca.
+    if (url != null && dataSaver.value) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Tooltip(
+          message: 'Ver foto (ahorro de datos activado)',
+          child: Material(
+            color: const Color(0xffe1ebe4),
+            child: InkWell(
+              onTap: () => showDialog<void>(
+                context: context,
+                builder: (_) => _ProductPhotoViewer(url: url),
+              ),
+              child: SizedBox(
+                width: size,
+                height: size,
+                child: const Icon(
+                  Icons.image_outlined,
+                  color: Color(0xff436550),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: url == null
