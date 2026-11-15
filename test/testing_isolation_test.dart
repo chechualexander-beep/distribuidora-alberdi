@@ -94,7 +94,7 @@ void main() {
       ),
     );
     const label =
-        'TESTING — SOLO DATOS FICTICIOS\nNotificaciones y catálogo deshabilitados';
+        'TESTING — SOLO DATOS FICTICIOS\nNotificaciones deshabilitadas';
     expect(find.text(label), findsOneWidget);
     navigator.currentState!.push(
       MaterialPageRoute<void>(

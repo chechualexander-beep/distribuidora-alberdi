@@ -27,7 +27,7 @@ class EnvironmentFrame extends StatelessWidget {
               padding: const EdgeInsets.all(8),
               child: Text(
                 'TESTING — SOLO DATOS FICTICIOS\n'
-                'Notificaciones y catálogo deshabilitados',
+                'Notificaciones deshabilitadas',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Colors.black,

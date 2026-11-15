@@ -120,98 +120,17 @@ class _CatalogAppearancePageState extends State<CatalogAppearancePage> {
   }
 
   Future<void> _addNovelty() async {
-    final search = TextEditingController();
-    String? selected;
-    int days = 15;
-    final accepted = await showDialog<bool>(
+    final result = await showDialog<({String id, int days})>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, update) {
-          final query = _normalize(search.text);
-          final matches = _products
-              .where((p) => !_novelties.containsKey(p['id'].toString()))
-              .where(
-                (p) =>
-                    query.isEmpty ||
-                    _normalize(p['nombre']?.toString()).contains(query),
-              )
-              .take(40)
-              .toList();
-          return AlertDialog(
-            title: const Text('Agregar novedad'),
-            content: SizedBox(
-              width: 440,
-              height: 420,
-              child: Column(
-                children: [
-                  TextField(
-                    controller: search,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Buscar producto',
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                    onChanged: (_) => update(() {}),
-                  ),
-                  Expanded(
-                    child: ListView(
-                      children: matches
-                          .map(
-                            (p) => ListTile(
-                              dense: true,
-                              selected: selected == p['id'].toString(),
-                              leading: Icon(
-                                selected == p['id'].toString()
-                                    ? Icons.radio_button_checked
-                                    : Icons.radio_button_unchecked,
-                              ),
-                              title: Text(p['nombre'].toString()),
-                              subtitle: Text(p['categoria']?.toString() ?? ''),
-                              onTap: () =>
-                                  update(() => selected = p['id'].toString()),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-                  DropdownButtonFormField<int>(
-                    initialValue: days,
-                    decoration: const InputDecoration(
-                      labelText: 'Se muestra durante',
-                    ),
-                    items: const [7, 15, 30, 60]
-                        .map(
-                          (d) => DropdownMenuItem(
-                            value: d,
-                            child: Text('$d días'),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => update(() => days = value ?? 15),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: selected == null
-                    ? null
-                    : () => Navigator.pop(context, true),
-                child: const Text('Agregar'),
-              ),
-            ],
-          );
-        },
+      builder: (_) => NoveltyDialog(
+        products: _products
+            .where((p) => !_novelties.containsKey(p['id'].toString()))
+            .toList(),
       ),
     );
-    search.dispose();
-    if (accepted == true && selected != null && mounted) {
+    if (result != null && mounted) {
       setState(() {
-        _novelties[selected!] = DateTime.now().add(Duration(days: days));
+        _novelties[result.id] = DateTime.now().add(Duration(days: result.days));
         _changed = true;
       });
     }
@@ -393,6 +312,107 @@ class _CatalogAppearancePageState extends State<CatalogAppearancePage> {
                 ],
               ),
       ),
+    );
+  }
+}
+
+/// Ventana para elegir un producto y cuántos días se muestra como novedad.
+/// Tiene su propio buscador: se libera recién cuando la ventana termina de cerrarse.
+class NoveltyDialog extends StatefulWidget {
+  const NoveltyDialog({super.key, required this.products});
+  final List<Map<String, dynamic>> products;
+  @override
+  State<NoveltyDialog> createState() => _NoveltyDialogState();
+}
+
+class _NoveltyDialogState extends State<NoveltyDialog> {
+  final _search = TextEditingController();
+  String? _selected;
+  int _days = 15;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _normalize(_search.text);
+    final matches = widget.products
+        .where(
+          (p) =>
+              query.isEmpty ||
+              _normalize(p['nombre']?.toString()).contains(query) ||
+              _normalize(p['categoria']?.toString()).contains(query),
+        )
+        .take(60)
+        .toList();
+    // Con el teclado abierto queda menos alto: la lista se achica en vez de desbordar.
+    final available =
+        MediaQuery.sizeOf(context).height - MediaQuery.viewInsetsOf(context).bottom;
+    return AlertDialog(
+      title: const Text('Agregar novedad'),
+      contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      content: SizedBox(
+        width: 440,
+        height: (available * 0.45).clamp(180.0, 460.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                labelText: 'Buscar producto o categoría',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            Expanded(
+              child: matches.isEmpty
+                  ? const Center(child: Text('No hay productos con ese nombre.'))
+                  : ListView.builder(
+                      itemCount: matches.length,
+                      itemBuilder: (context, index) {
+                        final p = matches[index];
+                        final id = p['id'].toString();
+                        return ListTile(
+                          dense: true,
+                          selected: _selected == id,
+                          leading: Icon(
+                            _selected == id
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                          ),
+                          title: Text(p['nombre'].toString()),
+                          subtitle: Text(p['categoria']?.toString() ?? ''),
+                          onTap: () => setState(() => _selected = id),
+                        );
+                      },
+                    ),
+            ),
+            DropdownButtonFormField<int>(
+              initialValue: _days,
+              decoration: const InputDecoration(labelText: 'Se muestra durante'),
+              items: const [7, 15, 30, 60]
+                  .map((d) => DropdownMenuItem(value: d, child: Text('$d días')))
+                  .toList(),
+              onChanged: (value) => setState(() => _days = value ?? 15),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _selected == null
+              ? null
+              : () => Navigator.pop(context, (id: _selected!, days: _days)),
+          child: const Text('Agregar'),
+        ),
+      ],
     );
   }
 }
