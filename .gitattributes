@@ -1,0 +1,11 @@
+# Las migraciones se aplican tal cual a la base: siempre con saltos de línea LF,
+# también en Windows (core.autocrlf=true las convertiría a CRLF).
+*.sql text eol=lf
+*.dart text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.png binary
+*.ico binary
+*.jpg binary
+*.ttf binary

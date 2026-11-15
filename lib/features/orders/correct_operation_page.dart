@@ -1,4 +1,5 @@
 import '../../core/desktop_records.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -669,7 +670,7 @@ class _CorrectOperationPageState extends State<CorrectOperationPage> {
                         children: [
                           const Text(
                             'Cliente',
-                            style: TextStyle(color: Colors.grey),
+                            style: TextStyle(color: AppColors.gris),
                           ),
                           const SizedBox(height: 4),
                           Text(

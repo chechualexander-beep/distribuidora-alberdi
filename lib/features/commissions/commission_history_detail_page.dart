@@ -1,4 +1,5 @@
 import '../../core/desktop_records.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'settlement_review_page.dart';
@@ -265,7 +266,7 @@ class _CommissionHistoryDetailPageState
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
                   _errorDetalles!,
-                  style: const TextStyle(color: Colors.red),
+                  style: const TextStyle(color: AppColors.rojo),
                 ),
               )
             else if (_detalles.isEmpty)
@@ -321,7 +322,7 @@ class _CommissionHistoryDetailPageState
                             'Pedido #$pedidoCorto',
                             style: const TextStyle(
                               fontSize: 12,
-                              color: Colors.grey,
+                              color: AppColors.gris,
                             ),
                           ),
                           const SizedBox(height: 12),

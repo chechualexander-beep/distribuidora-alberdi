@@ -1,4 +1,5 @@
 import '../../core/desktop_records.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -317,7 +318,7 @@ class _CommissionHistoryPageState extends State<CommissionHistoryPage> {
                 child: Text(
                   'No hay liquidaciones para los filtros seleccionados.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
+                  style: TextStyle(color: AppColors.gris, fontSize: 14),
                 ),
               ),
             );
@@ -406,7 +407,7 @@ class _CommissionHistoryPageState extends State<CommissionHistoryPage> {
                 children: [
                   const Text(
                     'Comisión',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: AppColors.gris),
                   ),
                   const SizedBox(height: 4),
                   Text(

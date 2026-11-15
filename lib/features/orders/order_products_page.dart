@@ -1,3 +1,4 @@
+import '../../core/app_theme.dart';
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
 import '../products/product_photo.dart';
@@ -265,7 +266,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Productos del pedido')),
+      appBar: _barraLista(),
       body: Column(
         children: [
           if (widget.pedidoId != null && widget.fechaEntrega == null)
@@ -293,6 +294,10 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colorLista(_tipoPrecio),
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: _verPedido,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -378,118 +383,69 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
       return nombre.contains(texto) || codigo.contains(texto);
     }).toList();
 
+    final escribiendo = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Cliente', style: TextStyle(color: Colors.grey)),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.cliente['nombre_comercio']?.toString() ??
-                        'Sin nombre',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+        AnimatedSize(
+          duration: const Duration(milliseconds: 150),
+          child: escribiendo
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<String>(
+                      showSelectedIcon: false,
+                      style: ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+                          (states) => states.contains(WidgetState.selected)
+                              ? colorLista(_tipoPrecio)
+                              : Colors.white,
+                        ),
+                        foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+                          (states) => states.contains(WidgetState.selected)
+                              ? Colors.white
+                              : AppColors.negro,
+                        ),
+                      ),
+                      segments: const [
+                        ButtonSegment<String>(
+                          value: 'normal',
+                          label: Text('Normal'),
+                        ),
+                        ButtonSegment<String>(
+                          value: 'promo',
+                          label: Text('Promo'),
+                        ),
+                        ButtonSegment<String>(
+                          value: 'interior',
+                          label: Text('Interior'),
+                        ),
+                      ],
+                      selected: {_tipoPrecio},
+                      onSelectionChanged: (seleccion) {
+                        setState(() {
+                          _tipoPrecio = seleccion.first;
+                        });
+                      },
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Tipo de precio para nuevos productos',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  SegmentedButton<String>(
-                    style: ButtonStyle(
-                      backgroundColor: WidgetStateProperty.resolveWith<Color?>((
-                        states,
-                      ) {
-                        if (!states.contains(WidgetState.selected)) {
-                          return null;
-                        }
-
-                        switch (_tipoPrecio) {
-                          case 'promo':
-                            return Colors.orange;
-                          case 'interior':
-                            return Colors.green;
-                          default:
-                            return Colors.blue;
-                        }
-                      }),
-                      foregroundColor: WidgetStateProperty.resolveWith<Color?>((
-                        states,
-                      ) {
-                        if (states.contains(WidgetState.selected)) {
-                          return Colors.white;
-                        }
-                        return null;
-                      }),
-                    ),
-                    segments: const [
-                      ButtonSegment<String>(
-                        value: 'normal',
-                        label: Text('Normal'),
-                      ),
-                      ButtonSegment<String>(
-                        value: 'promo',
-                        label: Text('Promo'),
-                      ),
-                      ButtonSegment<String>(
-                        value: 'interior',
-                        label: Text('Interior'),
-                      ),
-                    ],
-                    selected: {_tipoPrecio},
-                    onSelectionChanged: (seleccion) {
-                      setState(() {
-                        _tipoPrecio = seleccion.first;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: _tipoPrecio == 'promo'
-                ? Colors.orange
-                : _tipoPrecio == 'interior'
-                ? Colors.green
-                : Colors.blue,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            _tipoPrecio == 'promo'
-                ? 'LISTA PROMO'
-                : _tipoPrecio == 'interior'
-                ? 'LISTA INTERIOR'
-                : 'LISTA NORMAL',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
+                ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: TextField(
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
+              isDense: true,
               hintText: 'Buscar producto...',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.search, color: colorLista(_tipoPrecio)),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(
+                  color: colorLista(_tipoPrecio),
+                  width: 2,
+                ),
+              ),
             ),
             onChanged: (valor) {
               setState(() {
@@ -587,7 +543,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
 
                     return Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(10),
                         child: Row(
                           children: [
                             ProductPhoto(
@@ -626,7 +582,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                                     Text(
                                       'Código: $codigo',
                                       style: const TextStyle(
-                                        color: Colors.grey,
+                                        color: AppColors.gris,
                                       ),
                                     ),
                                   ],
@@ -640,11 +596,22 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                                   ),
                                   if (cantidad > 0 && listaFijada != null) ...[
                                     const SizedBox(height: 4),
-                                    Text(
-                                      'Precio fijado: ${_nombreLista(listaFijada)}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: colorLista(listaFijada),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'Lista ${_nombreLista(listaFijada)}',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -684,6 +651,41 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                 ),
         ),
       ],
+    );
+  }
+
+  PreferredSizeWidget _barraLista() {
+    final habitual = widget.cliente['tipo_precio_habitual']?.toString();
+    final distintaHabitual =
+        habitual != null &&
+        {'normal', 'promo', 'interior'}.contains(habitual) &&
+        habitual != _tipoPrecio;
+    return AppBar(
+      backgroundColor: colorLista(_tipoPrecio),
+      foregroundColor: Colors.white,
+      toolbarHeight: 64,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.cliente['nombre_comercio']?.toString() ?? 'Sin nombre',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            'LISTA ${_nombreLista(_tipoPrecio).toUpperCase()}'
+            '${distintaHabitual ? ' · habitual: ${_nombreLista(habitual ?? '')}' : ''}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

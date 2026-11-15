@@ -1,4 +1,5 @@
 import 'core/app_config.dart';
+import 'core/app_theme.dart';
 import 'core/app_bootstrap.dart';
 import 'core/environment_frame.dart';
 import 'core/environment_auth_storage.dart';
@@ -82,12 +83,8 @@ class DistribuidoraAlberdiApp extends StatelessWidget {
       locale: const Locale('es', 'AR'),
       supportedLocales: const [Locale('es', 'AR')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorSchemeSeed: Colors.indigo,
-      ),
+      theme: temaClaro(),
+      darkTheme: temaOscuro(),
       themeMode: Platform.isWindows ? ThemeMode.dark : ThemeMode.light,
 
       home: const SplashPage(),
@@ -269,7 +266,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 8),
                   const Text(
                     'Sistema de ventas',
-                    style: TextStyle(fontSize: 17, color: Colors.grey),
+                    style: TextStyle(fontSize: 17, color: AppColors.gris),
                   ),
                   const SizedBox(height: 40),
                   TextField(
@@ -495,15 +492,15 @@ class _HomePageState extends State<HomePage> {
 
     final Color colorPrincipal = esModoOscuro
         ? Colors.white
-        : const Color(0xFF0B2854);
+        : AppColors.negro;
 
     final Color colorSecundario = esModoOscuro
         ? Colors.white70
-        : Colors.black54;
+        : const Color(0xFF4A4A4A);
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF062A5E),
+        backgroundColor: AppColors.negro,
         foregroundColor: Colors.white,
         elevation: 0,
         toolbarHeight: 72,
@@ -554,7 +551,7 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 6),
               Text(
                 esAdministrador ? 'Administrador' : 'Preventista',
-                style: const TextStyle(fontSize: 17, color: Colors.grey),
+                style: const TextStyle(fontSize: 17, color: AppColors.gris),
               ),
               const SizedBox(height: 32),
 

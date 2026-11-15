@@ -144,14 +144,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Filtrar por fecha'));
+      await tester.tap(find.text('Todas las fechas'));
       await pickDate(tester);
       expect(reads.last, 'eq.2026-11-12');
       await tester.tap(find.text('Sin programar'));
       await tester.pumpAndSettle();
       expect(reads.last, 'is.null');
       final program = find.textContaining(
-        RegExp(r'^(Programar|PROGRAMAR ENTREGA)$'),
+        RegExp(r'^(Programar|PROGRAMAR|PROGRAMAR ENTREGA)$'),
       );
       await tester.ensureVisible(program);
       await tester.tap(program);

@@ -1,4 +1,5 @@
 import '../../core/desktop_records.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'visit_day_field.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -328,7 +329,7 @@ class _NewClientPageState extends State<NewClientPage> {
               const Text(
                 '* Campos obligatorios',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(color: AppColors.gris),
               ),
             ],
           ),

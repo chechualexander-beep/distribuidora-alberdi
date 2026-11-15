@@ -1,4 +1,5 @@
 import '../../core/app_config.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import 'delivery_quantity.dart';
 import '../balances/balance_repository.dart';
 import '../balances/balances_page.dart';
@@ -1269,7 +1270,7 @@ cantidad_entregada,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Cliente', style: TextStyle(color: Colors.grey)),
+                    const Text('Cliente', style: TextStyle(color: AppColors.gris)),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -1499,7 +1500,7 @@ cantidad_entregada,
                                     _quitarProductoAgregado(detalle),
                                 icon: const Icon(
                                   Icons.delete_outline,
-                                  color: Colors.orange,
+                                  color: AppColors.naranja,
                                 ),
                               ),
                           ],
@@ -1511,13 +1512,13 @@ cantidad_entregada,
                               Icon(
                                 Icons.add_circle_outline,
                                 size: 17,
-                                color: Colors.orange,
+                                color: AppColors.naranja,
                               ),
                               SizedBox(width: 6),
                               Text(
                                 'Agregado durante la entrega',
                                 style: TextStyle(
-                                  color: Colors.orange,
+                                  color: AppColors.naranja,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -1589,7 +1590,7 @@ cantidad_entregada,
                               'Se actualiza según la mercadería entregada',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Colors.grey,
+                                color: AppColors.gris,
                               ),
                             ),
                           ],

@@ -1,4 +1,5 @@
 import '../../core/desktop_records.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_table.dart';
 import '../../core/whatsapp_link.dart';
 import 'package:flutter/material.dart';
@@ -582,7 +583,7 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                         'Actualizada: ${_formatearFechaUbicacion()}',
                         style: const TextStyle(
                           fontSize: 13,
-                          color: Colors.grey,
+                          color: AppColors.gris,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -623,18 +624,18 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
                   _errorSaldo!,
-                  style: const TextStyle(color: Colors.red),
+                  style: const TextStyle(color: AppColors.rojo),
                 ),
               )
             else
               Card(
                 color: _saldoPendiente > 0
-                    ? Colors.orange.withValues(alpha: 0.12)
-                    : Colors.green.withValues(alpha: 0.12),
+                    ? AppColors.naranja.withValues(alpha: 0.12)
+                    : AppColors.verde.withValues(alpha: 0.12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
-                    color: _saldoPendiente > 0 ? Colors.orange : Colors.green,
+                    color: _saldoPendiente > 0 ? AppColors.naranja : AppColors.verde,
                     width: 1.5,
                   ),
                 ),
@@ -651,8 +652,8 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                                 ? Icons.warning_amber_rounded
                                 : Icons.check_circle_outline,
                             color: _saldoPendiente > 0
-                                ? Colors.orange
-                                : Colors.green,
+                                ? AppColors.naranja
+                                : AppColors.verde,
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -663,8 +664,8 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: _saldoPendiente > 0
-                                  ? Colors.orange
-                                  : Colors.green,
+                                  ? AppColors.naranja
+                                  : AppColors.verde,
                             ),
                           ),
                         ],
@@ -870,7 +871,7 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
                   _errorCompras!,
-                  style: const TextStyle(color: Colors.red),
+                  style: const TextStyle(color: AppColors.rojo),
                 ),
               )
             else if (_ultimasCompras.isEmpty)

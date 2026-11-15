@@ -1,4 +1,5 @@
 import 'product_photo.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_table.dart';
 import 'products_desktop_table.dart';
 import 'package:flutter/material.dart';
@@ -227,7 +228,7 @@ class _ProductsPageState extends State<ProductsPage> {
                                 const SizedBox(height: 4),
                                 Text(
                                   'Código: $codigo',
-                                  style: const TextStyle(color: Colors.grey),
+                                  style: const TextStyle(color: AppColors.gris),
                                 ),
                               ],
 

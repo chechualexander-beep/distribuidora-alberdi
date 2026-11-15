@@ -1,4 +1,5 @@
 import '../../core/desktop_records.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -819,7 +820,7 @@ productos (
                                           const Icon(
                                             Icons.add_circle_outline,
                                             size: 16,
-                                            color: Colors.orange,
+                                            color: AppColors.naranja,
                                           ),
                                           const SizedBox(width: 6),
                                           Text(
@@ -827,7 +828,7 @@ productos (
                                                 ? 'Agregado durante una corrección'
                                                 : 'Agregado durante la entrega',
                                             style: const TextStyle(
-                                              color: Colors.orange,
+                                              color: AppColors.naranja,
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
@@ -839,7 +840,7 @@ productos (
                                       Text(
                                         'Código: $codigo',
                                         style: const TextStyle(
-                                          color: Colors.grey,
+                                          color: AppColors.gris,
                                         ),
                                       ),
                                     ],
@@ -872,7 +873,7 @@ productos (
                                       'Lista usada: $lista',
                                       style: const TextStyle(
                                         fontSize: 12,
-                                        color: Colors.grey,
+                                        color: AppColors.gris,
                                       ),
                                     ),
                                   ],

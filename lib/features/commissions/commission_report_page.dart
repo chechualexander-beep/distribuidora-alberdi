@@ -1,4 +1,5 @@
 import 'commission_groups_table.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
 import 'dart:io';
@@ -110,7 +111,7 @@ class CommissionReportPage extends StatelessWidget {
                   children: [
                     const Text(
                       'Preventista',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: AppColors.gris),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -245,7 +246,7 @@ class CommissionReportPage extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           'Pedido #$numeroPedido',
-                          style: const TextStyle(color: Colors.grey),
+                          style: const TextStyle(color: AppColors.gris),
                         ),
                         const SizedBox(height: 10),
                         Text('Pedido: ${_formatearPrecio(pedidoTotal)}'),

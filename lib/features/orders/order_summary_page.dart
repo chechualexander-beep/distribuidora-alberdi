@@ -1,4 +1,5 @@
 import '../../core/desktop_records.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_table.dart';
 import '../../core/app_config.dart';
 import 'dart:math';
@@ -332,7 +333,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Cliente', style: TextStyle(color: Colors.grey)),
+                    const Text('Cliente', style: TextStyle(color: AppColors.gris)),
                     const SizedBox(height: 4),
                     Text(
                       widget.cliente['nombre_comercio']?.toString() ??
@@ -345,7 +346,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
                     const SizedBox(height: 10),
                     const Text(
                       'Cada producto conserva el precio con el que fue agregado.',
-                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                      style: TextStyle(fontSize: 13, color: AppColors.gris),
                     ),
                   ],
                 ),
@@ -428,7 +429,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
                                 'Lista usada: $lista',
                                 style: const TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey,
+                                  color: AppColors.gris,
                                 ),
                               ),
                             ],

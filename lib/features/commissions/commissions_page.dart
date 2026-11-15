@@ -1,4 +1,5 @@
 import 'commission_groups_table.dart';
+import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
 import 'commission_statistics_page.dart';
@@ -588,7 +589,7 @@ class _CommissionsPageState extends State<CommissionsPage> {
                                 const SizedBox(height: 4),
                                 Text(
                                   'Pedido #$numeroPedido',
-                                  style: const TextStyle(color: Colors.grey),
+                                  style: const TextStyle(color: AppColors.gris),
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
