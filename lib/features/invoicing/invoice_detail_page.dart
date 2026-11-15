@@ -225,12 +225,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           );
         }
       } else {
-        // Explicit old mode only; never reached as a recovery/error fallback.
-        if (_billing != null) {
-          await _billing!.runLegacyIfClear(_orderId, _facturarPedidoLegacy);
-        } else {
-          await _facturarPedidoLegacy();
-        }
+        // Boletas internas apagadas (producción y TESTING): facturación en una sola
+        // operación del servidor, con reintento seguro si se corta internet.
+        await _facturarPedidoLegacy();
       }
     } catch (_) {
       if (mounted) {
