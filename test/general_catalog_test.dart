@@ -11,16 +11,16 @@ void main() {
     () => activateAppConfig(AppConfig.resolve(productionKey: fixtureKey)),
   );
 
-  test('general link uses #general= on each environment site', () {
+  test('general link uses #general= without slash on each environment site', () {
     activateAppConfig(AppConfig.resolve(productionKey: fixtureKey));
     expect(
       generalCatalogLink(token),
-      'https://distribuidora-alberdi.pages.dev/#general=$token',
+      'https://distribuidora-alberdi.pages.dev#general=$token',
     );
     activateAppConfig(testingConfig());
     expect(
       generalCatalogLink(token),
-      'https://alberdi-catalogo-testing.pages.dev/#general=$token',
+      'https://alberdi-catalogo-testing.pages.dev#general=$token',
     );
   });
 

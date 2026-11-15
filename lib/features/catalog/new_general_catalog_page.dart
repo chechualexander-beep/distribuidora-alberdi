@@ -23,8 +23,10 @@ String get _whatsappKey => appConfig.catalogPreferenceKey('general:whatsapp');
 /// Enlace público a partir del token: <sitio del entorno>/#general=<token>.
 String generalCatalogLink(String token) {
   const override = String.fromEnvironment('CATALOGO_URL');
+  // Sin barra antes del '#', igual que los enlaces de cliente: WhatsApp guardó la vista
+  // previa vieja (sin imagen) de la dirección con barra.
   final base = Uri.parse(override.isNotEmpty ? override : appConfig.catalogUrl);
-  final site = base.path.isEmpty ? base.replace(path: '/') : base;
+  final site = base.path == '/' ? base.replace(path: '') : base;
   return site.replace(fragment: 'general=$token').toString();
 }
 
