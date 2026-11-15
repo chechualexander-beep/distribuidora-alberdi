@@ -675,7 +675,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
           ),
           Text(
             'LISTA ${_nombreLista(_tipoPrecio).toUpperCase()}'
-            '${distintaHabitual ? ' · habitual: ${_nombreLista(habitual ?? '')}' : ''}',
+            '${distintaHabitual ? ' · habitual: ${_nombreLista(habitual)}' : ''}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
