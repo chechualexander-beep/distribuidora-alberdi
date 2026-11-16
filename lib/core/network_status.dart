@@ -1,46 +1,96 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'offline_cache.dart';
+
 /// true mientras la última consulta falló por la conexión (sin señal, señal débil o caída).
 final connectionProblem = ValueNotifier<bool>(false);
 
-/// Cliente HTTP de Supabase con tiempo máximo para las CONSULTAS (GET).
+/// Marca de zona: dentro de [withoutCacheFallback] las consultas fallan si no hay red
+/// (no devuelven lo guardado). La usa "Preparar para trabajar sin señal".
+const _noFallback = #alberdiSinRespaldoLocal;
+
+Future<T> withoutCacheFallback<T>(Future<T> Function() action) =>
+    runZoned(action, zoneValues: {_noFallback: true});
+
+/// Cliente HTTP de Supabase: tiempo máximo para las CONSULTAS (GET) y copia local.
 ///
-/// Con poca señal una pantalla podía quedarse cargando minutos: ahora, si no responde en
-/// [readTimeout], falla y la pantalla ofrece "Reintentar". Las operaciones que guardan datos
-/// (POST, PATCH, DELETE) no se cortan desde acá, para no dejar dudas sobre si se guardaron:
-/// esas tienen su propio manejo (reintento sin duplicar).
+/// - Con poca señal una pantalla podía quedarse cargando minutos: ahora, si no responde a
+///   tiempo, falla y la pantalla ofrece "Reintentar".
+/// - Cada consulta que funciona se guarda; si después no hay conexión, se devuelve lo guardado
+///   y la franja avisa de cuándo son los datos. Con copia guardada se espera menos.
+/// - Las operaciones que guardan datos (POST, PATCH, DELETE) no se cortan ni se copian.
 class ResilientHttpClient extends http.BaseClient {
   ResilientHttpClient(
     this._inner, {
     this.readTimeout = const Duration(seconds: 15),
-  });
+    this.cachedTimeout = const Duration(seconds: 8),
+    this.offlineTimeout = const Duration(seconds: 3),
+    OfflineCache? Function()? cache,
+  }) : _cache = cache ?? (() => offlineCache);
 
   final http.Client _inner;
-  final Duration readTimeout;
+  final Duration readTimeout, cachedTimeout, offlineTimeout;
+  final OfflineCache? Function() _cache;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final isRead = request.method == 'GET' || request.method == 'HEAD';
+    final cache = isCacheableRequest(request.method, request.url) ? _cache() : null;
+    final key = cache == null ? null : cacheKey(request.url, request.headers);
+    final saved = key == null ? null : await cache!.read(key);
+    final fallback = saved != null && Zone.current[_noFallback] != true;
+    final timeout = !fallback
+        ? readTimeout
+        : (connectionProblem.value ? offlineTimeout : cachedTimeout);
     try {
       final pending = _inner.send(request);
-      final response = await (isRead ? pending.timeout(readTimeout) : pending);
+      var response = await (isRead ? pending.timeout(timeout) : pending);
+      if (cache != null && response.statusCode == 200) {
+        final body = await response.stream.bytesToString().timeout(timeout);
+        final headers = {
+          for (final h in ['content-type', 'content-range'])
+            if (response.headers[h] != null) h: response.headers[h]!,
+        };
+        await cache.write(key!, CachedResponse(200, headers, body, DateTime.now()));
+        response = _replay(request, 200, headers, body);
+      }
       connectionProblem.value = false;
+      showingCachedSince.value = null;
       return response;
-    } on TimeoutException {
+    } on Exception catch (error) {
+      final network =
+          error is TimeoutException || error is SocketException || error is http.ClientException;
+      if (!network) rethrow;
       connectionProblem.value = true;
-      rethrow;
-    } on SocketException {
-      connectionProblem.value = true;
-      rethrow;
-    } on http.ClientException {
-      connectionProblem.value = true;
+      if (fallback) {
+        final copy = saved!;
+        showingCachedSince.value = copy.savedAt;
+        return _replay(request, copy.status, copy.headers, copy.body);
+      }
       rethrow;
     }
+  }
+
+  http.StreamedResponse _replay(
+    http.BaseRequest request,
+    int status,
+    Map<String, String> headers,
+    String body,
+  ) {
+    final bytes = utf8.encode(body);
+    return http.StreamedResponse(
+      Stream.value(bytes),
+      status,
+      contentLength: bytes.length,
+      headers: headers,
+      request: request,
+    );
   }
 
   @override
@@ -81,12 +131,7 @@ class ConnectionBanner extends StatelessWidget {
                   children: const [
                     Icon(Icons.signal_wifi_bad, color: Colors.white, size: 18),
                     SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Sin conexión o señal débil. Lo que no cargó se puede reintentar.',
-                        style: TextStyle(color: Colors.white, fontSize: 13),
-                      ),
-                    ),
+                    Expanded(child: _BannerText()),
                   ],
                 ),
               ),
@@ -95,6 +140,33 @@ class ConnectionBanner extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _BannerText extends StatelessWidget {
+  const _BannerText();
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<DateTime?>(
+    valueListenable: showingCachedSince,
+    builder: (context, since, _) => Text(
+      since == null
+          ? 'Sin conexión o señal débil. Lo que no cargó se puede reintentar.'
+          : 'Sin conexión: mostrando datos guardados ${describeSavedAt(since)}.',
+      style: const TextStyle(color: Colors.white, fontSize: 13),
+    ),
+  );
+}
+
+/// "hoy 08:15", "ayer 19:02" o "14/11 08:15".
+String describeSavedAt(DateTime when, {DateTime? now}) {
+  final t = when.toLocal();
+  final n = (now ?? DateTime.now()).toLocal();
+  String two(int v) => v.toString().padLeft(2, '0');
+  final hour = '${two(t.hour)}:${two(t.minute)}';
+  final today = DateTime(n.year, n.month, n.day);
+  final day = DateTime(t.year, t.month, t.day);
+  if (day == today) return 'hoy $hour';
+  if (day == today.subtract(const Duration(days: 1))) return 'ayer $hour';
+  return 'el ${two(t.day)}/${two(t.month)} $hour';
 }
 
 /// Ahorro de datos: no se descargan las fotos de productos (se ven solo si se tocan).

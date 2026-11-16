@@ -15,6 +15,7 @@ import 'client_filters.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../core/offline_queries.dart';
 
 class ClientDetailPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -69,11 +70,7 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
     if (usuarioId == null) return;
 
     try {
-      final usuario = await _client
-          .from('usuarios')
-          .select('rol,activo')
-          .eq('id', usuarioId)
-          .single();
+      final usuario = await consultarRolActivo(_client, usuarioId);
 
       if (!mounted) return;
 
@@ -103,23 +100,8 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
         throw Exception('Cliente sin ID');
       }
 
-      final saldoCentral = await _client
-          .from('saldos_pendientes_clientes')
-          .select('''
-      total_entregado,
-      total_neto,
-      total_pagado,
-      saldo_pendiente,
-      cantidad_pedidos_con_saldo
-    ''')
-          .eq('cliente_id', clienteId)
-          .maybeSingle();
-
-      final saldos = await _client
-          .from('saldos_pendientes_pedidos')
-          .select()
-          .eq('cliente_id', clienteId)
-          .gt('saldo_pendiente', 0);
+      final saldoCentral = await consultarSaldoDetalle(_client, clienteId);
+      final saldos = await consultarPedidosConSaldo(_client, clienteId);
       final pedidosPendientes = saldos
           .map(
             (s) => <String, dynamic>{

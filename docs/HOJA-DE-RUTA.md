@@ -15,8 +15,9 @@ unos 170 productos. Regla de precio: **vale el que vio el cliente**.
 
 - [x] **A** (1.2.0): consultas con máximo 15 s y Reintentar, franja "Sin conexión", ahorro de datos.
 - [x] **B** (1.2.0): facturación en una sola operación (`facturar_pedido`), sin duplicar al reintentar.
-- [ ] **C**: copia local de clientes, productos (3 precios) y saldos; pantallas instantáneas;
-      "Actualizar todo antes de salir"; se borra al cerrar sesión. Android y Windows.
+- [x] **C** (1.3.0): copia local automática de toda consulta que funcionó (por usuario, se borra al
+      cerrar sesión); sin señal se muestra lo guardado con su fecha. Botón "Trabajar sin señal →
+      Preparar" en el inicio del celular: baja clientes, productos y el saldo de cada cliente.
 - [ ] **D**: operar sin señal con envío automático al volver ("Pendientes de enviar"):
       primero venta directa, cobros y gestiones de reparto; después pedidos de preventa;
       al final alta de clientes nuevos sin señal.

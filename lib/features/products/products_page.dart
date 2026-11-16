@@ -6,6 +6,7 @@ import '../../core/desktop_table.dart';
 import 'products_desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/offline_queries.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key});
@@ -69,14 +70,9 @@ class _ProductsPageState extends State<ProductsPage> {
     });
 
     try {
-      final respuesta = await Supabase.instance.client
-          .from('productos')
-          .select(
-            'id,codigo,nombre,descripcion,categoria,precio_normal,precio_promo,precio_interior,foto_path',
-          )
-          .eq('activo', true)
-          .eq('visible_preventistas', true)
-          .order('nombre');
+      final respuesta = await consultarProductosCatalogo(
+        Supabase.instance.client,
+      );
 
       if (!mounted) return;
 

@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'order_summary_page.dart';
 import 'delivery_date_picker.dart';
+import '../../core/offline_queries.dart';
 
 class OrderProductsPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -89,14 +90,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     });
 
     try {
-      final respuesta = await _client
-          .from('productos')
-          .select(
-            'id, codigo, nombre, descripcion, precio_normal, precio_promo, precio_interior, foto_path',
-          )
-          .eq('activo', true)
-          .eq('visible_preventistas', true)
-          .order('nombre');
+      final respuesta = await consultarProductosParaPedido(_client);
 
       if (!mounted) return;
 

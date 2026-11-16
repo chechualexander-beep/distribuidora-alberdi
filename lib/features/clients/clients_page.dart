@@ -7,6 +7,7 @@ import 'client_detail_page.dart';
 import 'new_client_page.dart';
 import 'client_filters.dart';
 import 'client_multi_filter.dart';
+import '../../core/offline_queries.dart';
 
 class ClientsPage extends StatefulWidget {
   const ClientsPage({super.key});
@@ -48,25 +49,15 @@ class _ClientsPageState extends State<ClientsPage> {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
       if (user == null) throw Exception('No hay usuario autenticado');
-      final usuario = await supabase
-          .from('usuarios')
-          .select('rol')
-          .eq('id', user.id)
-          .single();
+      final usuario = await consultarRol(supabase, user.id);
       final esAdministrador = usuario['rol'] == 'administrador';
-      final clientes = <Map<String, dynamic>>[];
-      // Paginar evita que el límite de respuesta oculte clientes a los filtros.
-      const tamanio = 500;
-      for (var desde = 0; ; desde += tamanio) {
-        var consulta = supabase.from('clientes').select().eq('activo', true);
-        if (!esAdministrador) consulta = consulta.eq('preventista_id', user.id);
-        final pagina = await consulta
-            .order('nombre_comercio')
-            .order('id')
-            .range(desde, desde + tamanio - 1);
-        clientes.addAll(List<Map<String, dynamic>>.from(pagina));
-        if (pagina.length < tamanio) break;
-      }
+      // Paginado (evita que el límite de respuesta oculte clientes). Consulta compartida
+      // con "Preparar para trabajar sin señal".
+      final clientes = await consultarClientesActivos(
+        supabase,
+        uid: user.id,
+        administrador: esAdministrador,
+      );
       if (!mounted) return;
       setState(() {
         _clientes = clientes;

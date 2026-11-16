@@ -9,6 +9,7 @@ import 'order_operation_selector.dart';
 import '../clients/client_detail_page.dart';
 import 'order_detail_page.dart';
 import '../clients/new_client_page.dart';
+import '../../core/offline_queries.dart';
 
 class NewOrderPage extends StatefulWidget {
   const NewOrderPage({super.key, this.clienteId, this.client});
@@ -58,11 +59,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
         throw Exception('No hay usuario autenticado');
       }
 
-      final usuario = await supabase
-          .from('usuarios')
-          .select('rol,activo')
-          .eq('id', user.id)
-          .single();
+      final usuario = await consultarRolActivo(supabase, user.id);
 
       final String rol = usuario['rol']?.toString() ?? '';
 
@@ -77,19 +74,14 @@ class _NewOrderPageState extends State<NewOrderPage> {
         return;
       }
 
-      var consulta = supabase
-          .from('clientes')
-          .select(
-            'id, nombre_comercio, propietario, direccion, localidad, tipo_precio_habitual',
-          )
-          .eq('activo', true);
-
-      if (rol != 'administrador') {
-        consulta = consulta.eq('preventista_id', user.id);
-      }
-
+      final administrador = rol == 'administrador';
       if (clienteId != null) {
-        final cliente = await consulta.eq('id', clienteId).maybeSingle();
+        final cliente = await consultarClienteParaPedido(
+          supabase,
+          uid: user.id,
+          administrador: administrador,
+          clienteId: clienteId,
+        );
         if (!mounted) return;
         setState(() {
           _cargando = false;
@@ -101,7 +93,11 @@ class _NewOrderPageState extends State<NewOrderPage> {
         return;
       }
 
-      final respuesta = await consulta.order('nombre_comercio');
+      final respuesta = await consultarClientesParaPedido(
+        supabase,
+        uid: user.id,
+        administrador: administrador,
+      );
 
       if (!mounted) return;
 
@@ -142,14 +138,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
         throw Exception('Cliente sin ID');
       }
 
-      final saldoCentral = await _client
-          .from('saldos_pendientes_clientes')
-          .select('''
-          saldo_pendiente,
-          cantidad_pedidos_con_saldo
-        ''')
-          .eq('cliente_id', clienteId)
-          .maybeSingle();
+      final saldoCentral = await consultarSaldoResumen(_client, clienteId);
 
       final deuda =
           double.tryParse(saldoCentral?['saldo_pendiente']?.toString() ?? '') ??

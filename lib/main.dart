@@ -24,6 +24,11 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'features/admin/admin_page.dart';
 import 'features/balances/balances_page.dart';
 import 'features/catalog/general_catalog_page.dart';
+import 'core/offline_queries.dart';
+import 'core/offline_prep_card.dart';
+import 'core/offline_cache.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 final _localAuthentication = LocalAuthentication();
@@ -69,6 +74,15 @@ Future<void> startApplication({bool testingEntrypoint = false}) async {
   }
   activateAppConfig(config);
   await loadDataSaver();
+  // Copia local de las consultas (para seguir viendo datos sin señal).
+  try {
+    final support = await getApplicationSupportDirectory();
+    offlineCache = await OfflineCache.open(
+      p.join(support.path, 'datos_sin_conexion_${config.project}'),
+    );
+  } catch (_) {
+    offlineCache = null;
+  }
   runApp(const DistribuidoraAlberdiApp());
 }
 
@@ -128,6 +142,7 @@ class DistribuidoraAlberdiApp extends StatelessWidget {
           persistAcrossBackgrounding: true,
         ),
         signOut: () async {
+          await borrarDatosSinConexion(auth.currentUser?.id);
           await auth.signOut();
           _navigatorKey.currentState?.pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -407,11 +422,10 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      final perfil = await Supabase.instance.client
-          .from('usuarios')
-          .select('nombre, apellido, rol, activo')
-          .eq('id', usuarioAuth.id)
-          .single();
+      final perfil = await consultarPerfilInicio(
+        Supabase.instance.client,
+        usuarioAuth.id,
+      );
 
       final nombre = perfil['nombre'] as String?;
 
@@ -468,6 +482,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _cerrarSesion() async {
+    await borrarDatosSinConexion(Supabase.instance.client.auth.currentUser?.id);
     await Supabase.instance.client.auth.signOut();
 
     if (!mounted) return;
@@ -575,7 +590,9 @@ class _HomePageState extends State<HomePage> {
                 esAdministrador ? 'Administrador' : 'Preventista',
                 style: const TextStyle(fontSize: 17, color: AppColors.gris),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
+              const OfflinePrepCard(),
+              const SizedBox(height: 12),
 
               // CLIENTES
               Card(
