@@ -16,6 +16,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/offline_queries.dart';
+import '../../core/pending_orders.dart';
 
 class ClientDetailPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -50,12 +51,21 @@ class _ClientDetailPageState extends State<ClientDetailPage> {
   double _totalCompras = 0;
   double _totalPagado = 0;
   double _saldoPendiente = 0;
+  /// Cliente nuevo hecho sin señal que todavía está solo en el teléfono: no tiene compras
+  /// ni cobros, y no se puede editar ni cobrar hasta que llegue al servidor.
+  bool get _sinEnviar =>
+      PendingOrders.instance.isPendingClient(widget.cliente['id']?.toString());
+
   @override
   void initState() {
     super.initState();
-    _cargarUltimasCompras();
+    if (_sinEnviar) {
+      _cargandoCompras = false;
+    } else {
+      _cargarUltimasCompras();
+      _cargarHistorialPagos();
+    }
     _cargarSaldoPendiente();
-    _cargarHistorialPagos();
     if (!widget.soloConsulta) _cargarRolUsuario();
   }
 
@@ -343,7 +353,19 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                   ),
                 ),
               ),
-            if (_esAdministrador)
+            if (_sinEnviar)
+              const Card(
+                color: Color(0xFFFFF3E0),
+                child: ListTile(
+                  leading: Icon(Icons.cloud_upload_outlined, color: AppColors.naranja),
+                  title: Text('Guardado en el teléfono'),
+                  subtitle: Text(
+                    'Cliente nuevo hecho sin señal: se envía solo cuando vuelva la conexión. '
+                    'Ya le podés hacer pedidos; editarlo y cobrarle, cuando se envíe.',
+                  ),
+                ),
+              ),
+            if (_esAdministrador && !_sinEnviar)
               OutlinedButton.icon(
                 icon: const Icon(Icons.account_balance_wallet_outlined),
                 label: const Text('Ver saldo / Registrar pago'),
@@ -361,7 +383,7 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                   }
                 },
               ),
-            if (_esAdministrador)
+            if (_esAdministrador && !_sinEnviar)
               OutlinedButton.icon(
                 icon: const Icon(Icons.shopping_bag_outlined),
                 label: const Text('Catálogo web del cliente'),
@@ -371,7 +393,7 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                   ),
                 ),
               ),
-            if (!widget.soloConsulta)
+            if (!widget.soloConsulta && !_sinEnviar)
               OutlinedButton.icon(
                 icon: const Icon(Icons.account_balance_wallet_outlined),
                 label: const Text('Créditos y reintegros'),
@@ -706,7 +728,7 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                           }),
                         ],
                         const SizedBox(height: 16),
-                        if (_esAdministrador)
+                        if (_esAdministrador && !_sinEnviar)
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
@@ -995,7 +1017,7 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
               }),
             const SizedBox(height: 28),
 
-            if (!widget.soloConsulta)
+            if (!widget.soloConsulta && !_sinEnviar)
               SizedBox(
                 height: 52,
                 child: FilledButton.icon(

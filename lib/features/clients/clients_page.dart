@@ -8,6 +8,8 @@ import 'new_client_page.dart';
 import 'client_filters.dart';
 import 'client_multi_filter.dart';
 import '../../core/offline_queries.dart';
+import '../../core/pending_orders.dart';
+import '../../core/app_theme.dart';
 
 class ClientsPage extends StatefulWidget {
   const ClientsPage({super.key});
@@ -333,7 +335,9 @@ class _ClientsPageState extends State<ClientsPage> {
                     fields: [
                       DesktopField(
                         'Comercio',
-                        (r) => r['nombre_comercio'],
+                        (r) => r[PendingOrders.sinEnviarKey] == true
+                            ? '${r['nombre_comercio']} (sin enviar)'
+                            : r['nombre_comercio'],
                         width: 220,
                       ),
                       DesktopField('Propietario', (r) => r['propietario']),
@@ -397,6 +401,14 @@ class _ClientsPageState extends State<ClientsPage> {
                               Text(
                                 'Visita: ${nombreDiaVisita(diaVisitaCliente(cliente))}',
                               ),
+                              if (cliente[PendingOrders.sinEnviarKey] == true)
+                                const Text(
+                                  'Sin enviar: guardado en el teléfono',
+                                  style: TextStyle(
+                                    color: AppColors.naranja,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                             ],
                           ),
                           trailing: const Icon(Icons.chevron_right),

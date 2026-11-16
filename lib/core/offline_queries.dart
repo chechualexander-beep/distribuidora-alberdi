@@ -6,12 +6,27 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_config.dart';
 import 'network_status.dart';
 import 'offline_cache.dart';
+import 'pending_orders.dart';
 
 // Consultas compartidas entre las pantallas y "Preparar para trabajar sin señal".
 // Tienen que ser EXACTAMENTE las mismas en los dos lados: la copia local se busca por la
 // consulta, así que una pantalla encuentra lo que se preparó solo si pregunta igual.
 
 typedef Fila = Map<String, dynamic>;
+
+/// Suma a la lista los clientes nuevos hechos sin señal que todavía no llegaron al servidor
+/// (marcados con [PendingOrders.sinEnviarKey]), ordenados por nombre como el resto.
+List<Fila> conClientesSinEnviar(List<Fila> clientes) {
+  final nuevos = PendingOrders.instance.pendingClients;
+  if (nuevos.isEmpty) return clientes;
+  final ids = {for (final c in clientes) c['id']?.toString()};
+  final faltan = nuevos.where((c) => !ids.contains(c['id']?.toString())).toList();
+  if (faltan.isEmpty) return clientes;
+  String nombre(Fila c) => (c['nombre_comercio']?.toString() ?? '').toLowerCase();
+  return [...clientes, ...faltan]..sort((a, b) => nombre(a).compareTo(nombre(b)));
+}
+
+bool _sinEnviar(String clienteId) => PendingOrders.instance.isPendingClient(clienteId);
 
 Future<Fila> consultarRol(SupabaseClient c, String uid) =>
     c.from('usuarios').select('rol').eq('id', uid).single();
@@ -43,7 +58,7 @@ Future<List<Fila>> consultarClientesActivos(
     clientes.addAll(List<Fila>.from(pagina));
     if (pagina.length < tamanio) break;
   }
-  return clientes;
+  return conClientesSinEnviar(clientes);
 }
 
 const _camposClientePedido =
@@ -64,8 +79,10 @@ Future<List<Fila>> consultarClientesParaPedido(
   SupabaseClient c, {
   required String uid,
   required bool administrador,
-}) async => List<Fila>.from(
-  await _clientesParaPedido(c, uid: uid, administrador: administrador).order('nombre_comercio'),
+}) async => conClientesSinEnviar(
+  List<Fila>.from(
+    await _clientesParaPedido(c, uid: uid, administrador: administrador).order('nombre_comercio'),
+  ),
 );
 
 Future<Fila?> consultarClienteParaPedido(
@@ -73,7 +90,9 @@ Future<Fila?> consultarClienteParaPedido(
   required String uid,
   required bool administrador,
   required String clienteId,
-}) => _clientesParaPedido(c, uid: uid, administrador: administrador).eq('id', clienteId).maybeSingle();
+}) async =>
+    PendingOrders.instance.pendingClient(clienteId) ??
+    await _clientesParaPedido(c, uid: uid, administrador: administrador).eq('id', clienteId).maybeSingle();
 
 /// Productos con sus 3 precios para armar pedidos.
 Future<List<Fila>> consultarProductosParaPedido(SupabaseClient c) async => List<Fila>.from(
@@ -96,14 +115,18 @@ Future<List<Fila>> consultarProductosCatalogo(SupabaseClient c) async => List<Fi
 );
 
 /// Saldo del cliente al elegirlo para un pedido.
-Future<Fila?> consultarSaldoResumen(SupabaseClient c, String clienteId) => c
+Future<Fila?> consultarSaldoResumen(SupabaseClient c, String clienteId) async => _sinEnviar(clienteId)
+    ? null
+    : await c
     .from('saldos_pendientes_clientes')
     .select('saldo_pendiente, cantidad_pedidos_con_saldo')
     .eq('cliente_id', clienteId)
     .maybeSingle();
 
 /// Saldo completo del cliente (ficha del cliente).
-Future<Fila?> consultarSaldoDetalle(SupabaseClient c, String clienteId) => c
+Future<Fila?> consultarSaldoDetalle(SupabaseClient c, String clienteId) async => _sinEnviar(clienteId)
+    ? null
+    : await c
     .from('saldos_pendientes_clientes')
     .select('total_entregado, total_neto, total_pagado, saldo_pendiente, cantidad_pedidos_con_saldo')
     .eq('cliente_id', clienteId)
@@ -111,7 +134,7 @@ Future<Fila?> consultarSaldoDetalle(SupabaseClient c, String clienteId) => c
 
 /// Pedidos del cliente que todavía deben plata (ficha del cliente).
 Future<List<Fila>> consultarPedidosConSaldo(SupabaseClient c, String clienteId) async =>
-    List<Fila>.from(
+    _sinEnviar(clienteId) ? <Fila>[] : List<Fila>.from(
       await c
           .from('saldos_pendientes_pedidos')
           .select()
@@ -120,7 +143,9 @@ Future<List<Fila>> consultarPedidosConSaldo(SupabaseClient c, String clienteId) 
     );
 
 /// Teléfono del cliente para mandarle el pedido por WhatsApp.
-Future<Fila?> consultarTelefonoCliente(SupabaseClient c, String clienteId) => c
+Future<Fila?> consultarTelefonoCliente(SupabaseClient c, String clienteId) async =>
+    PendingOrders.instance.pendingClient(clienteId) ??
+    await c
     .from('clientes')
     .select('telefono,preventista_id')
     .eq('id', clienteId)

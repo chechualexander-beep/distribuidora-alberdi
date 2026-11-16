@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:distribuidora_alberdi/core/app_config.dart';
 import 'package:distribuidora_alberdi/core/network_status.dart';
+import 'package:distribuidora_alberdi/core/offline_queries.dart';
 import 'package:distribuidora_alberdi/core/pending_orders.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +19,21 @@ PendingOrder pedido(String id, {String tipo = 'pedido'}) => PendingOrder(
   total: 1500,
   createdAt: DateTime(2026, 11, 16, 9),
 );
+
+PendingOrder pedidoDe(String id, String clienteId) => PendingOrder(
+  params: {'p_id': id, 'p_cliente_id': clienteId, 'p_tipo_operacion': 'pedido', 'p_detalles': []},
+  clientName: 'Almacén nuevo',
+  total: 900,
+  createdAt: DateTime(2026, 11, 16, 10),
+);
+
+PendingOrder clienteNuevo(String id) => PendingOrder.client({
+  'id': id,
+  'nombre_comercio': 'Almacén nuevo',
+  'direccion': 'Ruta 5 km 12',
+  'preventista_id': 'mary',
+  'activo': true,
+}, createdAt: DateTime(2026, 11, 16, 9, 30));
 
 Future<SupabaseClient> sesion(String uid) async {
   final client = mockClient((request) async => jsonResponse(request, {}), autoRefreshToken: false);
@@ -144,5 +160,101 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(enviados, ['r']);
     expect(cola.items.value, isEmpty);
+  });
+
+  test('cliente nuevo sin señal: sale primero y su pedido espera hasta que llegue', () async {
+    var online = false;
+    var clienteRechazado = false;
+    final enviados = <String>[];
+    await cola.start(
+      await sesion('mary'),
+      send: (params) async {
+        if (!online) throw http.ClientException('sin red');
+        enviados.add('pedido ${params['p_id']}');
+      },
+      sendClient: (row) async {
+        if (!online) throw http.ClientException('sin red');
+        if (clienteRechazado) {
+          throw const PostgrestException(message: 'dato inválido', code: '23514');
+        }
+        enviados.add('cliente ${row['id']}');
+      },
+    );
+    // El pedido se guardó antes en la cola, pero igual sale después del cliente.
+    await cola.add(pedidoDe('p1', 'c1'));
+    await cola.add(clienteNuevo('c1'));
+    await cola.add(pedido('otro'));
+    expect(cola.isPendingClient('c1'), isTrue);
+    expect(cola.pendingClient('c1')?[PendingOrders.sinEnviarKey], isTrue);
+    expect(cola.ordersOf('c1'), 1);
+
+    // Al reabrir sigue sabiendo que es un cliente.
+    final guardado = cola.items.value.firstWhere((o) => o.id == 'c1');
+    final copia = PendingOrder.fromJson(guardado.toJson());
+    expect(copia.isClient, isTrue);
+    expect(copia.clientId, 'c1');
+    expect(copia.params.containsKey(PendingOrders.sinEnviarKey), isFalse,
+        reason: 'la marca nunca se manda al servidor');
+
+    online = true;
+    expect(await cola.sendAll(), 3);
+    expect(enviados, ['cliente c1', 'pedido p1', 'pedido otro']);
+    expect(cola.isPendingClient('c1'), isFalse);
+
+    // Si el servidor rechaza el cliente, su pedido no se manda (fallaría) y espera.
+    enviados.clear();
+    clienteRechazado = true;
+    await cola.add(clienteNuevo('c2'));
+    await cola.add(pedidoDe('p2', 'c2'));
+    await cola.sendAll();
+    expect(enviados, isEmpty);
+    expect(cola.items.value.firstWhere((o) => o.id == 'c2').rejected, contains('dato inválido'));
+    expect(cola.items.value.firstWhere((o) => o.id == 'p2').rejected, isNull);
+
+    // Descartar el cliente descarta también sus pedidos.
+    await cola.discard('c2');
+    expect(cola.items.value, isEmpty);
+  });
+
+  test('alta del cliente: si ya había llegado (respuesta perdida) cuenta como enviado', () async {
+    var respuesta = 409;
+    var cuerpo = {'code': '23505', 'message': 'duplicate key value violates unique constraint "clientes_pkey"'};
+    final client = mockClient((request) async {
+      expect(request.method, 'POST');
+      expect(request.url.path, endsWith('/rest/v1/clientes'));
+      return jsonResponse(request, cuerpo, respuesta);
+    });
+    await insertPendingClient(client, {'id': 'c1', 'nombre_comercio': 'A', 'direccion': 'B'});
+
+    respuesta = 400;
+    cuerpo = {'code': '23514', 'message': 'violates check constraint'};
+    await expectLater(
+      insertPendingClient(client, {'id': 'c1', 'nombre_comercio': 'A', 'direccion': 'B'}),
+      throwsA(isA<PostgrestException>()),
+    );
+  });
+
+  test('el cliente sin enviar aparece en las listas y su ficha no va a internet', () async {
+    await cola.start(await sesion('mary'), send: (_) async => throw http.ClientException('x'),
+        sendClient: (_) async => throw http.ClientException('x'));
+    await cola.add(clienteNuevo('c9'));
+    final lista = conClientesSinEnviar([
+      {'id': 'a', 'nombre_comercio': 'Zapatería'},
+      {'id': 'b', 'nombre_comercio': 'Bazar'},
+    ]);
+    expect(lista.map((c) => c['nombre_comercio']), ['Almacén nuevo', 'Bazar', 'Zapatería']);
+    expect(conClientesSinEnviar([{'id': 'c9', 'nombre_comercio': 'Almacén nuevo'}]), hasLength(1),
+        reason: 'cuando ya llegó, no se repite');
+
+    // Sin red: estas consultas contestan desde el teléfono.
+    final sinRed = mockClient((request) async => throw http.ClientException('sin red'));
+    expect(
+      (await consultarClienteParaPedido(sinRed, uid: 'mary', administrador: false, clienteId: 'c9'))?['direccion'],
+      'Ruta 5 km 12',
+    );
+    expect(await consultarSaldoResumen(sinRed, 'c9'), isNull);
+    expect(await consultarSaldoDetalle(sinRed, 'c9'), isNull);
+    expect(await consultarPedidosConSaldo(sinRed, 'c9'), isEmpty);
+    expect((await consultarTelefonoCliente(sinRed, 'c9'))?['preventista_id'], 'mary');
   });
 }

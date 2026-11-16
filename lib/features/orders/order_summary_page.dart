@@ -11,6 +11,7 @@ import 'order_whatsapp_button.dart';
 import '../../core/network_status.dart';
 import '../../core/pending_orders.dart';
 import '../../core/offline_cache.dart';
+import 'dart:async';
 
 class OrderSummaryPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -267,7 +268,15 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
               .toUtc()
               .toIso8601String(),
         };
+        final cola = PendingOrders.instance;
+        final clienteId = widget.cliente['id']?.toString();
+        // Cliente nuevo hecho sin señal: primero tiene que llegar él. Si sigue sin llegar,
+        // el pedido se guarda en el teléfono y sale detrás del cliente.
+        if (cola.isPendingClient(clienteId)) await cola.sendAll();
         try {
+          if (cola.isPendingClient(clienteId)) {
+            throw TimeoutException('Cliente nuevo todavía sin enviar');
+          }
           await _client
               .rpc('crear_pedido_sin_conexion', params: params)
               .timeout(const Duration(seconds: 20));

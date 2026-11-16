@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'visit_day_field.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../core/network_status.dart';
+import '../../core/pending_orders.dart';
+import '../invoicing/atomic_invoice.dart' show newInvoiceRequestId;
 
 class NewClientPage extends StatefulWidget {
   const NewClientPage({super.key});
@@ -24,6 +27,7 @@ class _NewClientPageState extends State<NewClientPage> {
   final _observacionesController = TextEditingController();
 
   int? _diaVisita;
+  String? _clienteId;
   bool _guardando = false;
   double? _latitud;
   double? _longitud;
@@ -84,27 +88,57 @@ class _NewClientPageState extends State<NewClientPage> {
       _guardando = true;
     });
 
+    // El id se elige acá: si no hay señal, el cliente queda guardado en el teléfono con ese
+    // id y se le pueden hacer pedidos enseguida. Reintentar nunca lo duplica.
+    _clienteId ??= newInvoiceRequestId();
+    final fila = <String, dynamic>{
+      'id': _clienteId,
+      'nombre_comercio': _comercioController.text.trim(),
+      'direccion': _direccionController.text.trim(),
+      'propietario': _textoOpcional(_propietarioController),
+      'telefono': _textoOpcional(_telefonoController),
+      'localidad': _textoOpcional(_localidadController),
+      'zona': _textoOpcional(_zonaController),
+      'dia_visita': _diaVisita,
+      'observaciones': _textoOpcional(_observacionesController),
+      'latitud': _latitud,
+      'longitud': _longitud,
+      'ubicacion_actualizada_at': _ubicacionActualizadaAt?.toIso8601String(),
+      'preventista_id': usuario.id,
+      'activo': true,
+    };
+
     try {
-      final clienteCreado = await Supabase.instance.client
-          .from('clientes')
-          .insert({
-            'nombre_comercio': _comercioController.text.trim(),
-            'direccion': _direccionController.text.trim(),
-            'propietario': _textoOpcional(_propietarioController),
-            'telefono': _textoOpcional(_telefonoController),
-            'localidad': _textoOpcional(_localidadController),
-            'zona': _textoOpcional(_zonaController),
-            'dia_visita': _diaVisita,
-            'observaciones': _textoOpcional(_observacionesController),
-            'latitud': _latitud,
-            'longitud': _longitud,
-            'ubicacion_actualizada_at': _ubicacionActualizadaAt
-                ?.toIso8601String(),
-            'preventista_id': usuario.id,
-            'activo': true,
-          })
-          .select()
-          .single();
+      Map<String, dynamic> clienteCreado;
+      try {
+        await insertPendingClient(Supabase.instance.client, fila)
+            .timeout(const Duration(seconds: 20));
+        clienteCreado = fila;
+      } catch (error) {
+        if (!isUncertainRequestError(error)) rethrow;
+        // Sin señal: queda en el teléfono y se envía solo (antes que sus pedidos).
+        await PendingOrders.instance.add(PendingOrder.client(fila), uid: usuario.id);
+        clienteCreado = PendingOrders.instance.pendingClient(_clienteId) ?? fila;
+        if (mounted) {
+          await showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              icon: const Icon(Icons.cloud_upload_outlined, size: 48),
+              title: const Text('Guardado en el teléfono'),
+              content: const Text(
+                'No hay señal: el cliente quedó guardado en el teléfono y se envía solo '
+                'cuando vuelva la conexión. Ya le podés hacer pedidos.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('ACEPTAR'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
 
       if (!mounted) return;
 

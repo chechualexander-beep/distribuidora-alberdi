@@ -8,7 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_config.dart';
 import 'network_status.dart';
 
-/// Pedido o venta directa confirmado sin señal: queda guardado en el teléfono y se envía solo.
+/// Pedido, venta directa o cliente nuevo hecho sin señal: queda guardado en el teléfono y
+/// se envía solo.
 class PendingOrder {
   PendingOrder({
     required this.params,
@@ -16,10 +17,26 @@ class PendingOrder {
     required this.total,
     required this.createdAt,
     this.rejected,
+    this.kind = orderKind,
   });
 
-  /// Parámetros exactos de `crear_pedido_sin_conexion` (incluye p_id: reenviar no duplica).
+  static const orderKind = 'pedido';
+  static const clientKind = 'cliente';
+
+  /// Cliente nuevo: [params] es la fila completa de `clientes` con su `id` ya elegido en el
+  /// teléfono, así los pedidos sin señal lo pueden usar antes de que llegue al servidor.
+  factory PendingOrder.client(Map<String, dynamic> row, {DateTime? createdAt}) => PendingOrder(
+    params: row,
+    clientName: row['nombre_comercio']?.toString() ?? 'Cliente nuevo',
+    total: 0,
+    createdAt: createdAt ?? DateTime.now(),
+    kind: clientKind,
+  );
+
+  /// Pedido: parámetros exactos de `crear_pedido_sin_conexion` (incluye p_id: reenviar no
+  /// duplica). Cliente: la fila a insertar.
   final Map<String, dynamic> params;
+  final String kind;
   final String clientName;
   final double total;
   final DateTime createdAt;
@@ -27,7 +44,11 @@ class PendingOrder {
   /// Motivo si el servidor lo rechazó (por ejemplo, cambió un precio hace más de 3 días).
   String? rejected;
 
-  String get id => params['p_id'].toString();
+  bool get isClient => kind == clientKind;
+  String get id => (isClient ? params['id'] : params['p_id']).toString();
+
+  /// Cliente del pedido (o el propio cliente nuevo).
+  String? get clientId => (isClient ? params['id'] : params['p_cliente_id'])?.toString();
   bool get isDirectSale => params['p_tipo_operacion'] == 'venta_directa';
 
   Map<String, dynamic> toJson() => {
@@ -36,6 +57,7 @@ class PendingOrder {
     'total': total,
     'creado': createdAt.toUtc().toIso8601String(),
     if (rejected != null) 'rechazado': rejected,
+    if (isClient) 'tipo': kind,
   };
 
   static PendingOrder fromJson(Map<String, dynamic> json) => PendingOrder(
@@ -44,10 +66,22 @@ class PendingOrder {
     total: (json['total'] as num?)?.toDouble() ?? 0,
     createdAt: DateTime.tryParse(json['creado']?.toString() ?? '') ?? DateTime.now(),
     rejected: json['rechazado']?.toString(),
+    kind: json['tipo']?.toString() ?? orderKind,
   );
 }
 
 typedef SendOrder = Future<void> Function(Map<String, dynamic> params);
+
+/// Alta de un cliente nuevo con su id elegido en el teléfono. Si un intento anterior llegó
+/// pero no la respuesta, el servidor contesta "ya existe" (23505): eso cuenta como enviado.
+Future<void> insertPendingClient(SupabaseClient client, Map<String, dynamic> row) async {
+  try {
+    await client.from('clientes').insert(row).timeout(const Duration(seconds: 25));
+  } on PostgrestException catch (error) {
+    if (error.code == '23505') return;
+    rethrow;
+  }
+}
 
 /// Cola de pedidos sin enviar, por usuario. Se envía sola: al iniciar, al volver a la app,
 /// cuando otra pantalla detecta que volvió la conexión y cada 30 segundos mientras haya
@@ -60,6 +94,7 @@ class PendingOrders {
   final sending = ValueNotifier<bool>(false);
   String? _uid;
   SendOrder? _send;
+  SendOrder? _sendClient;
   Timer? _timer;
   AppLifecycleListener? _lifecycle;
   bool _listening = false;
@@ -71,7 +106,7 @@ class PendingOrders {
   String _key(String uid) => appConfig.localPreferenceKey('pedidos_sin_enviar:$uid');
 
   /// Arranca para el usuario de la sesión. [send] se puede reemplazar en pruebas.
-  Future<void> start(SupabaseClient client, {SendOrder? send}) async {
+  Future<void> start(SupabaseClient client, {SendOrder? send, SendOrder? sendClient}) async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) return;
     _uid = uid;
@@ -80,6 +115,7 @@ class PendingOrders {
         (params) => client
             .rpc('crear_pedido_sin_conexion', params: params)
             .timeout(const Duration(seconds: 25));
+    _sendClient = sendClient ?? (row) => insertPendingClient(client, row);
     await _load();
     if (!_listening) {
       _listening = true;
@@ -143,12 +179,41 @@ class PendingOrders {
     await _save();
   }
 
+  /// Descarta un pendiente. Si es un cliente nuevo, también sus pedidos (sin el cliente no
+  /// se pueden cargar).
   Future<void> discard(String id) async {
-    items.value = items.value.where((o) => o.id != id).toList();
+    final client = items.value.where((o) => o.isClient && o.id == id).isNotEmpty;
+    items.value = items.value
+        .where((o) => o.id != id && !(client && !o.isClient && o.clientId == id))
+        .toList();
     await _save();
   }
 
-  /// Envía los pendientes (no los rechazados). Devuelve cuántos se enviaron.
+  /// Clientes nuevos guardados en el teléfono que todavía no llegaron al servidor.
+  List<Map<String, dynamic>> get pendingClients => [
+    for (final o in items.value)
+      if (o.isClient) {...o.params, sinEnviarKey: true},
+  ];
+
+  bool isPendingClient(String? id) =>
+      id != null && items.value.any((o) => o.isClient && o.id == id);
+
+  Map<String, dynamic>? pendingClient(String? id) {
+    for (final c in pendingClients) {
+      if (c['id']?.toString() == id) return c;
+    }
+    return null;
+  }
+
+  /// Pedidos guardados de un cliente nuevo.
+  int ordersOf(String id) =>
+      items.value.where((o) => !o.isClient && o.clientId == id).length;
+
+  /// Marca que se agrega a la fila de un cliente sin enviar (nunca se manda al servidor).
+  static const sinEnviarKey = '_sin_enviar';
+
+  /// Envía los pendientes (no los rechazados): primero los clientes nuevos y después los
+  /// pedidos; un pedido de un cliente que todavía no llegó espera. Devuelve cuántos se enviaron.
   Future<int> sendAll() async {
     final send = _send;
     if (send == null) return 0;
@@ -156,14 +221,20 @@ class PendingOrders {
       _again = true;
       return 0;
     }
-    final queue = items.value.where((o) => o.rejected == null).toList();
+    final waiting = items.value.where((o) => o.rejected == null);
+    final queue = [...waiting.where((o) => o.isClient), ...waiting.where((o) => !o.isClient)];
     if (queue.isEmpty) return 0;
     sending.value = true;
     var sent = 0;
     try {
       for (final order in queue) {
+        if (!order.isClient && isPendingClient(order.clientId)) continue;
         try {
-          await send(order.params);
+          if (order.isClient) {
+            await (_sendClient ?? send)(order.params);
+          } else {
+            await send(order.params);
+          }
           items.value = items.value.where((o) => o.id != order.id).toList();
           sent++;
         } catch (error) {

@@ -1,6 +1,6 @@
 # Hoja de ruta — Distribuidora Alberdi
 
-Última actualización: 16/11/2026 (producción en **1.2.0**).
+Última actualización: 16/11/2026 (producción en **1.2.0**; 1.3.0 a 1.5.0 en TESTING).
 
 ## Orden acordado
 1. **Modo sin conexión** (en curso)
@@ -21,13 +21,23 @@ unos 170 productos. Regla de precio: **vale el que vio el cliente**.
 - [ ] **D**: operar sin señal con envío automático al volver ("Pendientes de enviar"):
   - [x] **D1** (1.4.0): pedidos y ventas directas nuevos (`crear_pedido_sin_conexion`), con
         historial de precios: se respeta el precio visto hasta 72 h y queda anotado en la observación.
-  - [ ] **D2**: gestiones de reparto y cobros sin señal (administrador).
-  - [ ] **D3**: alta de clientes nuevos sin señal.
+  - [x] **D3** (1.5.0): alta de clientes nuevos sin señal. El id se elige en el teléfono: se le
+        pueden hacer pedidos enseguida, el cliente sale primero y sus pedidos detrás.
+  - [ ] **D2**: gestiones de reparto y cobros sin señal → se hace **junto con el stock del
+        vehículo** (sección 2), porque toca el mismo circuito.
 
 ## 2. Stock V2
 Instalado y **apagado** (régimen OFF) desde la 1.0.8. Pendiente: stock del vehículo y del
 local comercial, y decidir cuándo encenderlo. Las ventas hechas sin señal deben registrarse
 y avisar diferencias, no rechazarse.
+
+**Reparto y cobros sin señal (D2), decidido el 16/11/2026:**
+- Los hace el **administrador** en la calle (los preventistas no entregan ni cobran).
+- Queda la **hora real del teléfono** de la entrega o el cobro, no la del envío: una entrega
+  del sábado cuenta para la liquidación de esa semana aunque se envíe el lunes. El servidor la
+  acepta si es de las últimas 72 h y no está en el futuro (hoy `preparar_finalizacion_contexto`
+  exige la hora del servidor; hay que cambiarlo junto con el stock del vehículo).
+- Mismo mecanismo que los pedidos: "Pendientes de enviar", envío automático y sin duplicar.
 
 ## 3. Gestión del negocio (no contabilidad formal)
 El dueño hoy lleva las cuentas "a ojo": el Excel no se usa porque hay que acordarse de anotar

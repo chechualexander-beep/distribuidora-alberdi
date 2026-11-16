@@ -491,9 +491,9 @@ class _HomePageState extends State<HomePage> {
       final seguir = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Hay pedidos sin enviar'),
+          title: const Text('Hay pendientes sin enviar'),
           content: Text(
-            'Tenés $pendientes ${pendientes == 1 ? 'pedido guardado' : 'pedidos guardados'} en este teléfono '
+            'Tenés $pendientes ${pendientes == 1 ? 'pendiente guardado' : 'pendientes guardados'} (pedidos o clientes nuevos) en este teléfono '
             'que todavía no se enviaron. No se pierden: se envían cuando vuelvas a entrar con tu usuario '
             'en este teléfono y haya señal.',
           ),

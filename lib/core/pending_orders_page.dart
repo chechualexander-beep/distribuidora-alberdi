@@ -65,7 +65,7 @@ class PendingOrdersPage extends StatelessWidget {
       SnackBar(
         content: Text(
           left == 0
-              ? 'Listo: ${sent == 1 ? 'se envió 1 pedido' : 'se enviaron $sent pedidos'}.'
+              ? 'Listo: ${sent == 1 ? 'se envió 1' : 'se enviaron $sent'}.'
               : 'Todavía sin señal: quedan $left. Se envían solos cuando vuelva.',
         ),
       ),
@@ -73,13 +73,18 @@ class PendingOrdersPage extends StatelessWidget {
   }
 
   Future<void> _discard(BuildContext context, PendingOrder order) async {
+    final orders = order.isClient ? PendingOrders.instance.ordersOf(order.id) : 0;
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Descartar pedido'),
+        title: Text(order.isClient ? 'Descartar cliente nuevo' : 'Descartar pedido'),
         content: Text(
-          'El pedido de ${order.clientName} no se cargó y se va a borrar del teléfono. '
-          'Si hace falta, volvé a hacerlo desde Nuevo pedido.',
+          order.isClient
+              ? 'El cliente ${order.clientName} no se cargó y se va a borrar del teléfono'
+                    '${orders == 0 ? '' : orders == 1 ? ', junto con su pedido' : ', junto con sus $orders pedidos'}. '
+                    'Si hace falta, volvé a cargarlo desde Nuevo cliente.'
+              : 'El pedido de ${order.clientName} no se cargó y se va a borrar del teléfono. '
+                    'Si hace falta, volvé a hacerlo desde Nuevo pedido.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
@@ -101,7 +106,7 @@ class PendingOrdersPage extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             const Text(
-              'Estos pedidos se confirmaron sin señal y están guardados en el teléfono. '
+              'Estos pedidos y clientes nuevos se hicieron sin señal y están guardados en el teléfono. '
               'Se envían solos cuando vuelve la conexión, y nunca se cargan dos veces.',
             ),
             const SizedBox(height: 12),
@@ -125,22 +130,28 @@ class PendingOrdersPage extends StatelessWidget {
             if (items.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 32),
-                child: Text('No hay pedidos pendientes.', textAlign: TextAlign.center),
+                child: Text('No hay nada pendiente.', textAlign: TextAlign.center),
               ),
             for (final order in items)
               Card(
                 child: ListTile(
                   leading: Icon(
-                    order.rejected != null ? Icons.error_outline : Icons.schedule,
+                    order.rejected != null
+                        ? Icons.error_outline
+                        : order.isClient
+                        ? Icons.person_add_alt_1
+                        : Icons.schedule,
                     color: order.rejected != null ? AppColors.rojo : AppColors.naranja,
                   ),
                   title: Text(order.clientName),
                   subtitle: Text(
-                    '${order.isDirectSale ? 'Venta directa' : 'Pedido'} · ${_money(order.total)} · '
+                    '${order.isClient ? 'Cliente nuevo' : '${order.isDirectSale ? 'Venta directa' : 'Pedido'} · ${_money(order.total)}'} · '
                     '${_when(order.createdAt)}'
-                    '${order.rejected != null ? '\nNo se cargó: ${order.rejected}' : ''}',
+                    '${order.rejected != null ? '\nNo se cargó: ${order.rejected}' : ''}'
+                    '${order.rejected == null && !order.isClient && pending.isPendingClient(order.clientId) ? '\nSale después del cliente nuevo' : ''}',
                   ),
-                  isThreeLine: order.rejected != null,
+                  isThreeLine: order.rejected != null ||
+                      (!order.isClient && pending.isPendingClient(order.clientId)),
                   trailing: order.rejected != null
                       ? IconButton(
                           tooltip: 'Descartar',

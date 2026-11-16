@@ -10,6 +10,7 @@ import '../clients/client_detail_page.dart';
 import 'order_detail_page.dart';
 import '../clients/new_client_page.dart';
 import '../../core/offline_queries.dart';
+import '../../core/pending_orders.dart';
 
 class NewOrderPage extends StatefulWidget {
   const NewOrderPage({super.key, this.clienteId, this.client});
@@ -175,6 +176,9 @@ class _NewOrderPageState extends State<NewOrderPage> {
       if (clienteId == null || clienteId.isEmpty) {
         return;
       }
+
+      // Cliente nuevo todavía en el teléfono: no tiene pedidos anteriores.
+      if (PendingOrders.instance.isPendingClient(clienteId)) return;
 
       final respuesta = await _client
           .from('pedidos')
