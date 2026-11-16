@@ -69,7 +69,7 @@ class ResilientHttpClient extends http.BaseClient {
       if (!network) rethrow;
       connectionProblem.value = true;
       if (fallback) {
-        final copy = saved!;
+        final copy = saved;
         showingCachedSince.value = copy.savedAt;
         return _replay(request, copy.status, copy.headers, copy.body);
       }

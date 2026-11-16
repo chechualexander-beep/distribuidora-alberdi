@@ -20,7 +20,7 @@ String generalCatalogLinkKey(String id) =>
 
 String get _whatsappKey => appConfig.catalogPreferenceKey('general:whatsapp');
 
-/// Enlace público a partir del token: <sitio del entorno>/#general=<token>.
+/// Enlace público a partir del token: `sitio del entorno` + `#general=` + token.
 String generalCatalogLink(String token) {
   const override = String.fromEnvironment('CATALOGO_URL');
   // Sin barra antes del '#', igual que los enlaces de cliente: WhatsApp guardó la vista

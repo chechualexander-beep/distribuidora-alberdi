@@ -17,10 +17,10 @@ String _normalize(String? text) => (text ?? '').trim().toLowerCase();
 /// Orden final: primero las guardadas que siguen existiendo, después las nuevas por nombre.
 List<String> mergeCategoryOrder(List<String> saved, Iterable<String> current) {
   final existing = current.map(_normalize).where((c) => c.isNotEmpty).toSet();
-  final ordered = <String>[
+  final ordered = <String>{
     for (final c in saved.map(_normalize))
       if (existing.contains(c)) c,
-  ].toSet().toList();
+  }.toList();
   final rest = existing.difference(ordered.toSet()).toList()..sort();
   return [...ordered, ...rest];
 }

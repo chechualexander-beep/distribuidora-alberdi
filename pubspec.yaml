@@ -54,10 +54,10 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.5
   local_auth: ^3.0.2
+  # Cliente HTTP de Supabase con tiempo máximo y copia local (lib/core/network_status.dart).
+  http: 1.6.0
 
 dev_dependencies:
-  # HTTP fixtures for finalization recovery; same version already in the lockfile.
-  http: 1.6.0
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.4
