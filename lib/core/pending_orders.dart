@@ -61,6 +61,9 @@ class PendingOrders {
   SendOrder? _send;
   Timer? _timer;
   bool _listening = false;
+  // Si se pide enviar mientras ya se está enviando (por ejemplo, volvió la señal justo en ese
+  // momento), se repite apenas termine en vez de esperar al próximo intento.
+  bool _again = false;
 
   String _key(String uid) => appConfig.localPreferenceKey('pedidos_sin_enviar:$uid');
 
@@ -89,6 +92,7 @@ class PendingOrders {
     _timer = null;
     if (_listening) connectionProblem.removeListener(_onConnection);
     _listening = false;
+    _again = false;
     _uid = null;
     items.value = const [];
   }
@@ -139,7 +143,11 @@ class PendingOrders {
   /// Envía los pendientes (no los rechazados). Devuelve cuántos se enviaron.
   Future<int> sendAll() async {
     final send = _send;
-    if (send == null || sending.value) return 0;
+    if (send == null) return 0;
+    if (sending.value) {
+      _again = true;
+      return 0;
+    }
     final queue = items.value.where((o) => o.rejected == null).toList();
     if (queue.isEmpty) return 0;
     sending.value = true;
@@ -159,6 +167,10 @@ class PendingOrders {
       }
     } finally {
       sending.value = false;
+    }
+    if (_again) {
+      _again = false;
+      sent += await sendAll();
     }
     return sent;
   }

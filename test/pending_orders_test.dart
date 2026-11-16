@@ -76,10 +76,11 @@ void main() {
     expect(cola.items.value.last.isDirectSale, isFalse);
     expect(cola.items.value.first.isDirectSale, isTrue);
 
+    // La señal vuelve justo mientras sigue el intento que hizo al abrir: igual se envía.
     online = true;
     connectionProblem.value = true;
     connectionProblem.value = false; // "volvió la conexión": envía solo
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(enviados, ['b', 'a']);
     expect(cola.items.value, isEmpty);
   });
