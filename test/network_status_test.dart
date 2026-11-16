@@ -94,6 +94,37 @@ void main() {
     connectionProblem.value = false;
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('la app ocupa toda la pantalla con y sin franja (pantalla de bloqueo visible)', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final offline in [false, true]) {
+      connectionProblem.value = offline;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => ConnectionBanner(
+            child: Stack(
+              key: const ValueKey('bloqueo'),
+              children: [
+                Offstage(offstage: true, child: child!),
+                const Positioned.fill(
+                  child: Material(child: Center(child: Text('Alberdi bloqueada'))),
+                ),
+              ],
+            ),
+          ),
+          home: const Scaffold(body: Text('inicio')),
+        ),
+      );
+      final size = tester.getSize(find.byKey(const ValueKey('bloqueo')));
+      expect(size.width, 400, reason: 'offline=$offline');
+      expect(find.text('Alberdi bloqueada'), findsOneWidget);
+      expect(tester.getSize(find.text('Alberdi bloqueada')).width, greaterThan(0));
+    }
+    connectionProblem.value = false;
+  });
 }
 
 class _Contador extends StatefulWidget {

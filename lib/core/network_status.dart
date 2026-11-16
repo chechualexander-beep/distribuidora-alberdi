@@ -60,6 +60,8 @@ class ConnectionBanner extends StatelessWidget {
     valueListenable: connectionProblem,
     child: child,
     builder: (context, offline, app) => Column(
+      // stretch: la app ocupa TODO el ancho (si no, la pantalla de bloqueo queda en ancho 0).
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           child: MediaQuery.removePadding(
