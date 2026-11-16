@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -49,8 +49,9 @@ class PendingOrder {
 
 typedef SendOrder = Future<void> Function(Map<String, dynamic> params);
 
-/// Cola de pedidos sin enviar, por usuario. Se envía sola: al iniciar, cuando vuelve la
-/// conexión y cada 2 minutos mientras haya pendientes.
+/// Cola de pedidos sin enviar, por usuario. Se envía sola: al iniciar, al volver a la app,
+/// cuando otra pantalla detecta que volvió la conexión y cada 30 segundos mientras haya
+/// pendientes (sin señal el intento falla al instante: casi no gasta batería ni datos).
 class PendingOrders {
   PendingOrders._();
   static final instance = PendingOrders._();
@@ -60,7 +61,9 @@ class PendingOrders {
   String? _uid;
   SendOrder? _send;
   Timer? _timer;
+  AppLifecycleListener? _lifecycle;
   bool _listening = false;
+  static const retryEvery = Duration(seconds: 30);
   // Si se pide enviar mientras ya se está enviando (por ejemplo, volvió la señal justo en ese
   // momento), se repite apenas termine en vez de esperar al próximo intento.
   bool _again = false;
@@ -83,13 +86,18 @@ class PendingOrders {
       connectionProblem.addListener(_onConnection);
     }
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(minutes: 2), (_) => sendAll());
+    _timer = Timer.periodic(retryEvery, (_) {
+      if (items.value.any((o) => o.rejected == null)) unawaited(sendAll());
+    });
+    _lifecycle ??= AppLifecycleListener(onResume: () => unawaited(sendAll()));
     unawaited(sendAll());
   }
 
   void stop() {
     _timer?.cancel();
     _timer = null;
+    _lifecycle?.dispose();
+    _lifecycle = null;
     if (_listening) connectionProblem.removeListener(_onConnection);
     _listening = false;
     _again = false;

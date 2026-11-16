@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:distribuidora_alberdi/core/app_config.dart';
 import 'package:distribuidora_alberdi/core/network_status.dart';
 import 'package:distribuidora_alberdi/core/pending_orders.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -40,6 +41,7 @@ Future<SupabaseClient> sesion(String uid) async {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   final cola = PendingOrders.instance;
   setUp(() {
     activateAppConfig(fixtureConfig());
@@ -118,5 +120,29 @@ void main() {
     expect(isUncertainRequestError(http.ClientException('x')), isTrue);
     expect(isUncertainRequestError(const PostgrestException(message: 'gw', code: '502')), isTrue);
     expect(isUncertainRequestError(const PostgrestException(message: 'no', code: 'P0001')), isFalse);
+  });
+
+  test('reintenta solo cada 30 segundos mientras haya pendientes', () {
+    expect(PendingOrders.retryEvery, const Duration(seconds: 30));
+  });
+
+  test('al volver a la app intenta enviar enseguida', () async {
+    final binding = TestWidgetsFlutterBinding.instance;
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    var online = false;
+    final enviados = <String>[];
+    await cola.start(await sesion('mary'), send: (params) async {
+      if (!online) throw http.ClientException('sin red');
+      enviados.add(params['p_id'] as String);
+    });
+    await cola.add(pedido('r'));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    online = true;
+    // Simula que el usuario vuelve a la app (desde WhatsApp, o al desbloquear).
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(enviados, ['r']);
+    expect(cola.items.value, isEmpty);
   });
 }
