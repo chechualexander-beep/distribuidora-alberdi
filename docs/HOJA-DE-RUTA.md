@@ -1,0 +1,59 @@
+# Hoja de ruta — Distribuidora Alberdi
+
+Última actualización: 16/11/2026 (producción en **1.2.0**).
+
+## Orden acordado
+1. **Modo sin conexión** (en curso)
+2. **Stock V2**: encenderlo, con stock del vehículo y del local comercial
+3. **Gestión del negocio**: gastos, compras, caja y utilidad
+
+## 1. Modo sin conexión
+Problema: en zonas rurales, con poca señal, la app tarda minutos o da error. En la oficina,
+internet se corta cada tanto. Se usan: pedidos, venta directa, gestión de reparto, cobros de
+venta y de saldos, alta de clientes. Volumen: unos 406 clientes (la mayoría de "Mary Ana") y
+unos 170 productos. Regla de precio: **vale el que vio el cliente**.
+
+- [x] **A** (1.2.0): consultas con máximo 15 s y Reintentar, franja "Sin conexión", ahorro de datos.
+- [x] **B** (1.2.0): facturación en una sola operación (`facturar_pedido`), sin duplicar al reintentar.
+- [ ] **C**: copia local de clientes, productos (3 precios) y saldos; pantallas instantáneas;
+      "Actualizar todo antes de salir"; se borra al cerrar sesión. Android y Windows.
+- [ ] **D**: operar sin señal con envío automático al volver ("Pendientes de enviar"):
+      primero venta directa, cobros y gestiones de reparto; después pedidos de preventa;
+      al final alta de clientes nuevos sin señal.
+
+## 2. Stock V2
+Instalado y **apagado** (régimen OFF) desde la 1.0.8. Pendiente: stock del vehículo y del
+local comercial, y decidir cuándo encenderlo. Las ventas hechas sin señal deben registrarse
+y avisar diferencias, no rechazarse.
+
+## 3. Gestión del negocio (no contabilidad formal)
+El dueño hoy lleva las cuentas "a ojo": el Excel no se usa porque hay que acordarse de anotar
+después. El 90 % de los movimientos son del negocio. Idea central: **anotar en el momento,
+desde el celular, en segundos, y que funcione sin señal**.
+
+- Botón **"Anotar gasto"** en el inicio: monto + categoría (combustible, luz, mercadería, ...)
+  y foto del ticket opcional.
+- Los **cobros** ya están en la app: entran solos.
+- **"Retiro para el hogar"** como movimiento aparte: no es gasto del negocio (no baja la
+  ganancia), pero sale de la caja. Los gastos del hogar no se cargan (los maneja la esposa).
+- **Compras a proveedores** conectadas con costo de productos y stock (después del Stock V2).
+- **Utilidad por período**: ventas entregadas − costo de mercadería − comisiones − gastos;
+  por preventista, categoría o producto. **Caja**: entradas y salidas por medio de pago.
+- **Exportar a Excel** para el contador. Fuera de alcance: asientos, balances, IVA, ARCA.
+- Reaprovechar el diseño de compras, costos, gastos y equilibrio del **Alberdi POS**
+  (`D:\Respaldos\AlberdiPOS-20261115-1830.zip`).
+
+## Otros pendientes
+- Catálogo E4: ofertas (precio anterior tachado).
+- Play Console: ordenar pistas (la prueba cerrada apunta a TESTING).
+- Respaldos automáticos (plan gratuito de Supabase sin copias automáticas).
+- Simplificar capas del Stock V2 cuando se encienda.
+- Posible versión configurable para otra distribuidora (no hacer todavía; no agregar más
+  valores fijos de "Alberdi").
+
+## Dónde está cada cosa
+- Código: `C:\proyectos\distribuidora_alberdi` (repositorio) y `C:\proyectos\alberdi_release`
+  (compilación). GitHub: `chechualexander-beep/distribuidora-alberdi`.
+- Scripts y entregas: `C:\Alberdi\transferencias`. Clave de TESTING: `C:\Alberdi\config\testing.json`.
+- Respaldos de la base: `C:\AlberdiRespaldos` (copiar al pendrive).
+- Catálogo web: `catalogo/` (ver `catalogo/docs/ALBERDI.md`).
