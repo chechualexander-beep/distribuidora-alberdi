@@ -119,6 +119,13 @@ Future<List<Fila>> consultarPedidosConSaldo(SupabaseClient c, String clienteId) 
           .gt('saldo_pendiente', 0),
     );
 
+/// Teléfono del cliente para mandarle el pedido por WhatsApp.
+Future<Fila?> consultarTelefonoCliente(SupabaseClient c, String clienteId) => c
+    .from('clientes')
+    .select('telefono,preventista_id')
+    .eq('id', clienteId)
+    .maybeSingle();
+
 class PreparacionSinConexion {
   const PreparacionSinConexion(this.fecha, this.clientes, this.productos);
   final DateTime fecha;
@@ -179,6 +186,7 @@ Future<PreparacionSinConexion> prepararSinConexion(
       () => consultarSaldoResumen(c, cliente['id'].toString()),
       () => consultarSaldoDetalle(c, cliente['id'].toString()),
       () => consultarPedidosConSaldo(c, cliente['id'].toString()),
+      () => consultarTelefonoCliente(c, cliente['id'].toString()),
       () => consultarClienteParaPedido(
         c,
         uid: uid,

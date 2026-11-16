@@ -19,8 +19,10 @@ unos 170 productos. Regla de precio: **vale el que vio el cliente**.
       cerrar sesión); sin señal se muestra lo guardado con su fecha. Botón "Trabajar sin señal →
       Preparar" en el inicio del celular: baja clientes, productos y el saldo de cada cliente.
 - [ ] **D**: operar sin señal con envío automático al volver ("Pendientes de enviar"):
-      primero venta directa, cobros y gestiones de reparto; después pedidos de preventa;
-      al final alta de clientes nuevos sin señal.
+  - [x] **D1** (1.4.0): pedidos y ventas directas nuevos (`crear_pedido_sin_conexion`), con
+        historial de precios: se respeta el precio visto hasta 72 h y queda anotado en la observación.
+  - [ ] **D2**: gestiones de reparto y cobros sin señal (administrador).
+  - [ ] **D3**: alta de clientes nuevos sin señal.
 
 ## 2. Stock V2
 Instalado y **apagado** (régimen OFF) desde la 1.0.8. Pendiente: stock del vehículo y del

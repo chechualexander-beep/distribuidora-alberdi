@@ -29,6 +29,8 @@ import 'core/offline_prep_card.dart';
 import 'core/offline_cache.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'core/pending_orders.dart';
+import 'core/pending_orders_page.dart';
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 final _localAuthentication = LocalAuthentication();
@@ -456,6 +458,8 @@ class _HomePageState extends State<HomePage> {
         _cargandoPerfil = false;
       });
       _cargarPermisoCatalogoGeneral();
+      // Pedidos guardados sin señal: se envían solos (al iniciar, al volver la conexión, cada 2 min).
+      PendingOrders.instance.start(Supabase.instance.client);
       if (rol == 'administrador') {
         await _configurarNotificaciones();
       }
@@ -482,6 +486,32 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _cerrarSesion() async {
+    final pendientes = PendingOrders.instance.items.value.length;
+    if (pendientes > 0) {
+      final seguir = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Hay pedidos sin enviar'),
+          content: Text(
+            'Tenés $pendientes ${pendientes == 1 ? 'pedido guardado' : 'pedidos guardados'} en este teléfono '
+            'que todavía no se enviaron. No se pierden: se envían cuando vuelvas a entrar con tu usuario '
+            'en este teléfono y haya señal.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Cerrar sesión igual'),
+            ),
+          ],
+        ),
+      );
+      if (seguir != true || !mounted) return;
+    }
+    PendingOrders.instance.stop();
     await borrarDatosSinConexion(Supabase.instance.client.auth.currentUser?.id);
     await Supabase.instance.client.auth.signOut();
 
@@ -591,6 +621,7 @@ class _HomePageState extends State<HomePage> {
                 style: const TextStyle(fontSize: 17, color: AppColors.gris),
               ),
               const SizedBox(height: 20),
+              const PendingOrdersCard(),
               const OfflinePrepCard(),
               const SizedBox(height: 12),
 

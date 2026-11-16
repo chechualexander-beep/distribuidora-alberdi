@@ -5,11 +5,33 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import 'offline_cache.dart';
 
 /// true mientras la última consulta falló por la conexión (sin señal, señal débil o caída).
 final connectionProblem = ValueNotifier<bool>(false);
+
+/// Error en el que no se sabe si el servidor recibió la operación (corte, demora, caída).
+/// Ante esto se reintenta con la MISMA solicitud: el servidor no la duplica.
+bool isUncertainRequestError(Object error) {
+  if (error is TimeoutException ||
+      error is SocketException ||
+      error is HttpException ||
+      error is http.ClientException) {
+    return true;
+  }
+  if (error is PostgrestException) {
+    final code = error.code ?? '';
+    return code.isEmpty ||
+        RegExp(r'^5\d\d$').hasMatch(code) ||
+        code == '408' ||
+        code == '429' ||
+        code.startsWith('PGRST00');
+  }
+  final name = error.runtimeType.toString();
+  return name.contains('ClientException') || name.contains('Handshake');
+}
 
 /// Marca de zona: dentro de [withoutCacheFallback] las consultas fallan si no hay red
 /// (no devuelven lo guardado). La usa "Preparar para trabajar sin señal".

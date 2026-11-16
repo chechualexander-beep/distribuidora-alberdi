@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'order_whatsapp_button.dart';
+import '../../core/network_status.dart';
+import '../../core/pending_orders.dart';
 
 class OrderSummaryPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -215,6 +217,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
       _guardando = true;
     });
 
+    var guardadoSinSenal = false;
     try {
       final detalles = _productosSeleccionados.map((producto) {
         final productoId = producto['id'].toString();
@@ -248,35 +251,69 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
           },
         );
       } else {
-        await _client.rpc(
-          'crear_pedido_interno',
-          params: {
-            'p_id': _solicitudId,
-            'p_cliente_id': widget.cliente['id'],
-            'p_tipo_precio': widget.tipoPrecio,
-            'p_tipo_operacion': widget.tipoOperacion,
-            'p_observacion': _observacionController.text.trim(),
-            'p_fecha_entrega': widget.fechaEntrega
-                .toIso8601String()
-                .split('T')
-                .first,
-            'p_detalles': detalles,
-          },
-        );
+        // Mismo identificador en cada intento: reenviar nunca duplica el pedido.
+        // p_precios_vistos_at: cuándo se vieron los precios (sin señal, la fecha de los datos
+        // guardados). El servidor respeta ese precio hasta 72 h si después cambió.
+        final params = <String, dynamic>{
+          'p_id': _solicitudId,
+          'p_cliente_id': widget.cliente['id'],
+          'p_tipo_precio': widget.tipoPrecio,
+          'p_tipo_operacion': widget.tipoOperacion,
+          'p_observacion': _observacionController.text.trim(),
+          'p_fecha_entrega': widget.fechaEntrega.toIso8601String().split('T').first,
+          'p_detalles': detalles,
+          'p_precios_vistos_at': (showingCachedSince.value ?? DateTime.now())
+              .toUtc()
+              .toIso8601String(),
+        };
+        try {
+          await _client
+              .rpc('crear_pedido_sin_conexion', params: params)
+              .timeout(const Duration(seconds: 20));
+        } catch (error) {
+          if (!isUncertainRequestError(error)) rethrow;
+          // Sin señal: queda guardado en el teléfono y se envía solo al volver.
+          await PendingOrders.instance.add(
+            PendingOrder(
+              params: params,
+              clientName:
+                  widget.cliente['nombre_comercio']?.toString() ?? 'Cliente',
+              total: _totalPedido,
+              createdAt: DateTime.now(),
+            ),
+            uid: usuario.id,
+          );
+          guardadoSinSenal = true;
+        }
       }
 
       if (!mounted) return;
 
+      final esVenta = widget.tipoOperacion == 'venta_directa';
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (context) {
           return AlertDialog(
-            icon: const Icon(Icons.check_circle_outline, size: 48),
-            title: const Text('Pedido guardado'),
+            icon: Icon(
+              guardadoSinSenal
+                  ? Icons.cloud_upload_outlined
+                  : Icons.check_circle_outline,
+              size: 48,
+            ),
+            title: Text(
+              guardadoSinSenal
+                  ? 'Guardado en el teléfono'
+                  : (esVenta ? 'Venta guardada' : 'Pedido guardado'),
+            ),
             content: Text(
-              'El pedido fue registrado correctamente.\n\n'
-              'Total: ${_formatearPrecio(_totalPedido)}',
+              guardadoSinSenal
+                  ? 'No hay señal: ${esVenta ? 'la venta quedó guardada' : 'el pedido quedó guardado'} en el teléfono '
+                        'y se envía solo cuando vuelva la conexión (no se carga dos veces). '
+                        'Lo ves en "Pendientes de enviar".\n\n'
+                        'Total: ${_formatearPrecio(_totalPedido)}'
+                  : 'El pedido fue registrado correctamente.\n\n'
+                        'Total: ${_formatearPrecio(_totalPedido)}',
             ),
             actions: [
               OrderWhatsAppButton(

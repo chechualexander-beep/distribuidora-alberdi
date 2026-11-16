@@ -15,6 +15,7 @@ import '../stock/stock_models.dart';
 import '../stock/stock_page.dart';
 import '../balances/balances_page.dart';
 import '../catalog/general_catalog_page.dart';
+import '../../core/pending_orders_page.dart';
 
 class DesktopHome extends StatefulWidget {
   const DesktopHome({
@@ -57,6 +58,10 @@ class _DesktopHomeState extends State<DesktopHome> {
     _ => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24, 12, 24, 0),
+          child: PendingOrdersCard(),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
           child: Row(

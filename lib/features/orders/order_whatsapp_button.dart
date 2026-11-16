@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/whatsapp_link.dart';
+import '../../core/offline_queries.dart';
 
 class OrderWhatsAppButton extends StatefulWidget {
   const OrderWhatsAppButton({
@@ -42,11 +43,8 @@ class _OrderWhatsAppButtonState extends State<OrderWhatsAppButton> {
       }
       final clientId = widget.clientId!;
       final text = widget.message();
-      final customer = await _client
-          .from('clientes')
-          .select('telefono,preventista_id')
-          .eq('id', clientId)
-          .maybeSingle();
+      // Consulta compartida con "Preparar para trabajar sin señal".
+      final customer = await consultarTelefonoCliente(_client, clientId);
       if (!mounted || _client.auth.currentUser?.id != actor) return;
       if (customer == null) {
         _notice(

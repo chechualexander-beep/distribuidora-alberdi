@@ -165,7 +165,7 @@ void main() {
     final r = await prepararSinConexion(client, progreso: (h, t) => hechos.add(h));
     expect(r.clientes, 2);
     expect(r.productos, 1);
-    expect(hechos.last, 8); // 4 consultas por cliente
+    expect(hechos.last, 10); // 5 consultas por cliente
     expect((await leerPreparacion('u-mary'))!.clientes, 2);
 
     // Sin señal: las mismas consultas de las pantallas responden con lo guardado.
@@ -183,6 +183,7 @@ void main() {
       await consultarClienteParaPedido(client, uid: 'u-mary', administrador: false, clienteId: 'c1'),
       isNotNull,
     );
+    expect(await consultarTelefonoCliente(client, 'c2'), isNotNull);
     expect(showingCachedSince.value, isNotNull);
 
     await borrarDatosSinConexion('u-mary');

@@ -91,7 +91,7 @@ void main() {
         final params = request.url.queryParameters;
         if (request.method == 'POST') {
           expect(allowCreate, isTrue);
-          expect(table, 'crear_pedido_interno');
+          expect(table, 'crear_pedido_sin_conexion');
           expect(jsonDecode(request.body)['p_cliente_id'], customer);
           creates++;
           return jsonResponse(request, 'pedido');
