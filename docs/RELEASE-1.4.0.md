@@ -3,8 +3,8 @@
 Rama: `release/1.4.0` (base: `release/1.3.0`). Migración nueva: `20261117010000_pedidos_sin_conexion`.
 
 - Al confirmar un pedido o una venta directa **sin señal**, queda **guardado en el teléfono**
-  ("Guardado en el teléfono") y se envía solo: al iniciar la app, al volver la conexión y cada
-  2 minutos. Nunca se carga dos veces (misma solicitud).
+  ("Guardado en el teléfono") y se envía solo: al iniciar la app, al volver a la app, al detectar
+  conexión y cada 30 segundos mientras haya pendientes. Nunca se carga dos veces (misma solicitud).
 - **Pendientes de enviar** (tarjeta en el inicio, también en Windows): lista de lo guardado,
   "Enviar ahora", y los que el servidor rechazó, con el motivo y la opción de descartarlos.
 - **Precio que vio el cliente**: la base guarda el historial de precios. Si un precio cambió
