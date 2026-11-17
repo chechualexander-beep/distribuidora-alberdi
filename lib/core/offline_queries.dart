@@ -98,7 +98,7 @@ Future<Fila?> consultarClienteParaPedido(
 Future<List<Fila>> consultarProductosParaPedido(SupabaseClient c) async => List<Fila>.from(
   await c
       .from('productos')
-      .select('id, codigo, nombre, descripcion, precio_normal, precio_promo, precio_interior, foto_path')
+      .select('id, codigo, nombre, descripcion, categoria, precio_normal, precio_promo, precio_interior, foto_path')
       .eq('activo', true)
       .eq('visible_preventistas', true)
       .order('nombre'),
@@ -205,6 +205,11 @@ Future<PreparacionSinConexion> prepararSinConexion(
   await consultarClientesParaPedido(c, uid: uid, administrador: administrador);
   final productos = await consultarProductosParaPedido(c);
   await consultarProductosCatalogo(c);
+  try {
+    // Lo que lleva el vehículo ("Lo que llevamos" y la venta directa sin señal).
+    await c.rpc('stock_vehiculo_disponible', get: true);
+  } catch (_) {}
+
 
   final tareas = <Future<void> Function()>[
     for (final cliente in clientes) ...[

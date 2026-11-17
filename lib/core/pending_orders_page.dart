@@ -77,9 +77,18 @@ class PendingOrdersPage extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(order.isClient ? 'Descartar cliente nuevo' : 'Descartar pedido'),
-        content: Text(
+        title: Text(
           order.isClient
+              ? 'Descartar cliente nuevo'
+              : order.isStock
+              ? 'Descartar operación de stock'
+              : 'Descartar pedido',
+        ),
+        content: Text(
+          order.isStock
+              ? '"${order.clientName}" no se cargó y se va a borrar del teléfono. '
+                    'Si hace falta, volvé a hacerla desde Stock.'
+              : order.isClient
               ? 'El cliente ${order.clientName} no se cargó y se va a borrar del teléfono'
                     '${orders == 0 ? '' : orders == 1 ? ', junto con su pedido' : ', junto con sus $orders pedidos'}. '
                     'Si hace falta, volvé a cargarlo desde Nuevo cliente.'
@@ -140,12 +149,14 @@ class PendingOrdersPage extends StatelessWidget {
                         ? Icons.error_outline
                         : order.isClient
                         ? Icons.person_add_alt_1
+                        : order.isStock
+                        ? Icons.inventory_2_outlined
                         : Icons.schedule,
                     color: order.rejected != null ? AppColors.rojo : AppColors.naranja,
                   ),
                   title: Text(order.clientName),
                   subtitle: Text(
-                    '${order.isClient ? 'Cliente nuevo' : '${order.isDirectSale ? 'Venta directa' : 'Pedido'} · ${_money(order.total)}'} · '
+                    '${order.isClient ? 'Cliente nuevo' : order.isStock ? 'Stock${order.total > 0 ? ' · ${_money(order.total)}' : ''}' : '${order.isDirectSale ? 'Venta directa' : 'Pedido'} · ${_money(order.total)}'} · '
                     '${_when(order.createdAt)}'
                     '${order.rejected != null ? '\nNo se cargó: ${order.rejected}' : ''}'
                     '${order.rejected == null && !order.isClient && pending.isPendingClient(order.clientId) ? '\nSale después del cliente nuevo' : ''}',

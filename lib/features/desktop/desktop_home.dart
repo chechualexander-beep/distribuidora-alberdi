@@ -11,8 +11,8 @@ import '../commissions/my_commissions_page.dart';
 import '../commissions/commissions_page.dart';
 import '../commissions/commission_history_page.dart';
 import '../admin/commercial_summary_page.dart';
-import '../stock/stock_models.dart';
-import '../stock/stock_page.dart';
+import '../stock/stock_home_page.dart';
+import '../stock/vehicle_load_page.dart';
 import '../balances/balances_page.dart';
 import '../catalog/general_catalog_page.dart';
 import '../../core/pending_orders_page.dart';
@@ -49,7 +49,8 @@ class _DesktopHomeState extends State<DesktopHome> {
     'Comisiones' => const CommissionsPage(),
     'Liquidaciones' => const CommissionHistoryPage(),
     'Administrar productos' => const AdminProductsPage(),
-    'Stock' when widget.isAdmin && enableStock => const StockPage(),
+    'Stock' when widget.isAdmin => const StockHomePage(),
+    'Lo que llevamos' => const VehicleLoadPage(),
     'Saldos' when widget.isAdmin => const BalancesPage(),
     'Catálogo general' when widget.canGeneralCatalog => GeneralCatalogPage(
       isAdmin: widget.isAdmin,
@@ -149,6 +150,8 @@ class _DesktopHomeState extends State<DesktopHome> {
                       link('Productos', Icons.inventory_2_outlined),
                       link('Pedidos', Icons.receipt_long_outlined),
                       link('Mis comisiones', Icons.payments_outlined),
+                      if (!widget.isAdmin)
+                        link('Lo que llevamos', Icons.local_shipping_outlined),
                       if (widget.canGeneralCatalog)
                         link('Catálogo general', Icons.storefront_outlined),
                       const SizedBox(height: 10),
@@ -178,8 +181,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                           Icons.account_balance_wallet_outlined,
                         ),
                         link('Administrar productos', Icons.edit_note),
-                        if (enableStock)
-                          link('Stock', Icons.warehouse_outlined),
+                        link('Stock', Icons.warehouse_outlined),
                         link('Resumen comercial', Icons.analytics_outlined),
                       ],
                     ],

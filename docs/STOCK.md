@@ -40,10 +40,23 @@
 Toda venta directa creada con un viaje abierto queda en ese viaje (`pedidos.viaje_id`).
 Prueba: `test/stock_vehiculo_escenario.sql`.
 
+## Pantallas (1.6.0)
+- **Stock** (administrador; celular: "Stock y vehículo", Windows: menú Stock): viaje abierto,
+  Cargar vehículo (propone "Pedidos a entregar" o "Repetir la última carga"; con quién sale),
+  Bajar al depósito, Anotar compra (depósito o vehículo, costo opcional, actualizar costo),
+  Contar (depósito o vehículo), Cerrar viaje (conteo precargado con lo que debería quedar,
+  diferencias, bajar todo). Filtros: con stock, a pedido, en negativo. Tocar un producto: contar
+  o pasar a "a pedido".
+- **Lo que llevamos** (preventista; el administrador desde Stock): por categoría, "Quedan N",
+  agotados al final, con copia sin señal ("Trabajar sin señal → Preparar" la baja).
+- **Venta directa con viaje abierto**: "Solo lo del vehículo" (por categoría), "Vehículo: quedan
+  N", "La última vez llevó N" primero, y antes de ver el pedido "¿Ofreciste todo?" con lo del
+  vehículo que no está en la venta (una vez por venta).
+- Sin señal, las operaciones de stock quedan en "Pendientes de enviar" (mismo id, hora real).
+- Se quitó la pantalla vieja de Stock V2 (`ENABLE_STOCK`).
+
 ## Etapas
-1. Base de datos (esta).
-2. Pantallas: contar, con stock / a pedido, cargar y bajar el vehículo, compras, cerrar viaje;
-   "Lo que llevamos" y la venta directa armada desde la carga del vehículo (con "Lo que compró la
-   última vez" y "No ofreciste...").
+1. Base de datos.
+2. Pantallas (1.6.0).
 3. Reparto y cobros sin señal (hora real del teléfono), descontando del vehículo.
 4. Encender en producción (contar los primeros productos).

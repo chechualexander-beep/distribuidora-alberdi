@@ -29,8 +29,8 @@ unos 170 productos. Regla de precio: **vale el que vio el cliente**.
 ## 2. Stock
 Diseño y reglas en `docs/STOCK.md` (por producto "con stock" / "a pedido", depósito + vehículo,
 viajes con cierre y diferencias, compras, el stock informa y no traba).
-- [ ] **Etapa 1**: base de datos (`20261118010000_stock_por_producto`).
-- [ ] **Etapa 2**: pantallas (contar, cargar/bajar vehículo, compras, cerrar viaje, "Lo que
+- [x] **Etapa 1**: base de datos (`20261118010000_stock_por_producto`), en TESTING.
+- [x] **Etapa 2** (1.6.0): pantallas (contar, cargar/bajar vehículo, compras, cerrar viaje, "Lo que
       llevamos" y venta directa armada desde la carga).
 - [ ] **Etapa 3**: reparto y cobros sin señal (D2, abajo).
 - [ ] **Etapa 4**: encender en producción.

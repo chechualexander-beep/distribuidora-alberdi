@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'order_summary_page.dart';
 import 'delivery_date_picker.dart';
 import '../../core/offline_queries.dart';
+import '../../core/pending_orders.dart';
+import '../stock/stock_data.dart';
 
 class OrderProductsPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -52,6 +54,14 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   SupabaseClient get _client => widget.client ?? Supabase.instance.client;
 
   final Map<String, int> _cantidades = {};
+
+  // Venta directa con un viaje abierto: se ofrece lo que lleva el vehículo.
+  VehicleStock? _vehiculo;
+  bool _soloVehiculo = true;
+  bool _avisoNoOfrecido = false;
+
+  /// Lo que el cliente compró la última vez (producto → cantidad).
+  Map<String, int> _ultimaCompra = const {};
   final Map<String, double> _preciosFijados = {};
   final Map<String, String> _tiposPrecioFijados = {};
 
@@ -81,7 +91,60 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     }
 
     _cargarProductos();
+    if (widget.tipoOperacion == 'venta_directa' && widget.pedidoId == null) {
+      _cargarVehiculo();
+      _cargarUltimaCompra();
+    }
   }
+
+  Future<void> _cargarVehiculo() async {
+    try {
+      final vehiculo = await fetchVehicleStock(_client);
+      if (!mounted || !vehiculo.tripOpen || vehiculo.lines.isEmpty) return;
+      setState(() => _vehiculo = vehiculo);
+    } catch (_) {}
+  }
+
+  Future<void> _cargarUltimaCompra() async {
+    final clienteId = widget.cliente['id']?.toString();
+    if (clienteId == null || PendingOrders.instance.isPendingClient(clienteId)) return;
+    try {
+      final ultimo = await _client
+          .from('pedidos')
+          .select('id')
+          .eq('cliente_id', clienteId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (ultimo == null) return;
+      final detalles = await _client
+          .from('pedido_detalles')
+          .select('producto_id,cantidad')
+          .eq('pedido_id', ultimo['id']);
+      final cantidades = <String, int>{};
+      for (final d in List<Map<String, dynamic>>.from(detalles)) {
+        final q = num.tryParse(d['cantidad']?.toString() ?? '')?.round() ?? 0;
+        if (q > 0) cantidades[d['producto_id'].toString()] = q;
+      }
+      if (mounted) setState(() => _ultimaCompra = cantidades);
+    } catch (_) {}
+  }
+
+  bool get _modoVehiculo => _vehiculo != null && _soloVehiculo;
+
+  /// Lo que queda en el vehículo descontando lo que ya está en esta venta.
+  double? _quedanEnVehiculo(Map<String, dynamic> producto) {
+    final linea = _vehiculo?.lines[producto['id'].toString()];
+    if (linea == null) return null;
+    return linea.available - _cantidadProducto(producto);
+  }
+
+  /// Productos del vehículo con algo para vender que no están en la venta.
+  List<String> get _noOfrecidos => [
+    for (final p in _productos)
+      if ((_vehiculo?.lines[p['id'].toString()]?.available ?? 0) > 0 && _cantidadProducto(p) == 0)
+        p['nombre']?.toString() ?? 'Producto',
+  ];
 
   Future<void> _cargarProductos() async {
     setState(() {
@@ -214,7 +277,38 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     if (mounted && fecha != null) setState(() => _fechaEntrega = fecha);
   }
 
-  void _verPedido() {
+  Future<void> _verPedido() async {
+    if (_vehiculo != null && !_avisoNoOfrecido) {
+      final faltan = _noOfrecidos;
+      if (faltan.isNotEmpty) {
+        _avisoNoOfrecido = true;
+        final seguir = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            icon: const Icon(Icons.lightbulb_outline, size: 40),
+            title: const Text('¿Ofreciste todo?'),
+            content: SingleChildScrollView(
+              child: Text(
+                'Del vehículo no ofreciste:\n'
+                '${faltan.take(20).map((n) => '• $n').join('\n')}'
+                '${faltan.length > 20 ? '\n... y ${faltan.length - 20} más' : ''}',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Volver a la lista'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Seguir'),
+              ),
+            ],
+          ),
+        );
+        if (seguir != true || !mounted) return;
+      }
+    }
     final fechaEntrega = _fechaEntrega;
 
     if (fechaEntrega == null) {
@@ -374,8 +468,28 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
 
       final codigo = producto['codigo']?.toString().toLowerCase() ?? '';
 
+      if (_modoVehiculo &&
+          texto.isEmpty &&
+          !_vehiculo!.lines.containsKey(producto['id'].toString()) &&
+          _cantidadProducto(producto) == 0) {
+        return false;
+      }
+
       return nombre.contains(texto) || codigo.contains(texto);
     }).toList();
+
+    if (_ultimaCompra.isNotEmpty || _modoVehiculo) {
+      // Primero lo que compró la última vez; con el vehículo, después por categoría.
+      int orden(Map<String, dynamic> p) => _ultimaCompra.containsKey(p['id'].toString()) ? 0 : 1;
+      String categoria(Map<String, dynamic> p) => _modoVehiculo ? (p['categoria']?.toString() ?? '') : '';
+      productosFiltrados.sort((a, b) {
+        final o = orden(a).compareTo(orden(b));
+        if (o != 0) return o;
+        final c = categoria(a).compareTo(categoria(b));
+        if (c != 0) return c;
+        return (a['nombre']?.toString() ?? '').compareTo(b['nombre']?.toString() ?? '');
+      });
+    }
 
     final escribiendo = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Column(
@@ -427,6 +541,27 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                   ),
                 ),
         ),
+        if (_vehiculo != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+            child: Row(
+              children: [
+                FilterChip(
+                  avatar: const Icon(Icons.local_shipping_outlined, size: 18),
+                  label: const Text('Solo lo del vehículo'),
+                  selected: _soloVehiculo,
+                  onSelected: (v) => setState(() => _soloVehiculo = v),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${_vehiculo!.lines.values.where((l) => l.available > 0).length} productos para ofrecer',
+                    style: const TextStyle(color: AppColors.gris),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: TextField(
@@ -493,6 +628,22 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                       (r) => _tiposPrecioFijados[r['id'].toString()] ?? '—',
                       width: 100,
                     ),
+                    if (_vehiculo != null)
+                      DesktopField(
+                        'Vehículo',
+                        (r) {
+                          final q = _quedanEnVehiculo(r);
+                          return q == null ? '—' : 'Quedan ${formatQty(q)}';
+                        },
+                        width: 110,
+                      ),
+                    if (_ultimaCompra.isNotEmpty)
+                      DesktopField(
+                        'Última compra',
+                        (r) => _ultimaCompra[r['id'].toString()] ?? '',
+                        numeric: true,
+                        width: 100,
+                      ),
                     DesktopField(
                       'Cantidad',
                       (r) => _cantidadProducto(r),
@@ -577,6 +728,30 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                                       'Código: $codigo',
                                       style: const TextStyle(
                                         color: AppColors.gris,
+                                      ),
+                                    ),
+                                  ],
+                                  if (_quedanEnVehiculo(producto) != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      (_quedanEnVehiculo(producto)! <= 0)
+                                          ? 'Vehículo: no queda'
+                                          : 'Vehículo: quedan ${formatQty(_quedanEnVehiculo(producto)!)}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: _quedanEnVehiculo(producto)! <= 0
+                                            ? AppColors.rojo
+                                            : AppColors.verde,
+                                      ),
+                                    ),
+                                  ],
+                                  if (_ultimaCompra.containsKey(id)) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'La última vez llevó ${_ultimaCompra[id]}',
+                                      style: const TextStyle(
+                                        color: AppColors.doradoOscuro,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],

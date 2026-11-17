@@ -22,6 +22,23 @@ class PendingOrder {
 
   static const orderKind = 'pedido';
   static const clientKind = 'cliente';
+  static const stockKind = 'stock';
+
+  /// Operación de stock (compra, carga o bajada del vehículo, conteo, cierre de viaje):
+  /// [rpc] y sus parámetros exactos, con `p_id` y la hora real (`p_fecha`).
+  factory PendingOrder.stock({
+    required String rpc,
+    required Map<String, dynamic> args,
+    required String description,
+    double total = 0,
+    DateTime? createdAt,
+  }) => PendingOrder(
+    params: {'rpc': rpc, 'args': args},
+    clientName: description,
+    total: total,
+    createdAt: createdAt ?? DateTime.now(),
+    kind: stockKind,
+  );
 
   /// Cliente nuevo: [params] es la fila completa de `clientes` con su `id` ya elegido en el
   /// teléfono, así los pedidos sin señal lo pueden usar antes de que llegue al servidor.
@@ -45,10 +62,17 @@ class PendingOrder {
   String? rejected;
 
   bool get isClient => kind == clientKind;
-  String get id => (isClient ? params['id'] : params['p_id']).toString();
+  bool get isStock => kind == stockKind;
+  String get id => (isClient
+          ? params['id']
+          : isStock
+          ? (params['args'] as Map)['p_id']
+          : params['p_id'])
+      .toString();
 
   /// Cliente del pedido (o el propio cliente nuevo).
-  String? get clientId => (isClient ? params['id'] : params['p_cliente_id'])?.toString();
+  String? get clientId =>
+      isStock ? null : (isClient ? params['id'] : params['p_cliente_id'])?.toString();
   bool get isDirectSale => params['p_tipo_operacion'] == 'venta_directa';
 
   Map<String, dynamic> toJson() => {
@@ -57,7 +81,7 @@ class PendingOrder {
     'total': total,
     'creado': createdAt.toUtc().toIso8601String(),
     if (rejected != null) 'rechazado': rejected,
-    if (isClient) 'tipo': kind,
+    if (kind != orderKind) 'tipo': kind,
   };
 
   static PendingOrder fromJson(Map<String, dynamic> json) => PendingOrder(
@@ -95,6 +119,7 @@ class PendingOrders {
   String? _uid;
   SendOrder? _send;
   SendOrder? _sendClient;
+  SendOrder? _sendStock;
   Timer? _timer;
   AppLifecycleListener? _lifecycle;
   bool _listening = false;
@@ -106,7 +131,12 @@ class PendingOrders {
   String _key(String uid) => appConfig.localPreferenceKey('pedidos_sin_enviar:$uid');
 
   /// Arranca para el usuario de la sesión. [send] se puede reemplazar en pruebas.
-  Future<void> start(SupabaseClient client, {SendOrder? send, SendOrder? sendClient}) async {
+  Future<void> start(
+    SupabaseClient client, {
+    SendOrder? send,
+    SendOrder? sendClient,
+    SendOrder? sendStock,
+  }) async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) return;
     _uid = uid;
@@ -116,6 +146,11 @@ class PendingOrders {
             .rpc('crear_pedido_sin_conexion', params: params)
             .timeout(const Duration(seconds: 25));
     _sendClient = sendClient ?? (row) => insertPendingClient(client, row);
+    _sendStock =
+        sendStock ??
+        (p) => client
+            .rpc(p['rpc'] as String, params: Map<String, dynamic>.from(p['args'] as Map))
+            .timeout(const Duration(seconds: 25));
     await _load();
     if (!_listening) {
       _listening = true;
@@ -232,6 +267,10 @@ class PendingOrders {
         try {
           if (order.isClient) {
             await (_sendClient ?? send)(order.params);
+          } else if (order.isStock) {
+            final sendStock = _sendStock;
+            if (sendStock == null) break;
+            await sendStock(order.params);
           } else {
             await send(order.params);
           }

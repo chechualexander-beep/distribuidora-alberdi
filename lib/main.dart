@@ -31,6 +31,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'core/pending_orders.dart';
 import 'core/pending_orders_page.dart';
+import 'features/stock/stock_home_page.dart';
+import 'features/stock/vehicle_load_page.dart';
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 final _localAuthentication = LocalAuthentication();
@@ -857,6 +859,82 @@ class _HomePageState extends State<HomePage> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const BalancesPage()),
+                      );
+                    },
+                  ),
+                ),
+
+              // STOCK (administrador) y LO QUE LLEVAMOS (preventista)
+              if (esAdministrador)
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: Icon(
+                      Icons.warehouse_outlined,
+                      color: colorPrincipal,
+                      size: 28,
+                    ),
+                    title: Text(
+                      'Stock y vehículo',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: colorPrincipal,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        'Contar, cargar el vehículo, compras y viaje',
+                        style: TextStyle(fontSize: 13, color: colorSecundario),
+                      ),
+                    ),
+                    trailing: Icon(Icons.chevron_right, color: colorPrincipal),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const StockHomePage()),
+                      );
+                    },
+                  ),
+                ),
+              if (!esAdministrador)
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: Icon(
+                      Icons.local_shipping_outlined,
+                      color: colorPrincipal,
+                      size: 28,
+                    ),
+                    title: Text(
+                      'Lo que llevamos',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: colorPrincipal,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        'Lo que va en el vehículo para ofrecer',
+                        style: TextStyle(fontSize: 13, color: colorSecundario),
+                      ),
+                    ),
+                    trailing: Icon(Icons.chevron_right, color: colorPrincipal),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const VehicleLoadPage()),
                       );
                     },
                   ),
