@@ -1,10 +1,10 @@
 # Hoja de ruta — Distribuidora Alberdi
 
-Última actualización: 16/11/2026 (producción en **1.2.0**; 1.3.0 a 1.5.0 en TESTING).
+Última actualización: 17/11/2026 (producción en **1.5.0**).
 
 ## Orden acordado
-1. **Modo sin conexión** (en curso)
-2. **Stock V2**: encenderlo, con stock del vehículo y del local comercial
+1. **Modo sin conexión** (hecho, salvo reparto y cobros: van con el stock)
+2. **Stock** (en curso): depósito + vehículo, por producto. Diseño en `docs/STOCK.md`
 3. **Gestión del negocio**: gastos, compras, caja y utilidad
 
 ## 1. Modo sin conexión
@@ -26,10 +26,15 @@ unos 170 productos. Regla de precio: **vale el que vio el cliente**.
   - [ ] **D2**: gestiones de reparto y cobros sin señal → se hace **junto con el stock del
         vehículo** (sección 2), porque toca el mismo circuito.
 
-## 2. Stock V2
-Instalado y **apagado** (régimen OFF) desde la 1.0.8. Pendiente: stock del vehículo y del
-local comercial, y decidir cuándo encenderlo. Las ventas hechas sin señal deben registrarse
-y avisar diferencias, no rechazarse.
+## 2. Stock
+Diseño y reglas en `docs/STOCK.md` (por producto "con stock" / "a pedido", depósito + vehículo,
+viajes con cierre y diferencias, compras, el stock informa y no traba).
+- [ ] **Etapa 1**: base de datos (`20261118010000_stock_por_producto`).
+- [ ] **Etapa 2**: pantallas (contar, cargar/bajar vehículo, compras, cerrar viaje, "Lo que
+      llevamos" y venta directa armada desde la carga).
+- [ ] **Etapa 3**: reparto y cobros sin señal (D2, abajo).
+- [ ] **Etapa 4**: encender en producción.
+- Local comercial: cuando se concrete (con el Alberdi POS).
 
 **Reparto y cobros sin señal (D2), decidido el 16/11/2026:**
 - Los hace el **administrador** en la calle (los preventistas no entregan ni cobran).
@@ -49,7 +54,7 @@ desde el celular, en segundos, y que funcione sin señal**.
 - Los **cobros** ya están en la app: entran solos.
 - **"Retiro para el hogar"** como movimiento aparte: no es gasto del negocio (no baja la
   ganancia), pero sale de la caja. Los gastos del hogar no se cargan (los maneja la esposa).
-- **Compras a proveedores** conectadas con costo de productos y stock (después del Stock V2).
+- **Compras a proveedores**: se anotan en Stock (`stock_registrar_compra`, con costo); falta sumarlas a la utilidad.
 - **Utilidad por período**: ventas entregadas − costo de mercadería − comisiones − gastos;
   por preventista, categoría o producto. **Caja**: entradas y salidas por medio de pago.
 - **Exportar a Excel** para el contador. Fuera de alcance: asientos, balances, IVA, ARCA.
@@ -60,7 +65,7 @@ desde el celular, en segundos, y que funcione sin señal**.
 - Catálogo E4: ofertas (precio anterior tachado).
 - Play Console: ordenar pistas (la prueba cerrada apunta a TESTING).
 - Respaldos automáticos (plan gratuito de Supabase sin copias automáticas).
-- Simplificar capas del Stock V2 cuando se encienda.
+- Retirar lo viejo del Stock V2 (régimen ON/OFF, `cargar_stock_inicial`, `ajustar_stock`, pantalla vieja) cuando el stock nuevo esté andando.
 - Posible versión configurable para otra distribuidora (no hacer todavía; no agregar más
   valores fijos de "Alberdi").
 
