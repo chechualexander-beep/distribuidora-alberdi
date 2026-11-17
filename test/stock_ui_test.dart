@@ -116,7 +116,7 @@ void main() {
           {'producto_id': 'a', 'antes': 10, 'contado': 7},
         ],
       });
-    });
+    }, autoRefreshToken: false);
     await tester.pumpWidget(
       MaterialApp(
         home: StockFormPage(
