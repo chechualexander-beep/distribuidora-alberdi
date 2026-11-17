@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:distribuidora_alberdi/core/app_config.dart';
 import 'package:distribuidora_alberdi/core/pending_orders.dart';
 import 'package:distribuidora_alberdi/features/desktop/desktop_home.dart';
+import 'package:distribuidora_alberdi/features/stock/product_summary.dart';
 import 'package:distribuidora_alberdi/features/stock/stock_data.dart';
 import 'package:distribuidora_alberdi/features/stock/stock_form_page.dart';
 import 'package:distribuidora_alberdi/features/stock/stock_home_page.dart';
@@ -42,6 +43,78 @@ void main() {
     expect(formatQty(12), '12');
     expect(formatQty(2.5), '2,5');
     expect(formatQty(-2), '-2');
+  });
+
+  test('resumen: alcanza, falta, fraccionar, a pedido y lista de compras', () {
+    StockItem p(String id, String name, double dep, {bool controlled = true, String? parent, double? units}) =>
+        StockItem(
+          id: id,
+          name: name,
+          code: '',
+          category: 'x',
+          photo: null,
+          controlled: controlled,
+          deposit: dep,
+          vehicle: 0,
+          parentId: parent,
+          unitsPerParent: units,
+        );
+    final stock = {
+      for (final i in [
+        p('y', 'Yerba', 30),
+        p('p', 'Copos 3A x 4 kg', 2),
+        p('c', 'Copos x 1 kg', 3, parent: 'p', units: 4),
+        p('f', 'Papas x 1 kg', 4),
+        p('a', 'Aceite de coco', 0, controlled: false),
+        p('q', 'Aritos x 2,5 kg', 0),
+        p('k', 'Aritos x 1 kg', 0, parent: 'q', units: 2.5),
+      ])
+        i.id: i,
+    };
+    final rows = evaluateSummary(const [
+      SummaryLine('y', 'Yerba', 12),
+      SummaryLine('c', 'Copos x 1 kg', 6),
+      SummaryLine('f', 'Papas x 1 kg', 7),
+      SummaryLine('a', 'Aceite de coco', 2),
+      SummaryLine('k', 'Aritos x 1 kg', 6),
+      SummaryLine(null, 'Sin id', 1),
+    ], stock);
+    expect(rows.map((r) => r.state), [
+      SummaryState.enough,
+      SummaryState.open,
+      SummaryState.missing,
+      SummaryState.onDemand,
+      SummaryState.missing,
+      SummaryState.unknown,
+    ]);
+    expect(rows[1].openParents, 1);
+    expect(rows[2].missing, 3);
+    expect(rows[4].buyName, 'Aritos x 2,5 kg');
+    expect(rows[4].buyQuantity, 3);
+    final list = shoppingList(rows);
+    expect(list, contains('3 × Papas x 1 kg'));
+    expect(list, contains('2 × Aceite de coco'));
+    expect(list, contains('3 × Aritos x 2,5 kg'));
+    expect(list, contains('Abrir 1 × Copos 3A x 4 kg'));
+    expect(evaluateSummary(const [SummaryLine('y', 'Yerba', 1)], null).single.state, SummaryState.unknown);
+  });
+
+  testWidgets('resumen sin stock (preventista): filas con cantidades, sin columna Hay', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ProductSummaryTable(
+              stock: const {},
+              lines: const [SummaryLine('y', 'Yerba', 12), SummaryLine('z', 'Azúcar', 3)],
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Yerba'), findsOneWidget);
+    expect(find.text('12'), findsOneWidget);
+    expect(find.text('Lista de compras'), findsOneWidget, reason: 'con stock cargado (vacío) se ofrece');
   });
 
   test('lo que lleva el vehículo: disponible = arriba − vendido sin entregar', () {

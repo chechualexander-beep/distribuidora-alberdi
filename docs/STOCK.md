@@ -69,9 +69,23 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   lo que se vio queda guardado en el teléfono.
 - Prueba: `test/reparto_sin_conexion_escenario.sql`.
 
+## Resumen de productos y fraccionados (1.8.0, migración `20261120010000_fraccionados`)
+- **Resumen de productos** (Pedidos y Preparación y reparto, celular y Windows): filas alternadas
+  blanco/celeste, "Pedido" y "Hay" (depósito + vehículo) y el estado: Alcanza, Faltan N,
+  Abrir N × origen (fraccionados), A pedido · comprar N. Contadores, "Solo lo que falta" y
+  "Lista de compras" (copiar o compartir; los fraccionados se compran en unidades del origen).
+  El preventista ve la tabla sin la columna de stock.
+- **Fraccionados** (`productos.fracciona_de`, `unidades_por_origen`): ej. "Copos c/azúcar x 1 kg"
+  sale de "Copos 3A x 4 kg" (1 → 4). Se configura tocando el producto en Stock.
+  - A mano: "Fraccionar" (`stock_fraccionar`): origen −N, fraccionado +N×unidades.
+  - Automático: si una entrega deja el fraccionado en negativo y hay unidades del origen en el
+    mismo lugar, se abren solas las necesarias ("Fraccionado automático al entregar").
+- Prueba: `test/fraccionados_escenario.sql`.
+
 ## Etapas
 1. Base de datos.
 2. Pantallas (1.6.0).
 3. Reparto y cobros sin señal (1.7.0).
+4. Resumen de productos con stock y fraccionados (1.8.0).
 3. Reparto y cobros sin señal (hora real del teléfono), descontando del vehículo.
 4. Encender en producción (contar los primeros productos).

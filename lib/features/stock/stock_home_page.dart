@@ -106,6 +106,18 @@ class _StockHomePageState extends State<StockHomePage> {
               title: Text(item.controlled ? 'Contar' : 'Contar y pasar a "con stock"'),
               onTap: () => Navigator.pop(context, 'contar'),
             ),
+            if (item.parentId != null)
+              ListTile(
+                leading: const Icon(Icons.call_split),
+                title: Text('Fraccionar: abrir ${_name(item.parentId)}'),
+                subtitle: Text('1 de ese → ${formatQty(item.unitsPerParent ?? 0)} de este'),
+                onTap: () => Navigator.pop(context, 'fraccionar'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: Text(item.parentId == null ? 'Sale de otro producto (fraccionado)' : 'Cambiar de qué producto sale'),
+              onTap: () => Navigator.pop(context, 'configurar'),
+            ),
             if (item.controlled)
               ListTile(
                 leading: const Icon(Icons.shopping_basket_outlined),
@@ -120,6 +132,10 @@ class _StockHomePageState extends State<StockHomePage> {
     if (!mounted || action == null) return;
     if (action == 'contar') {
       await _open(StockFormKind.count, only: {item.id});
+    } else if (action == 'fraccionar') {
+      await _fraction(item);
+    } else if (action == 'configurar') {
+      await _configureFraction(item);
     } else if (action == 'a_pedido') {
       try {
         await _client.rpc('stock_marcar_a_pedido', params: {'p_producto_id': item.id});
@@ -129,6 +145,172 @@ class _StockHomePageState extends State<StockHomePage> {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(stockErrorText(error))));
         }
       }
+    }
+  }
+
+  String _name(String? id) =>
+      _items.where((i) => i.id == id).map((i) => i.name).firstOrNull ?? 'otro producto';
+
+  void _snack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  /// "Abrí 1 bolsa de 4 kg" → suma las unidades sueltas y resta la bolsa.
+  Future<void> _fraction(StockItem item) async {
+    if (!item.controlled) {
+      _snack('Primero contá "${item.name}" para que lleve stock.');
+      return;
+    }
+    final count = TextEditingController(text: '1');
+    var location = _vehicle.tripOpen ? vehiculoCodigo : depositoCodigo;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: Text('Fraccionar ${item.name}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: count,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Cuántos abrís de ${_name(item.parentId)}',
+                  helperText: 'Cada uno da ${formatQty(item.unitsPerParent ?? 0)} de ${item.name}',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: depositoCodigo, label: Text('Depósito')),
+                  ButtonSegment(value: vehiculoCodigo, label: Text('Vehículo')),
+                ],
+                selected: {location},
+                onSelectionChanged: (v) => setLocal(() => location = v.first),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Fraccionar')),
+          ],
+        ),
+      ),
+    );
+    // Los controladores no se liberan acá: el diálogo todavía se está cerrando.
+    final n = parseQty(count.text);
+    if (ok != true) return;
+    if (n == null || n <= 0) {
+      _snack('Escribí cuántos abrís (mayor que 0).');
+      return;
+    }
+    try {
+      final outcome = await runStockOp(
+        _client,
+        rpc: 'stock_fraccionar',
+        args: {'p_producto_id': item.id, 'p_origenes': n, 'p_ubicacion': location},
+        description: 'Fraccionar ${formatQty(n)} × ${_name(item.parentId)}',
+      );
+      _snack(outcome.savedOffline
+          ? 'Sin señal: quedó guardado y se envía solo.'
+          : 'Listo: +${formatQty(n * (item.unitsPerParent ?? 0))} de ${item.name}.');
+      await _load();
+    } catch (error) {
+      _snack(stockErrorText(error));
+    }
+  }
+
+  /// De qué producto sale este (y cuántos salen de uno).
+  Future<void> _configureFraction(StockItem item) async {
+    final search = TextEditingController();
+    final units = TextEditingController(
+      text: item.unitsPerParent == null ? '' : formatQty(item.unitsPerParent!),
+    );
+    String? parentId = item.parentId;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) {
+          final text = search.text.trim().toLowerCase();
+          final options = _items
+              .where((i) => i.id != item.id && i.parentId == null)
+              .where((i) => text.isEmpty || i.name.toLowerCase().contains(text))
+              .take(40)
+              .toList();
+          return AlertDialog(
+            title: Text('¿De qué producto sale ${item.name}?'),
+            content: SizedBox(
+              width: 480,
+              height: 420,
+              child: Column(
+                children: [
+                  TextField(
+                    controller: search,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Buscar el producto de origen...',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        for (final o in options)
+                          ListTile(
+                            dense: true,
+                            title: Text(o.name),
+                            selected: o.id == parentId,
+                            trailing: o.id == parentId ? const Icon(Icons.check) : null,
+                            onTap: () => setLocal(() => parentId = o.id),
+                          ),
+                      ],
+                    ),
+                  ),
+                  TextField(
+                    controller: units,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Cuántos ${item.name} salen de uno',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              if (item.parentId != null)
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'quitar'),
+                  child: const Text('No es fraccionado'),
+                ),
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+              FilledButton(onPressed: () => Navigator.pop(context, 'guardar'), child: const Text('Guardar')),
+            ],
+          );
+        },
+      ),
+    );
+    final n = parseQty(units.text);
+    if (result == null) return;
+    if (result == 'guardar' && (parentId == null || n == null || n <= 1)) {
+      _snack('Elegí el producto de origen y cuántos salen de uno (más de 1).');
+      return;
+    }
+    try {
+      await _client.rpc('stock_configurar_fraccion', params: {
+        'p_producto_id': item.id,
+        'p_origen_id': result == 'quitar' ? null : parentId,
+        'p_unidades': result == 'quitar' ? null : n,
+      });
+      await _load();
+    } catch (error) {
+      _snack(stockErrorText(error));
     }
   }
 
@@ -250,7 +432,10 @@ class _StockHomePageState extends State<StockHomePage> {
             Card(
               child: ListTile(
                 title: Text(item.name),
-                subtitle: Text(item.controlled ? item.category : '${item.category} · a pedido'),
+                subtitle: Text(
+                  '${item.controlled ? item.category : '${item.category} · a pedido'}'
+                  '${item.parentId == null ? '' : '\nSale de ${_name(item.parentId)} (1 → ${formatQty(item.unitsPerParent ?? 0)})'}',
+                ),
                 trailing: item.controlled
                     ? Column(
                         mainAxisAlignment: MainAxisAlignment.center,

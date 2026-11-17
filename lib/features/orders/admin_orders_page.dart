@@ -10,6 +10,7 @@ import 'delivery_date_picker.dart';
 import 'manage_order_page.dart';
 import 'order_detail_page.dart';
 import 'pending_finalizations_page.dart';
+import '../stock/product_summary.dart';
 
 class AdminOrdersPage extends StatefulWidget {
   const AdminOrdersPage({super.key, this.client});
@@ -27,6 +28,16 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
 
   List<Map<String, dynamic>> _pedidos = [];
   List<Map<String, dynamic>> _resumenProductos = [];
+
+  /// El resumen en el formato de la tabla con stock.
+  List<SummaryLine> get _lineasResumen => [
+    for (final p in _resumenProductos)
+      SummaryLine(
+        p['producto_id']?.toString(),
+        p['nombre']?.toString() ?? 'Producto sin nombre',
+        (p['cantidad'] as num?)?.toDouble() ?? 0,
+      ),
+  ];
   final Set<String> _pedidosSeleccionados = {};
   List<Map<String, dynamic>> _detallesPedidos = [];
   DateTime _fechaSeleccionada = DateTime.now();
@@ -717,20 +728,10 @@ productos (
                         'Productos de ${_pedidosSeleccionados.length} pedidos',
                       ),
                       content: SizedBox(
-                        width: 650,
-                        height: 400,
-                        child: ListView(
-                          children: _resumenProductos
-                              .map(
-                                (p) => ListTile(
-                                  dense: true,
-                                  title: Text(
-                                    p['nombre']?.toString() ?? 'Producto',
-                                  ),
-                                  trailing: Text(p['cantidad'].toString()),
-                                ),
-                              )
-                              .toList(),
+                        width: 700,
+                        height: 520,
+                        child: SingleChildScrollView(
+                          child: ProductSummaryTable(lines: _lineasResumen, client: widget.client),
                         ),
                       ),
                       actions: [
@@ -868,28 +869,10 @@ productos (
                     ],
                   ),
                   const SizedBox(height: 12),
-                  ..._resumenProductos.map((producto) {
-                    final cantidad = (producto['cantidad'] as num?) ?? 0;
-
-                    final cantidadTexto = cantidad.toDouble() % 1 == 0
-                        ? cantidad.toInt().toString()
-                        : cantidad.toString();
-
-                    final nombre =
-                        producto['nombre']?.toString() ?? 'Producto sin nombre';
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: Text(
-                          '$cantidadTexto × $nombre',
-                          textAlign: TextAlign.left,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    );
-                  }),
+                  ProductSummaryTable(
+                    lines: _lineasResumen,
+                    client: widget.client,
+                  ),
                 ],
               ),
             );

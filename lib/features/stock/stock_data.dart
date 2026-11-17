@@ -96,6 +96,8 @@ class StockItem {
     required this.controlled,
     required this.deposit,
     required this.vehicle,
+    this.parentId,
+    this.unitsPerParent,
   });
 
   final String id;
@@ -106,6 +108,13 @@ class StockItem {
   final bool controlled;
   final double deposit;
   final double vehicle;
+
+  /// Fraccionado: sale de [parentId] (1 de ese → [unitsPerParent] de este).
+  final String? parentId;
+  final double? unitsPerParent;
+
+  /// Lo que hay entre depósito y vehículo.
+  double get total => deposit + vehicle;
 
   bool get negative => controlled && (deposit < 0 || vehicle < 0);
 }
@@ -136,6 +145,10 @@ Future<List<StockItem>> fetchStockItems(SupabaseClient client) async {
         controlled: state[p['id'].toString()]?['control_stock'] == true,
         deposit: stockNum(state[p['id'].toString()]?['deposito']),
         vehicle: stockNum(state[p['id'].toString()]?['vehiculo']),
+        parentId: state[p['id'].toString()]?['fracciona_de']?.toString(),
+        unitsPerParent: state[p['id'].toString()]?['unidades_por_origen'] == null
+            ? null
+            : stockNum(state[p['id'].toString()]?['unidades_por_origen']),
       ),
   ];
 }

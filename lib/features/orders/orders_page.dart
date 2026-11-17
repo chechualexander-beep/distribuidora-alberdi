@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'order_detail_page.dart';
+import '../stock/product_summary.dart';
 
 class OrdersPage extends StatefulWidget {
   const OrdersPage({super.key});
@@ -83,6 +84,7 @@ tipo_operacion,
         localidad
       ),
       pedido_detalles (
+  producto_id,
   cantidad,
   productos (
     nombre
@@ -308,6 +310,7 @@ tipo_operacion,
       return coincideCliente && coincideFecha && coincidePreventista;
     }).toList();
     final resumenProductos = <String, double>{};
+    final idsResumen = <String, String>{};
 
     for (final pedido in pedidosFiltrados) {
       final detalles = pedido['pedido_detalles'] as List<dynamic>? ?? [];
@@ -321,6 +324,8 @@ tipo_operacion,
             double.tryParse(detalle['cantidad']?.toString() ?? '0') ?? 0;
 
         resumenProductos[nombre] = (resumenProductos[nombre] ?? 0) + cantidad;
+        final productoId = detalle['producto_id']?.toString();
+        if (productoId != null) idsResumen[nombre] = productoId;
       }
     }
     final preventistasDisponibles = <String, String>{};
@@ -473,23 +478,16 @@ tipo_operacion,
               childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               children: [
                 SizedBox(
-                  height: 250,
-                  child: ListView(
-                    children: resumenProductos.entries.map((entry) {
-                      final cantidad = entry.value;
-
-                      final cantidadTexto = cantidad % 1 == 0
-                          ? cantidad.toInt().toString()
-                          : cantidad.toString();
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Text(
-                          '$cantidadTexto × ${entry.key}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      );
-                    }).toList(),
+                  height: 360,
+                  child: SingleChildScrollView(
+                    child: ProductSummaryTable(
+                      lines: [
+                        for (final entry
+                            in (resumenProductos.entries.toList()
+                              ..sort((a, b) => a.key.compareTo(b.key))))
+                          SummaryLine(idsResumen[entry.key], entry.key, entry.value),
+                      ],
+                    ),
                   ),
                 ),
               ],
