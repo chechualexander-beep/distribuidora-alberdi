@@ -195,6 +195,9 @@ class StockOpOutcome {
   bool get savedOffline => result == null;
 }
 
+/// Para las pruebas: reemplaza el envío al servidor.
+typedef StockOpRunner = Future<StockOpOutcome> Function(String rpc, Map<String, dynamic> args);
+
 /// Hace la operación con un id elegido acá y la hora real. Sin señal queda en
 /// "Pendientes de enviar" y se envía sola (reenviar no duplica).
 Future<StockOpOutcome> runStockOp(

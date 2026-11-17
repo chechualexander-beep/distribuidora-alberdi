@@ -17,6 +17,7 @@ class StockFormPage extends StatefulWidget {
     this.tripId,
     this.onlyIds,
     this.client,
+    this.runner,
   });
 
   final StockFormKind kind;
@@ -26,6 +27,9 @@ class StockFormPage extends StatefulWidget {
   /// Mostrar solo estos productos (por ejemplo, contar uno solo).
   final Set<String>? onlyIds;
   final SupabaseClient? client;
+
+  /// Solo para pruebas.
+  final StockOpRunner? runner;
 
   @override
   State<StockFormPage> createState() => _StockFormPageState();
@@ -240,13 +244,16 @@ class _StockFormPageState extends State<StockFormPage> {
     setState(() => _saving = true);
     final StockOpOutcome outcome;
     try {
-      outcome = await runStockOp(
-        _client,
-        rpc: rpc,
-        args: args,
-        description: description,
-        total: total,
-      );
+      final runner = widget.runner;
+      outcome = runner != null
+          ? await runner(rpc, args)
+          : await runStockOp(
+              _client,
+              rpc: rpc,
+              args: args,
+              description: description,
+              total: total,
+            );
     } catch (error) {
       if (mounted) setState(() => _saving = false);
       _snack(stockErrorText(error));

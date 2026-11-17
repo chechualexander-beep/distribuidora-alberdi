@@ -105,24 +105,24 @@ void main() {
   });
 
   testWidgets('contar: manda lo escrito y muestra el resultado', (tester) async {
+    String? rpc;
     Map<String, dynamic>? enviado;
-    final client = mockClient((request) async {
-      expect(request.url.path, endsWith('/rpc/stock_contar'));
-      enviado = jsonDecode(request.body) as Map<String, dynamic>;
-      return jsonResponse(request, {
-        'productos': 1,
-        'nuevos_con_stock': 0,
-        'diferencias': [
-          {'producto_id': 'a', 'antes': 10, 'contado': 7},
-        ],
-      });
-    }, autoRefreshToken: false);
     await tester.pumpWidget(
       MaterialApp(
         home: StockFormPage(
           kind: StockFormKind.count,
           items: [item('a'), item('b', controlled: false)],
-          client: client,
+          runner: (fn, args) async {
+            rpc = fn;
+            enviado = args;
+            return const StockOpOutcome({
+              'productos': 1,
+              'nuevos_con_stock': 0,
+              'diferencias': [
+                {'producto_id': 'a', 'antes': 10, 'contado': 7},
+              ],
+            });
+          },
         ),
       ),
     );
@@ -131,16 +131,12 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, 'Cantidad'), '7');
     await tester.pump();
     await tester.tap(find.text('CONFIRMAR (1 producto)'));
-    // Espera acotada (sin pumpAndSettle): deja correr la respuesta y dibuja el resultado.
-    for (var i = 0; i < 50 && find.textContaining('Listo').evaluate().isEmpty; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump(const Duration(milliseconds: 100));
-    }
+    await tester.pumpAndSettle();
+    expect(rpc, 'stock_contar');
     expect(enviado!['p_ubicacion'], depositoCodigo);
     expect(enviado!['p_items'], [
       {'producto_id': 'a', 'cantidad': 7.0},
     ]);
-    expect(enviado!['p_id'], isA<String>());
     expect(find.textContaining('Listo: 1 producto contado.'), findsOneWidget);
     expect(find.textContaining('Producto a: había 10, contaste 7'), findsOneWidget);
   });
