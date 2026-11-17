@@ -33,6 +33,7 @@ import 'core/pending_orders.dart';
 import 'core/pending_orders_page.dart';
 import 'features/stock/stock_home_page.dart';
 import 'features/stock/vehicle_load_page.dart';
+import 'features/orders/finalization_request.dart';
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 final _localAuthentication = LocalAuthentication();
@@ -461,7 +462,10 @@ class _HomePageState extends State<HomePage> {
       });
       _cargarPermisoCatalogoGeneral();
       // Pedidos guardados sin señal: se envían solos (al iniciar, al volver la conexión, cada 2 min).
-      PendingOrders.instance.start(Supabase.instance.client);
+      PendingOrders.instance.start(
+        Supabase.instance.client,
+        sendDelivery: rol == 'administrador' ? _enviarEntregaGuardada : null,
+      );
       if (rol == 'administrador') {
         await _configurarNotificaciones();
       }
@@ -485,6 +489,17 @@ class _HomePageState extends State<HomePage> {
     } catch (_) {
       if (mounted) setState(() => _puedeCatalogoGeneral = false);
     }
+  }
+
+  /// Envía una gestión de reparto hecha sin señal (la solicitud está en la cola del teléfono).
+  static Future<void> _enviarEntregaGuardada(Map<String, dynamic> params) async {
+    final client = Supabase.instance.client;
+    final store = await finalizationStore(client);
+    final pedidoId = params['pedido_id'].toString();
+    final payload = store.read(pedidoId);
+    if (payload == null) return; // ya se resolvió desde la pantalla del pedido
+    await reconcileFinalization(client, payload, store: store, retry: true);
+    await store.acknowledge(pedidoId);
   }
 
   Future<void> _cerrarSesion() async {

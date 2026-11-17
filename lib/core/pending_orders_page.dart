@@ -85,7 +85,10 @@ class PendingOrdersPage extends StatelessWidget {
               : 'Descartar pedido',
         ),
         content: Text(
-          order.isStock
+          order.isDelivery
+              ? 'La entrega a ${order.clientName} no se cargó y sale de esta lista. '
+                    'La gestión queda guardada en el pedido para revisarla.'
+              : order.isStock
               ? '"${order.clientName}" no se cargó y se va a borrar del teléfono. '
                     'Si hace falta, volvé a hacerla desde Stock.'
               : order.isClient
@@ -151,12 +154,14 @@ class PendingOrdersPage extends StatelessWidget {
                         ? Icons.person_add_alt_1
                         : order.isStock
                         ? Icons.inventory_2_outlined
+                        : order.isDelivery
+                        ? Icons.local_shipping_outlined
                         : Icons.schedule,
                     color: order.rejected != null ? AppColors.rojo : AppColors.naranja,
                   ),
                   title: Text(order.clientName),
                   subtitle: Text(
-                    '${order.isClient ? 'Cliente nuevo' : order.isStock ? 'Stock${order.total > 0 ? ' · ${_money(order.total)}' : ''}' : '${order.isDirectSale ? 'Venta directa' : 'Pedido'} · ${_money(order.total)}'} · '
+                    '${order.isClient ? 'Cliente nuevo' : order.isDelivery ? 'Entrega · ${_money(order.total)}' : order.isStock ? 'Stock${order.total > 0 ? ' · ${_money(order.total)}' : ''}' : '${order.isDirectSale ? 'Venta directa' : 'Pedido'} · ${_money(order.total)}'} · '
                     '${_when(order.createdAt)}'
                     '${order.rejected != null ? '\nNo se cargó: ${order.rejected}' : ''}'
                     '${order.rejected == null && !order.isClient && pending.isPendingClient(order.clientId) ? '\nSale después del cliente nuevo' : ''}',

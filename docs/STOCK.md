@@ -55,8 +55,23 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
 - Sin señal, las operaciones de stock quedan en "Pendientes de enviar" (mismo id, hora real).
 - Se quitó la pantalla vieja de Stock V2 (`ENABLE_STOCK`).
 
+## Reparto y cobros sin señal (1.7.0, migración `20261119010000_reparto_sin_conexion`)
+- Si al guardar una gestión de reparto no hay señal, queda "Guardado en el teléfono" con la
+  hora de ese momento y se envía sola (`finalizar_gestion_sin_conexion`, hasta 72 h). Descuenta
+  del vehículo como cualquier entrega.
+- La **fecha de finalización** (semana de la liquidación de comisiones) y la del **cobro hecho
+  al entregar** son las del momento real de la entrega, también en las gestiones con señal.
+- "Pago completo" sin señal se manda sin importe: el servidor aplica el saldo a favor y cobra el
+  saldo real al recibirla (sin señal no se puede consultar el saldo a favor).
+- Cobro de saldo sin señal (Registrar pago): queda en "Pendientes de enviar" con la hora de ese
+  momento (`registrar_cobro_sin_conexion`, misma solicitud: no se cobra dos veces).
+- Para trabajar sin señal, abrir con señal "Preparación y reparto" y la cuenta del cliente antes:
+  lo que se vio queda guardado en el teléfono.
+- Prueba: `test/reparto_sin_conexion_escenario.sql`.
+
 ## Etapas
 1. Base de datos.
 2. Pantallas (1.6.0).
+3. Reparto y cobros sin señal (1.7.0).
 3. Reparto y cobros sin señal (hora real del teléfono), descontando del vehículo.
 4. Encender en producción (contar los primeros productos).

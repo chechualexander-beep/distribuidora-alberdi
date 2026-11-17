@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/payment_outbox.dart';
 import '../../core/payment_money.dart';
 import 'balance_repository.dart';
+import '../../core/network_status.dart';
+import '../../core/pending_orders.dart';
 
 Future<void> showClientPayment(
   BuildContext context,
@@ -214,12 +216,20 @@ class _ClientPaymentDialogState extends State<ClientPaymentDialog> {
           refreshed = true;
         });
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         try {
           request = current();
         } catch (_) {
           available = false;
+        }
+        final pending = request;
+        if (pending != null &&
+            pending.result == null &&
+            pending.state != 'review' &&
+            isUncertainRequestError(error)) {
+          await _queueOffline(pending);
+          return;
         }
         setState(
           () => message = request?.state == 'review'
@@ -237,6 +247,35 @@ class _ClientPaymentDialogState extends State<ClientPaymentDialog> {
       } else if (widget.store == null) {
         store?.close();
       }
+    }
+  }
+
+  /// Sin señal: el cobro (misma solicitud) queda en "Pendientes de enviar" con la hora de
+  /// ahora y se envía solo. Si se recupera antes desde acá, el servidor no lo repite.
+  Future<void> _queueOffline(PaymentRequest pending) async {
+    final payload = pending.payload;
+    await PendingOrders.instance.add(
+      PendingOrder.stock(
+        rpc: 'registrar_cobro_sin_conexion',
+        args: {
+          'p_id': pending.id,
+          'p_cliente_id': payload['p_cliente_id'],
+          'p_importe': payload['p_importe'],
+          'p_medio_pago': payload['p_medio_pago'],
+          'p_observacion': payload['p_observacion'],
+          'p_fecha': DateTime.now().toUtc().toIso8601String(),
+        },
+        description: 'Cobro · ${widget.clientName}',
+        total: (payload['p_importe'] as num?)?.toDouble() ?? 0,
+      ),
+      uid: widget.repository.actor,
+    );
+    if (mounted) {
+      setState(
+        () => message =
+            'Sin señal: el cobro quedó guardado en el teléfono con la hora de ahora y se '
+            'envía solo cuando vuelva la conexión. Lo ves en "Pendientes de enviar".',
+      );
     }
   }
 

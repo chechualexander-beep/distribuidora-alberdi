@@ -110,6 +110,27 @@ void main() {
       );
     },
   );
+  test('sin señal: hora del teléfono y envío a finalizar_gestion_sin_conexion', () async {
+    final store = memoryStore();
+    final payload = await store.prepare(
+      'fake',
+      operational(),
+      physicalDate: DateTime.utc(2026, 11, 15, 18),
+      offline: true,
+    );
+    expect(payload['p_origen'], 'sin_senal');
+    expect(payload['p_fecha_fisica'], '2026-11-15T18:00:00.000Z');
+    final rpcs = <String>[];
+    final client = mockClient((r) async {
+      rpcs.add(r.url.pathSegments.last);
+      if (r.url.path.endsWith('consultar_finalizacion_solicitud')) {
+        return jsonResponse(r, {'estado': 'inexistente'});
+      }
+      return jsonResponse(r, receipt(payload));
+    });
+    await reconcile(client, store, payload);
+    expect(rpcs, ['consultar_finalizacion_solicitud', 'finalizar_gestion_sin_conexion']);
+  });
   test('unsaved or changed payload cannot reach any RPC', () async {
     final store = memoryStore();
     var calls = 0;

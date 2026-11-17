@@ -257,4 +257,25 @@ void main() {
     expect(await consultarPedidosConSaldo(sinRed, 'c9'), isEmpty);
     expect((await consultarTelefonoCliente(sinRed, 'c9'))?['preventista_id'], 'mary');
   });
+
+  test('entrega sin señal: se envía con su propio envío y sobrevive al reinicio', () async {
+    var online = false;
+    final entregas = <String>[];
+    Future<void> enviar(Map<String, dynamic> p) async {
+      if (!online) throw http.ClientException('sin red');
+      entregas.add(p['pedido_id'] as String);
+    }
+
+    await cola.start(await sesion('admin'), send: (_) async {}, sendDelivery: enviar);
+    await cola.add(PendingOrder.delivery(orderId: 'p9', clientName: 'Kiosco', total: 3000));
+    expect(await cola.sendAll(), 0);
+    final copia = PendingOrder.fromJson(cola.items.value.single.toJson());
+    expect(copia.isDelivery, isTrue);
+    expect(copia.id, 'entrega:p9');
+    expect(copia.clientId, isNull);
+    online = true;
+    expect(await cola.sendAll(), 1);
+    expect(entregas, ['p9']);
+    expect(cola.items.value, isEmpty);
+  });
 }

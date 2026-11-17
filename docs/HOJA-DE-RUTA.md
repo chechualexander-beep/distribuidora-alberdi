@@ -23,8 +23,7 @@ unos 170 productos. Regla de precio: **vale el que vio el cliente**.
         historial de precios: se respeta el precio visto hasta 72 h y queda anotado en la observación.
   - [x] **D3** (1.5.0): alta de clientes nuevos sin señal. El id se elige en el teléfono: se le
         pueden hacer pedidos enseguida, el cliente sale primero y sus pedidos detrás.
-  - [ ] **D2**: gestiones de reparto y cobros sin señal → se hace **junto con el stock del
-        vehículo** (sección 2), porque toca el mismo circuito.
+  - [x] **D2** (1.7.0, con el stock del vehículo): gestiones de reparto y cobros sin señal.
 
 ## 2. Stock
 Diseño y reglas en `docs/STOCK.md` (por producto "con stock" / "a pedido", depósito + vehículo,
@@ -32,7 +31,7 @@ viajes con cierre y diferencias, compras, el stock informa y no traba).
 - [x] **Etapa 1**: base de datos (`20261118010000_stock_por_producto`), en TESTING.
 - [x] **Etapa 2** (1.6.0): pantallas (contar, cargar/bajar vehículo, compras, cerrar viaje, "Lo que
       llevamos" y venta directa armada desde la carga).
-- [ ] **Etapa 3**: reparto y cobros sin señal (D2, abajo).
+- [x] **Etapa 3** (1.7.0): reparto y cobros sin señal (D2, abajo).
 - [ ] **Etapa 4**: encender en producción.
 - Local comercial: cuando se concrete (con el Alberdi POS).
 

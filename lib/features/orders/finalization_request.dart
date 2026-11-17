@@ -37,6 +37,7 @@ class FinalizationRequestStore {
     DateTime? physicalDate,
     Future<DateTime> Function()? serverClock,
     Future<Map<String, dynamic>> Function(String requestId)? serverContext,
+    bool offline = false,
   }) async {
     // Snapshot operational input before any await. Existing rows always win.
     if (read(orderId) != null) return read(orderId)!;
@@ -86,6 +87,8 @@ class FinalizationRequestStore {
         'p_pedido_id': orderId,
         'p_solicitud_id': id,
         'p_fecha_fisica': date.toUtc().toIso8601String(),
+        // Hecha sin señal: la hora es la del teléfono y el servidor la acepta hasta 72 h.
+        if (offline) 'p_origen': 'sin_senal',
       };
     });
   }
@@ -234,6 +237,20 @@ Future<Map<String, dynamic>> prepareCurrentFinalization(
   );
 }
 
+/// Sin señal: la gestión queda en el teléfono con la hora real de la entrega y se envía
+/// sola al volver la conexión (`finalizar_gestion_sin_conexion`).
+Future<Map<String, dynamic>> prepareOfflineFinalization(
+  SupabaseClient client,
+  FinalizationRequestStore store,
+  String orderId,
+  Map<String, dynamic> input, {
+  AppConfig? config,
+}) async {
+  (config ?? appConfig).requireV2Client(client.rest.url);
+  _requireScope(client, store);
+  return store.prepare(orderId, input, physicalDate: DateTime.now(), offline: true);
+}
+
 bool isFinalizationDateError(PostgrestException error) =>
     error.code == 'PT422' &&
     error.message.toLowerCase().contains('fecha o solicitud inválida');
@@ -367,8 +384,10 @@ Future<Map<String, dynamic>> reconcileFinalization(
       result = Map<String, dynamic>.from(
         await client
                 .rpc(
-                  frozen.containsKey('p_regimen_id') ||
-                          frozen.containsKey('p_protocolo')
+                  frozen['p_origen'] == 'sin_senal'
+                      ? 'finalizar_gestion_sin_conexion'
+                      : frozen.containsKey('p_regimen_id') ||
+                            frozen.containsKey('p_protocolo')
                       ? 'finalizar_gestion_pedido_contexto'
                       : 'finalizar_gestion_pedido_v2',
                   params: frozen,
@@ -429,6 +448,12 @@ String finalizationErrorMessage(PostgrestException error) {
   }
   if (detail.contains('operacion_ya_finalizada')) {
     return 'El pedido ya fue finalizado. Revisá la operación guardada.';
+  }
+  if (detail.contains('más de 72 horas')) {
+    return 'La gestión hecha sin señal tiene más de 72 horas y no se aceptó. Volvé a cargarla.';
+  }
+  if (detail.contains('venta_directa_preparada')) {
+    return 'Esta venta ya tenía una gestión empezada. Revisala en el pedido antes de cargar otra.';
   }
   if (isFinalizationDateError(error)) {
     return 'La fecha de la solicitud no fue aceptada por el servidor. La solicitud se conserva para revisión; no inicies otra gestión.';

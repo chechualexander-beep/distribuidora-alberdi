@@ -23,6 +23,22 @@ class PendingOrder {
   static const orderKind = 'pedido';
   static const clientKind = 'cliente';
   static const stockKind = 'stock';
+  static const deliveryKind = 'entrega';
+
+  /// Entrega (gestión de reparto) hecha sin señal: la solicitud completa vive en la cola de
+  /// gestiones del teléfono; acá queda el aviso y el envío automático.
+  factory PendingOrder.delivery({
+    required String orderId,
+    required String clientName,
+    double total = 0,
+    DateTime? createdAt,
+  }) => PendingOrder(
+    params: {'pedido_id': orderId},
+    clientName: clientName,
+    total: total,
+    createdAt: createdAt ?? DateTime.now(),
+    kind: deliveryKind,
+  );
 
   /// Operación de stock (compra, carga o bajada del vehículo, conteo, cierre de viaje):
   /// [rpc] y sus parámetros exactos, con `p_id` y la hora real (`p_fecha`).
@@ -63,16 +79,19 @@ class PendingOrder {
 
   bool get isClient => kind == clientKind;
   bool get isStock => kind == stockKind;
+  bool get isDelivery => kind == deliveryKind;
   String get id => (isClient
           ? params['id']
           : isStock
           ? (params['args'] as Map)['p_id']
+          : isDelivery
+          ? 'entrega:${params['pedido_id']}'
           : params['p_id'])
       .toString();
 
   /// Cliente del pedido (o el propio cliente nuevo).
   String? get clientId =>
-      isStock ? null : (isClient ? params['id'] : params['p_cliente_id'])?.toString();
+      isStock || isDelivery ? null : (isClient ? params['id'] : params['p_cliente_id'])?.toString();
   bool get isDirectSale => params['p_tipo_operacion'] == 'venta_directa';
 
   Map<String, dynamic> toJson() => {
@@ -120,6 +139,7 @@ class PendingOrders {
   SendOrder? _send;
   SendOrder? _sendClient;
   SendOrder? _sendStock;
+  SendOrder? _sendDelivery;
   Timer? _timer;
   AppLifecycleListener? _lifecycle;
   bool _listening = false;
@@ -136,6 +156,7 @@ class PendingOrders {
     SendOrder? send,
     SendOrder? sendClient,
     SendOrder? sendStock,
+    SendOrder? sendDelivery,
   }) async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) return;
@@ -151,6 +172,7 @@ class PendingOrders {
         (p) => client
             .rpc(p['rpc'] as String, params: Map<String, dynamic>.from(p['args'] as Map))
             .timeout(const Duration(seconds: 25));
+    _sendDelivery = sendDelivery;
     await _load();
     if (!_listening) {
       _listening = true;
@@ -271,6 +293,10 @@ class PendingOrders {
             final sendStock = _sendStock;
             if (sendStock == null) break;
             await sendStock(order.params);
+          } else if (order.isDelivery) {
+            final sendDelivery = _sendDelivery;
+            if (sendDelivery == null) continue;
+            await sendDelivery(order.params);
           } else {
             await send(order.params);
           }

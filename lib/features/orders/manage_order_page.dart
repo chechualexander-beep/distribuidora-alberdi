@@ -9,6 +9,8 @@ import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/network_status.dart';
+import '../../core/pending_orders.dart';
 
 class ManageOrderPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -864,6 +866,9 @@ cantidad_entregada,
 
     final totalEntregado = _totalEntregadoActual();
     double creditoAplicable = 0;
+    // Sin señal no se puede consultar el saldo a favor: la gestión se guarda en el teléfono
+    // y el servidor aplica el crédito y cobra el saldo real al recibirla.
+    var sinSenal = false;
     double efectivoCompleto = totalEntregado;
     if (resultado != 'no_entregado' && totalEntregado > 0) {
       try {
@@ -884,11 +889,14 @@ cantidad_entregada,
             .clamp(0, totalEntregado)
             .toDouble();
         efectivoCompleto = totalEntregado - creditoAplicable;
-      } catch (_) {
-        _mostrarMensaje(
-          'No se pudo consultar el saldo a favor. Intentá nuevamente.',
-        );
-        return;
+      } catch (error) {
+        if (!isUncertainRequestError(error)) {
+          _mostrarMensaje(
+            'No se pudo consultar el saldo a favor. Intentá nuevamente.',
+          );
+          return;
+        }
+        sinSenal = true;
       }
       if (!mounted) return;
     }
@@ -1073,22 +1081,72 @@ cantidad_entregada,
       }
 
       if (appConfig.usesV2For(widget.pedido['tipo_operacion']?.toString())) {
-        _solicitudes ??= await finalizationStore(Supabase.instance.client);
-        _pendiente = await prepareCurrentFinalization(
-          Supabase.instance.client,
-          _solicitudes!,
-          widget.pedido['id'].toString(),
-          {
-            'p_estado': _estado,
-            ...contextualDeliveryLines(detallesGestion),
-            'p_motivo_no_entrega': resultado == 'entregado'
-                ? null
-                : _motivoController.text.trim(),
-            'p_tipo_pago': tipoPago,
-            'p_importe_pago': importePago,
-            'p_medio_pago': medioPago,
-          },
-        );
+        final client = Supabase.instance.client;
+        _solicitudes ??= await finalizationStore(client);
+        final pedidoId = widget.pedido['id'].toString();
+        final entrada = <String, dynamic>{
+          'p_estado': _estado,
+          ...contextualDeliveryLines(detallesGestion),
+          'p_motivo_no_entrega': resultado == 'entregado'
+              ? null
+              : _motivoController.text.trim(),
+          'p_tipo_pago': tipoPago,
+          'p_importe_pago': importePago,
+          'p_medio_pago': medioPago,
+        };
+        try {
+          if (sinSenal) throw const FinalizationClockException();
+          _pendiente = await prepareCurrentFinalization(
+            client,
+            _solicitudes!,
+            pedidoId,
+            entrada,
+          );
+        } on FinalizationClockException {
+          // Sin señal: queda en el teléfono con la hora real de la entrega y se envía sola.
+          // "Pago completo" sin importe: el servidor cobra el saldo real de ese momento.
+          _pendiente = await prepareOfflineFinalization(
+            client,
+            _solicitudes!,
+            pedidoId,
+            {
+              ...entrada,
+              if (tipoPago == 'completo') 'p_importe_pago': null,
+            },
+          );
+          final cliente = widget.pedido['clientes'];
+          await PendingOrders.instance.add(
+            PendingOrder.delivery(
+              orderId: pedidoId,
+              clientName: cliente is Map
+                  ? cliente['nombre_comercio']?.toString() ?? 'Cliente'
+                  : 'Cliente',
+              total: totalEntregado,
+            ),
+            uid: client.auth.currentUser?.id,
+          );
+          if (!mounted) return;
+          await showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              icon: const Icon(Icons.cloud_upload_outlined, size: 48),
+              title: const Text('Guardado en el teléfono'),
+              content: Text(
+                'No hay señal: la gestión (${_nombreResultado(resultado)}) quedó guardada con la hora '
+                'de ahora y se envía sola cuando vuelva la conexión. '
+                'La ves en "Pendientes de enviar".',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('ACEPTAR'),
+                ),
+              ],
+            ),
+          );
+          if (mounted) Navigator.of(context).pop(true);
+          return;
+        }
         if (mounted) setState(() {});
         await _enviarPendiente();
         return;
