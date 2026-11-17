@@ -59,6 +59,38 @@ void main() {
     expect(VehicleStock.fromJson({'viaje': null, 'productos': []}).tripOpen, isFalse);
   });
 
+  test('consultas por GET: lo del vehículo y el estado de cada producto', () async {
+    final pedidos = <String>[];
+    final client = mockClient((request) async {
+      pedidos.add('${request.method} ${request.url.path.split('/v1/').last}');
+      return switch (request.url.path.split('/').last) {
+        'stock_vehiculo_disponible' => jsonResponse(request, {
+          'viaje': {'id': 'v1', 'preventista_id': null, 'abierto_at': '2026-11-17T12:00:00Z'},
+          'productos': [
+            {'producto_id': 'a', 'en_vehiculo': 8, 'comprometido': 0, 'disponible': 8},
+          ],
+        }),
+        'stock_estado' => jsonResponse(request, [
+          {'producto_id': 'a', 'control_stock': true, 'deposito': 12, 'vehiculo': 8},
+          {'producto_id': 'b', 'control_stock': false, 'deposito': null, 'vehiculo': null},
+        ]),
+        _ => jsonResponse(request, [
+          {'id': 'a', 'codigo': 'A', 'nombre': 'Yerba', 'categoria': 'Almacén', 'foto_path': null},
+          {'id': 'b', 'codigo': null, 'nombre': 'Fécula', 'categoria': null, 'foto_path': null},
+        ]),
+      };
+    }, autoRefreshToken: false);
+    final vehiculo = await fetchVehicleStock(client);
+    expect(vehiculo.lines['a']!.available, 8);
+    final items = await fetchStockItems(client);
+    expect(items.first.controlled, isTrue);
+    expect(items.first.deposit, 12);
+    expect(items.last.controlled, isFalse);
+    expect(items.last.category, 'Sin categoría');
+    expect(pedidos, contains('GET rpc/stock_vehiculo_disponible'));
+    expect(pedidos, contains('GET rpc/stock_estado'));
+  });
+
   test('operación de stock sin señal: queda pendiente y se envía con el mismo id', () async {
     final cola = PendingOrders.instance;
     var online = false;

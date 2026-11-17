@@ -81,7 +81,7 @@ class VehicleStock {
 
 /// Por GET: queda en la copia del teléfono y se ve aunque se corte la señal.
 Future<VehicleStock> fetchVehicleStock(SupabaseClient client) async {
-  final result = await client.rpc('stock_vehiculo_disponible', get: true);
+  final result = await client.rpc('stock_vehiculo_disponible', params: const {}, get: true);
   return VehicleStock.fromJson(Map<String, dynamic>.from(result as Map));
 }
 
@@ -118,7 +118,7 @@ Future<List<StockItem>> fetchStockItems(SupabaseClient client) async {
         .eq('activo', true)
         .order('nombre'),
   );
-  final List<dynamic> estado = await client.rpc('stock_estado', get: true);
+  final List<dynamic> estado = await client.rpc('stock_estado', params: const {}, get: true);
   final state = <String, StockRow>{
     for (final raw in estado)
       (raw as Map)['producto_id'].toString(): Map<String, dynamic>.from(raw),
@@ -229,5 +229,6 @@ Future<StockOpOutcome> runStockOp(
 String stockErrorText(Object error) {
   if (error is PostgrestException) return error.message;
   if (error is TimeoutException) return 'Sin respuesta del servidor. Probá de nuevo.';
-  return 'No se pudo completar. Probá de nuevo.';
+  final detail = error.toString();
+  return 'No se pudo completar (${detail.length > 160 ? detail.substring(0, 160) : detail}).';
 }

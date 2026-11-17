@@ -54,7 +54,7 @@ class _VehicleLoadPageState extends State<VehicleLoadPage> {
       setState(() {
         _error = isUncertainRequestError(error)
             ? 'Sin conexión y sin una copia guardada. Probá de nuevo cuando haya señal.'
-            : 'No se pudo cargar lo que lleva el vehículo.';
+            : 'No se pudo cargar lo que lleva el vehículo: ${stockErrorText(error)}';
         _loading = false;
       });
     }

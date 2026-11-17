@@ -207,7 +207,7 @@ Future<PreparacionSinConexion> prepararSinConexion(
   await consultarProductosCatalogo(c);
   try {
     // Lo que lleva el vehículo ("Lo que llevamos" y la venta directa sin señal).
-    await c.rpc('stock_vehiculo_disponible', get: true);
+    await c.rpc('stock_vehiculo_disponible', params: const {}, get: true);
   } catch (_) {}
 
 

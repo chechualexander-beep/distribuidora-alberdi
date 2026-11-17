@@ -69,7 +69,7 @@ class _StockHomePageState extends State<StockHomePage> {
       setState(() {
         _error = isUncertainRequestError(error)
             ? 'Sin conexión. Probá de nuevo cuando haya señal.'
-            : 'No se pudo cargar el stock.';
+            : 'No se pudo cargar el stock: ${stockErrorText(error)}';
         _loading = false;
       });
     }
