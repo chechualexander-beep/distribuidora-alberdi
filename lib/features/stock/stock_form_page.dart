@@ -238,22 +238,25 @@ class _StockFormPageState extends State<StockFormPage> {
       ),
     };
     setState(() => _saving = true);
+    final StockOpOutcome outcome;
     try {
-      final outcome = await runStockOp(
+      outcome = await runStockOp(
         _client,
         rpc: rpc,
         args: args,
         description: description,
         total: total,
       );
-      if (!mounted) return;
-      await _showResult(outcome.result);
-      if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
-      _snack(stockErrorText(error));
-    } finally {
       if (mounted) setState(() => _saving = false);
+      _snack(stockErrorText(error));
+      return;
     }
+    if (!mounted) return;
+    // Sin la ruedita girando detrás del resultado.
+    setState(() => _saving = false);
+    await _showResult(outcome.result);
+    if (mounted) Navigator.of(context).pop(true);
   }
 
   Future<void> _showResult(Map<String, dynamic>? result) async {
