@@ -131,7 +131,11 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, 'Cantidad'), '7');
     await tester.pump();
     await tester.tap(find.text('CONFIRMAR (1 producto)'));
-    await tester.pumpAndSettle();
+    // Espera acotada (sin pumpAndSettle): deja correr la respuesta y dibuja el resultado.
+    for (var i = 0; i < 50 && find.textContaining('Listo').evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     expect(enviado!['p_ubicacion'], depositoCodigo);
     expect(enviado!['p_items'], [
       {'producto_id': 'a', 'cantidad': 7.0},
