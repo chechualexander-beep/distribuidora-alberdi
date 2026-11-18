@@ -47,6 +47,15 @@ class SummaryRow {
 /// Compara lo pedido con el stock. Sin [stock] (preventista o sin señal) solo lista cantidades.
 List<SummaryRow> evaluateSummary(List<SummaryLine> lines, Map<String, StockItem>? stock) {
   final rows = <SummaryRow>[];
+  // Unidades de origen que se pueden abrir: lo que hay menos lo que piden los pedidos de ese
+  // mismo producto (primero se entrega lo pedido entero). Se descuentan a medida que se abren.
+  final demand = <String, double>{};
+  for (final line in lines) {
+    if (line.productId != null) {
+      demand[line.productId!] = (demand[line.productId!] ?? 0) + line.quantity;
+    }
+  }
+  final parentLeft = <String, double>{};
   for (final line in lines) {
     final item = line.productId == null ? null : stock?[line.productId];
     if (item == null) {
@@ -55,7 +64,14 @@ List<SummaryRow> evaluateSummary(List<SummaryLine> lines, Map<String, StockItem>
     }
     final parent = item.parentId == null ? null : stock![item.parentId];
     final units = item.unitsPerParent ?? 0;
-    final parentHave = parent != null && parent.controlled && units > 0 ? parent.total : 0.0;
+    final parentId = item.parentId;
+    if (parent != null && parent.controlled && units > 0 && parentId != null) {
+      parentLeft.putIfAbsent(parentId, () {
+        final left = parent.total - (demand[parentId] ?? 0);
+        return left > 0 ? left : 0;
+      });
+    }
+    final parentHave = parentId == null ? 0.0 : (parentLeft[parentId] ?? 0.0);
     final have = item.controlled ? item.total : 0.0;
     final q = line.quantity;
     if (item.controlled && have >= q) {
@@ -68,6 +84,7 @@ List<SummaryRow> evaluateSummary(List<SummaryLine> lines, Map<String, StockItem>
       open = (short / units).ceilToDouble();
       if (open > parentHave.floorToDouble()) open = parentHave.floorToDouble();
     }
+    if (open > 0) parentLeft[parentId!] = parentHave - open;
     final left = short - open * units;
     if (left <= 0) {
       rows.add(SummaryRow(

@@ -99,6 +99,26 @@ void main() {
     expect(evaluateSummary(const [SummaryLine('y', 'Yerba', 1)], null).single.state, SummaryState.unknown);
   });
 
+  test('resumen: las bolsas pedidas enteras no se cuentan para fraccionar', () {
+    final stock = {
+      'b': StockItem(id: 'b', name: 'Facu x 5 kg', code: '', category: 'x', photo: null,
+          controlled: true, deposit: 2, vehicle: 0),
+      's': StockItem(id: 's', name: 'Facu x 1 kg', code: '', category: 'x', photo: null,
+          controlled: false, deposit: 0, vehicle: 0, parentId: 'b', unitsPerParent: 5),
+    };
+    final rows = evaluateSummary(const [
+      SummaryLine('b', 'Facu x 5 kg', 1),
+      SummaryLine('s', 'Facu x 1 kg', 6),
+    ], stock);
+    expect(rows[0].state, SummaryState.enough);
+    expect(rows[1].state, SummaryState.missing);
+    expect(rows[1].openParents, 1);
+    expect(rows[1].missing, 1);
+    final list = shoppingList(rows);
+    expect(list, contains('1 × Facu x 5 kg'));
+    expect(list, contains('Abrir 1 × Facu x 5 kg'));
+  });
+
   testWidgets('resumen sin stock (preventista): filas con cantidades, sin columna Hay', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

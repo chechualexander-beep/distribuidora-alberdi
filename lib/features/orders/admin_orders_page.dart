@@ -725,7 +725,9 @@ productos (
                     context: context,
                     builder: (context) => AlertDialog(
                       title: Text(
-                        'Productos de ${_pedidosSeleccionados.length} pedidos',
+                        _pedidosSeleccionados.isEmpty
+                            ? 'Productos de todos los pedidos (${_pedidos.length})'
+                            : 'Productos de ${_pedidosSeleccionados.length} pedidos',
                       ),
                       content: SizedBox(
                         width: 700,
