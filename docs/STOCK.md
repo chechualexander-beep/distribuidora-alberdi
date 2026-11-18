@@ -18,6 +18,10 @@
 - **Con stock / a pedido** (`productos.control_stock`): se pasa a "con stock" al **contarlo**
   (`stock_contar`); se enciende de a poco. "A pedido" no mueve stock nunca.
 - **Entregas y ventas directas descuentan del vehículo** (`stock_base_finalizar_v2`).
+  - **Sin viaje abierto** (ese día no se registró la carga): lo que falta arriba se toma solo del
+    depósito, abriendo bolsas del depósito si hace falta (`20261121010000_entrega_sin_carga`).
+  - **Con viaje abierto** (se cargó el vehículo): no se toma del depósito; el vehículo marca que se
+    terminó y queda en negativo para revisar (precisión para la venta directa).
 - **Un conteo vale para su momento** (`stock_actual.contado_at`): una entrega hecha antes del
   conteo pero enviada después no se descuenta otra vez.
 - Operaciones con **id elegido en el teléfono**: reenviar devuelve lo mismo (sirve sin señal) y

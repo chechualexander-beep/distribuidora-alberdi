@@ -48,10 +48,13 @@ insert into r select 'automatico', (select cantidad from stock_actual where ubic
   and exists(select 1 from stock_movimientos where producto_id=:'pa' and tipo='fraccion_salida'
    and motivo='Fraccionado automático al entregar');
 
--- 3) Otra de 5 (hay 2 y no quedan de A): queda en negativo, sin trabar.
+-- 3) Otra de 5 (hay 2 y no quedan de A) sin viaje abierto: lo que falta se toma del depósito
+--    (que queda en negativo para revisar); el vehículo queda en 0.
 select jsonb_agg(jsonb_build_object('detalle_id',id,'cantidad_entregada',cantidad)) as o2 from pedido_detalles where pedido_id=:'v2' \gset
 select finalizar_gestion_sin_conexion(gen_random_uuid(), :'v2', now(), 'pendiente', :'o2', '[]', 'sin_pago', 'sin_senal') is not null as x2 \gset
-insert into r select 'sin_origen', (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pb')=-3
+insert into r select 'sin_origen', (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pb')=0
+  and (select cantidad from stock_actual s join ubicaciones_stock u on u.id=s.ubicacion_id
+   where u.codigo='deposito_alberdi' and s.producto_id=:'pb')=-3
   and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pa')=0;
 reset role;
 select coalesce(string_agg(paso, ', ') filter (where not ok), '') as fallas,
