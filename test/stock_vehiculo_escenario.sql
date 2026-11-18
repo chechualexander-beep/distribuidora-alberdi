@@ -16,6 +16,8 @@ set session_replication_role = replica;
 delete from stock_movimientos where producto_id in (:'pa',:'pb',:'pc');
 delete from stock_actual where producto_id in (:'pa',:'pb',:'pc');
 update viajes_vehiculo set estado='cerrado', cerrado_at=clock_timestamp() where estado='abierto';
+-- El vehículo vacío para la prueba (en TESTING puede tener carga de pruebas a mano).
+update stock_actual set cantidad=0 where ubicacion_id=:'veh';
 set session_replication_role = origin;
 create temp table r(paso text, ok boolean) on commit drop;
 grant all on r to authenticated;
