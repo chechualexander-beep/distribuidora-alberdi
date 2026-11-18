@@ -36,7 +36,7 @@
 | `stock_marcar_a_pedido(producto)` | Vuelve el producto a "a pedido". |
 | `stock_cargar_vehiculo(id, items, fecha, preventista?)` | Depósito → vehículo. Abre el viaje si no hay uno abierto. |
 | `stock_bajar_vehiculo(id, items, fecha)` | Vehículo → depósito. |
-| `stock_registrar_compra(id, ubicación, items con costo_unitario, fecha, proveedor?, actualizar_costo?)` | Ingreso de mercadería; "a pedido" solo deja el costo. |
+| `stock_registrar_compra(id, ubicación, items con costo_unitario, fecha, proveedor?, actualizar_costo?)` | Ingreso de mercadería; un producto "a pedido" pasa a llevar stock con lo comprado (`20261122010000`). |
 | `stock_cerrar_viaje(id, viaje, conteo?, bajar, fecha)` | Cuenta lo que sobró (debe incluir todo lo de arriba), diferencias, baja al depósito y cierra. |
 | `stock_vehiculo_disponible()` | **Personal activo** (preventista incluido), por GET: en vehículo, comprometido (ventas directas del viaje sin entregar) y disponible. |
 | `stock_estado()` | Depósito y vehículo de cada producto activo. |
@@ -57,6 +57,8 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   N", "La última vez llevó N" primero, y antes de ver el pedido "¿Ofreciste todo?" con lo del
   vehículo que no está en la venta (una vez por venta).
 - Sin señal, las operaciones de stock quedan en "Pendientes de enviar" (mismo id, hora real).
+- "Anotar compra" también desde Gestión de reparto (entra al vehículo) y con el costo actual
+  precargado (si se pagó lo mismo, no hay que escribirlo).
 - Se quitó la pantalla vieja de Stock V2 (`ENABLE_STOCK`).
 
 ## Reparto y cobros sin señal (1.7.0, migración `20261119010000_reparto_sin_conexion`)

@@ -11,6 +11,8 @@ import 'manage_order_page.dart';
 import 'order_detail_page.dart';
 import 'pending_finalizations_page.dart';
 import '../stock/product_summary.dart';
+import '../stock/stock_data.dart';
+import '../stock/stock_form_page.dart';
 
 class AdminOrdersPage extends StatefulWidget {
   const AdminOrdersPage({super.key, this.client});
@@ -478,6 +480,31 @@ productos (
     if (actualizado == true && mounted) await _cargarPedidos();
   }
 
+  /// Compra hecha durante el reparto (por defecto entra al vehículo).
+  Future<void> _anotarCompra() async {
+    try {
+      final items = await fetchStockItems(_client);
+      final vehiculo = await fetchVehicleStock(_client);
+      if (!mounted) return;
+      await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => StockFormPage(
+            kind: StockFormKind.purchase,
+            items: items,
+            tripId: vehiculo.tripId,
+            initialLocation: vehiculoCodigo,
+            client: widget.client,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir la compra: ${stockErrorText(error)}')),
+      );
+    }
+  }
+
   void _recalcularResumenSeleccionados() {
     final Map<String, Map<String, dynamic>> productosAgrupados = {};
 
@@ -552,6 +579,11 @@ productos (
       appBar: AppBar(
         title: const Text('Gestión de reparto'),
         actions: [
+          IconButton(
+            tooltip: 'Anotar compra (entra al vehículo)',
+            icon: const Icon(Icons.add_shopping_cart),
+            onPressed: _anotarCompra,
+          ),
           if (!_mostrarVentaDirecta)
             TextButton(
               onPressed: _cargando ? null : _alternarSinProgramar,

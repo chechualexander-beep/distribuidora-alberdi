@@ -98,6 +98,7 @@ class StockItem {
     required this.vehicle,
     this.parentId,
     this.unitsPerParent,
+    this.cost = 0,
   });
 
   final String id;
@@ -112,6 +113,9 @@ class StockItem {
   /// Fraccionado: sale de [parentId] (1 de ese → [unitsPerParent] de este).
   final String? parentId;
   final double? unitsPerParent;
+
+  /// Costo actual del producto (para precargar la compra); 0 si no se sabe.
+  final double cost;
 
   /// Lo que hay entre depósito y vehículo.
   double get total => deposit + vehicle;
@@ -128,6 +132,14 @@ Future<List<StockItem>> fetchStockItems(SupabaseClient client) async {
         .order('nombre'),
   );
   final List<dynamic> estado = await client.rpc('stock_estado', params: const {}, get: true);
+  // Costos (solo administración): precargan "Anotar compra". Sin ellos sigue igual.
+  final costs = <String, double>{};
+  try {
+    final rows = await client.from('productos_administracion').select('id,costo').eq('activo', true);
+    for (final r in List<StockRow>.from(rows)) {
+      costs[r['id'].toString()] = stockNum(r['costo']);
+    }
+  } catch (_) {}
   final state = <String, StockRow>{
     for (final raw in estado)
       (raw as Map)['producto_id'].toString(): Map<String, dynamic>.from(raw),
@@ -149,6 +161,7 @@ Future<List<StockItem>> fetchStockItems(SupabaseClient client) async {
         unitsPerParent: state[p['id'].toString()]?['unidades_por_origen'] == null
             ? null
             : stockNum(state[p['id'].toString()]?['unidades_por_origen']),
+        cost: costs[p['id'].toString()] ?? 0,
       ),
   ];
 }

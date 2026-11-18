@@ -18,6 +18,7 @@ class StockFormPage extends StatefulWidget {
     this.onlyIds,
     this.client,
     this.runner,
+    this.initialLocation,
   });
 
   final StockFormKind kind;
@@ -31,6 +32,9 @@ class StockFormPage extends StatefulWidget {
   /// Solo para pruebas.
   final StockOpRunner? runner;
 
+  /// Depósito o vehículo al abrir (compra desde el reparto: vehículo).
+  final String? initialLocation;
+
   @override
   State<StockFormPage> createState() => _StockFormPageState();
 }
@@ -41,9 +45,9 @@ class _StockFormPageState extends State<StockFormPage> {
   final _cost = <String, TextEditingController>{};
   final _search = TextEditingController();
   final _supplier = TextEditingController();
-  late String _location = widget.kind == StockFormKind.purchase && widget.tripId != null
-      ? vehiculoCodigo
-      : depositoCodigo;
+  late String _location =
+      widget.initialLocation ??
+      (widget.kind == StockFormKind.purchase && widget.tripId != null ? vehiculoCodigo : depositoCodigo);
   bool _onlyFilled = false;
   bool _allProducts = false;
   bool _unloadAll = false;
@@ -84,7 +88,11 @@ class _StockFormPageState extends State<StockFormPage> {
   }
 
   TextEditingController _controller(String id) => _qty.putIfAbsent(id, TextEditingController.new);
-  TextEditingController _costController(String id) => _cost.putIfAbsent(id, TextEditingController.new);
+  /// El costo viene precargado con el actual: si pagaste lo mismo, no hay que escribirlo.
+  TextEditingController _costController(StockItem item) => _cost.putIfAbsent(
+    item.id,
+    () => TextEditingController(text: item.cost > 0 ? formatQty(item.cost) : ''),
+  );
 
   String get _title => switch (_kind) {
     StockFormKind.count => 'Contar stock',
@@ -101,7 +109,8 @@ class _StockFormPageState extends State<StockFormPage> {
       'Lo que subís al vehículo sale del depósito. Los productos "a pedido" no se descuentan.',
     StockFormKind.unload => 'Lo que bajás del vehículo vuelve al depósito.',
     StockFormKind.purchase =>
-      'Lo comprado entra al stock. De los productos "a pedido" queda solo el costo.',
+      'Lo comprado entra al stock (un producto "a pedido" pasa a llevar stock). '
+          'El costo viene cargado: cambialo solo si pagaste otro precio.',
     StockFormKind.closeTrip =>
       'Contá lo que sobró en el vehículo y corregí lo que no coincida. '
           'La app compara con lo que debería quedar.',
@@ -174,7 +183,7 @@ class _StockFormPageState extends State<StockFormPage> {
       if (q == null || (!_zeroAllowed && q == 0)) return null;
       final line = <String, dynamic>{'producto_id': item.id, 'cantidad': q};
       if (_kind == StockFormKind.purchase) {
-        final costText = _cost[item.id]?.text ?? '';
+        final costText = _costController(item).text;
         if (costText.trim().isNotEmpty) {
           final cost = parseQty(costText);
           if (cost == null) return null;
@@ -300,8 +309,8 @@ class _StockFormPageState extends State<StockFormPage> {
           if (stockNum(result['total']) > 0) {
             lines.add('Total: \$${formatQty(stockNum(result['total']))}');
           }
-          final soloCosto = stockNum(result['a_pedido']).round();
-          if (soloCosto > 0) lines.add('$soloCosto productos "a pedido": quedó solo el costo.');
+          final pasaron = stockNum(result['nuevos_con_stock']).round();
+          if (pasaron > 0) lines.add('$pasaron productos "a pedido" pasaron a llevar stock.');
         case StockFormKind.closeTrip:
           final diffs = (result['diferencias'] as List? ?? const []);
           lines.add(diffs.isEmpty ? 'Viaje cerrado: todo coincide.' : 'Viaje cerrado. Diferencias:');
@@ -552,7 +561,7 @@ class _StockFormPageState extends State<StockFormPage> {
               SizedBox(
                 width: 96,
                 child: TextField(
-                  controller: _costController(item.id),
+                  controller: _costController(item),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   textAlign: TextAlign.end,
                   decoration: const InputDecoration(

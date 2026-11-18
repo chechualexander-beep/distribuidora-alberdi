@@ -92,11 +92,13 @@ select finalizar_gestion_pedido_contexto(:'s3', :'v3', (:'x3'::jsonb->>'fecha_fi
 insert into r select 'conteo_posterior', (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pa')=4
   and (:'r5'::jsonb->'diferencias'->0->>'antes')::numeric=5;
 
--- 6) Compra en el camino: B entra al vehículo; C ("a pedido") solo deja el costo.
+-- 6) Compra en el camino: B entra al vehículo; C ("a pedido") pasa a llevar stock con lo comprado.
 select stock_registrar_compra(gen_random_uuid(), 'vehiculo', jsonb_build_array(
   jsonb_build_object('producto_id',:'pb','cantidad',3,'costo_unitario',50),
   jsonb_build_object('producto_id',:'pc','cantidad',2,'costo_unitario',100)), now(), 'Almacén del camino') as r6 \gset
-insert into r select 'compra', (:'r6'::jsonb->>'total')::numeric=350 and (:'r6'::jsonb->>'con_stock')::int=1
+insert into r select 'compra', (:'r6'::jsonb->>'total')::numeric=350 and (:'r6'::jsonb->>'con_stock')::int=2
+  and (:'r6'::jsonb->>'nuevos_con_stock')::int=1
+  and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pc')=2
   and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pb')=1
   and (select viaje_id from stock_operaciones where id=(:'r6'::jsonb->>'operacion_id')::uuid)=:'viaje'::uuid;
 
@@ -111,7 +113,8 @@ do $$ begin perform stock_cerrar_viaje(gen_random_uuid(), (select id from viajes
   jsonb_build_array(jsonb_build_object('producto_id',current_setting('e.pa'),'cantidad',3)), true, now()); raise exception 'debió fallar';
 exception when others then if sqlerrm not like 'Falta contar:%' then raise; end if; end $$;
 select stock_cerrar_viaje(gen_random_uuid(), :'viaje', jsonb_build_array(
-  jsonb_build_object('producto_id',:'pa','cantidad',3), jsonb_build_object('producto_id',:'pb','cantidad',0)), true, now()) as r8 \gset
+  jsonb_build_object('producto_id',:'pa','cantidad',3), jsonb_build_object('producto_id',:'pb','cantidad',0),
+  jsonb_build_object('producto_id',:'pc','cantidad',2)), true, now()) as r8 \gset
 insert into r select 'cierre', jsonb_array_length(:'r8'::jsonb->'diferencias')=1
   and (:'r8'::jsonb->'diferencias'->0->>'diferencia')::numeric=-1
   and (:'r8'::jsonb->>'ventas')::int=3 and (:'r8'::jsonb->>'pendientes_de_entrega')::int=0
