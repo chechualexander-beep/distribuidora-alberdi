@@ -643,10 +643,11 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
               const SizedBox(height: 14),
-              NewOrderButton(onTap: () => _abrir(const NewOrderPage())),
-              const SizedBox(height: 10),
+              // Nuevo pedido debajo de lo de "sin señal": más cerca del pulgar.
               const PendingOrdersCard(),
               const OfflinePrepCard(),
+              const SizedBox(height: 10),
+              NewOrderButton(onTap: () => _abrir(const NewOrderPage())),
               HomeSection(
                 title: 'TRABAJO DIARIO',
                 actions: [

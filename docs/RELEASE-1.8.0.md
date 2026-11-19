@@ -18,4 +18,5 @@ Agregado antes de producción (migraciones `20261121010000` a `20261125010000`):
 - Pantalla bloqueada sin "Cerrar sesión" (solo aparece, con confirmación, si el teléfono no
   puede verificar).
 - Windows en modo oscuro sin zonas blancas (colores según el tema en `Tonos`).
-- Inicio del celular: "Nuevo pedido" dorado arriba y accesos en dos columnas con borde.
+- Inicio del celular: "Nuevo pedido" dorado (debajo de "Trabajar sin señal", al alcance del pulgar)
+  y accesos en dos columnas con borde.
