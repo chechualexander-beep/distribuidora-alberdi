@@ -285,7 +285,7 @@ void main() {
     expect(find.textContaining('Producto a: había 10, contaste 7'), findsOneWidget);
   });
 
-  testWidgets('cargar vehículo: tachar lo cargado y confirmar', (tester) async {
+  testWidgets('cargar vehículo: colores, marcar en flúor y confirmar', (tester) async {
     String? rpc;
     await tester.pumpWidget(
       MaterialApp(
@@ -300,15 +300,27 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, 'Cantidad').first, '3');
+    expect(find.text('Escribí qué cargar'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('cantidad-a')), '3');
     await tester.pump();
     expect(find.text('0 de 1 cargados'), findsOneWidget);
-    await tester.tap(find.byType(Checkbox).first);
+    expect(find.text('Hay 10'), findsOneWidget, reason: 'verde: alcanza lo del depósito');
+    await tester.enterText(find.byKey(const ValueKey('cantidad-b')), '12');
+    await tester.pump();
+    expect(find.text('Faltan 2 · hay 10'), findsOneWidget, reason: 'rojo: no alcanza');
+    await tester.enterText(find.byKey(const ValueKey('cantidad-b')), '');
+    await tester.pump();
+    // Tocar la fila (no solo la casilla) la marca: queda resaltada en flúor.
+    await tester.tap(find.text('Producto a'));
     await tester.pump();
     expect(find.text('1 de 1 cargados'), findsOneWidget);
+    final fila = tester.widget<Material>(
+      find.ancestor(of: find.text('Producto a'), matching: find.byType(Material)).first,
+    );
+    expect(fila.color, const Color(0xFFFFF176));
     await tester.tap(find.text('CONFIRMAR (1 producto)'));
     await tester.pumpAndSettle();
-    expect(find.text('Faltan tachar'), findsNothing);
+    expect(find.text('Faltan marcar'), findsNothing);
     expect(rpc, 'stock_cargar_vehiculo');
     expect(find.textContaining('Vehículo cargado'), findsOneWidget);
   });

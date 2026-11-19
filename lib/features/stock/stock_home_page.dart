@@ -472,6 +472,58 @@ class _StockHomePageState extends State<StockHomePage> {
     );
   }
 
+  /// Poner, cambiar o sacar el preventista del viaje abierto (por si se confirmó sin elegirlo).
+  Future<void> _changeSeller() async {
+    final tripId = _vehicle.tripId;
+    if (tripId == null) return;
+    if (_sellerNames.isEmpty) {
+      _snack('No se pudo traer la lista de preventistas. Probá de nuevo.');
+      return;
+    }
+    Widget option(String value, String label) => SimpleDialogOption(
+      onPressed: () => Navigator.pop(context, value),
+      child: Row(
+        children: [
+          Icon(
+            (value.isEmpty ? null : value) == _vehicle.sellerId
+                ? Icons.radio_button_checked
+                : Icons.radio_button_unchecked,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(label)),
+        ],
+      ),
+    );
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('¿Con quién sale el vehículo?'),
+        children: [
+          for (final e in _sellerNames.entries) option(e.key, e.value),
+          option('', 'Nadie / reparto'),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    final sellerId = picked.isEmpty ? null : picked;
+    if (sellerId == _vehicle.sellerId) return;
+    try {
+      await _client.rpc(
+        'stock_viaje_preventista',
+        params: {'p_viaje_id': tripId, 'p_preventista_id': sellerId},
+      );
+      _snack(sellerId == null
+          ? 'Listo: el viaje quedó sin preventista.'
+          : 'Listo: el viaje sale con ${_sellerNames[sellerId]}.');
+      await _load();
+    } catch (error) {
+      _snack(isUncertainRequestError(error)
+          ? 'Sin señal: probá de nuevo cuando haya conexión.'
+          : stockErrorText(error));
+    }
+  }
+
   Widget _tripCard() {
     final open = _vehicle.tripOpen;
     final seller = _vehicle.sellerId == null ? null : _sellerNames[_vehicle.sellerId];
@@ -519,6 +571,12 @@ class _StockHomePageState extends State<StockHomePage> {
                     MaterialPageRoute(builder: (_) => VehicleLoadPage(client: widget.client)),
                   ),
                 ),
+                if (open)
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.person_outline),
+                    label: Text(seller == null || seller.isEmpty ? 'Elegir preventista' : 'Cambiar preventista'),
+                    onPressed: _changeSeller,
+                  ),
                 if (open)
                   FilledButton.icon(
                     icon: const Icon(Icons.flag_outlined),

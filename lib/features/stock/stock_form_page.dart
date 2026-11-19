@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/app_config.dart';
+import 'product_summary.dart';
 
 enum StockFormKind { count, load, unload, purchase, closeTrip }
 
@@ -65,6 +66,13 @@ class _StockFormPageState extends State<StockFormPage> {
   // teléfono hasta confirmar, aunque se cierre la pantalla.
   final _loaded = <String>{};
   bool _onlyPending = false;
+
+  /// Arriba solo queda la barra del avance; lo demás se abre con "Opciones".
+  bool _optionsOpen = true;
+  static const _zebra = Color(0xFFE6F1FB);
+  static const _zebraText = Color(0xFF0C447C);
+  static const _fluor = Color(0xFFFFF176);
+  static const _fluorEdge = Color(0xFFF2D600);
   String get _draftKey => appConfig.localPreferenceKey('carga_vehiculo_borrador');
 
   StockFormKind get _kind => widget.kind;
@@ -116,7 +124,10 @@ class _StockFormPageState extends State<StockFormPage> {
           if (known(e.key)) _controller(e.key).text = e.value.toString();
         }
         _loaded.addAll(loaded.where(known));
-        if (quantities.isNotEmpty) _onlyFilled = true;
+        if (quantities.isNotEmpty) {
+          _onlyFilled = true;
+          _optionsOpen = false;
+        }
       });
     } catch (_) {}
   }
@@ -212,6 +223,7 @@ class _StockFormPageState extends State<StockFormPage> {
         _controller(entry.key).text = formatQty(entry.value);
       }
       _onlyFilled = true;
+      if (_kind == StockFormKind.load) _optionsOpen = false;
     });
     _saveDraft();
   }
@@ -307,9 +319,9 @@ class _StockFormPageState extends State<StockFormPage> {
         final go = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Faltan tachar'),
+            title: const Text('Faltan marcar'),
             content: Text(
-              'Quedan $missing ${missing == 1 ? 'producto' : 'productos'} sin tachar. '
+              'Quedan $missing ${missing == 1 ? 'producto' : 'productos'} sin marcar. '
               '¿Confirmar la carga igual?',
             ),
             actions: [
@@ -466,6 +478,7 @@ class _StockFormPageState extends State<StockFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_kind == StockFormKind.load) return _buildLoad();
     final visible = _visible;
     final filled = _qty.values.where((c) => c.text.trim().isNotEmpty).length;
     return Scaffold(
@@ -531,22 +544,266 @@ class _StockFormPageState extends State<StockFormPage> {
           ],
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: FilledButton.icon(
-            onPressed: _saving ? null : _confirm,
-            icon: _saving
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.check),
-            label: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                _kind == StockFormKind.closeTrip
-                    ? 'CERRAR VIAJE'
-                    : 'CONFIRMAR ($filled ${filled == 1 ? 'producto' : 'productos'})',
+      bottomNavigationBar: _confirmBar(filled),
+    );
+  }
+
+  Widget _confirmBar(int filled) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: FilledButton.icon(
+        onPressed: _saving ? null : _confirm,
+        icon: _saving
+            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.check),
+        label: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            _kind == StockFormKind.closeTrip
+                ? 'CERRAR VIAJE'
+                : 'CONFIRMAR ($filled ${filled == 1 ? 'producto' : 'productos'})',
+          ),
+        ),
+      ),
+    ),
+  );
+
+  /// Cargar el vehículo: lista a pantalla completa como el resumen de productos, con el color
+  /// del stock del depósito y lo cargado resaltado en flúor (como el marcador sobre el papel).
+  Widget _buildLoad() {
+    final visible = _visible;
+    final status = _loadStatus();
+    final filled = _qty.values.where((c) => c.text.trim().isNotEmpty).length;
+    return Scaffold(
+      appBar: AppBar(title: Text(_title)),
+      body: DesktopForm(
+        child: Column(
+          children: [
+            _loadBar(),
+            if (_optionsOpen)
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.5),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(_help, style: const TextStyle(color: AppColors.gris)),
+                      const SizedBox(height: 8),
+                      ..._options(),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _search,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Buscar producto...',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          FilterChip(
+                            label: const Text('Solo con cantidad'),
+                            selected: _onlyFilled,
+                            onSelected: (v) => setState(() => _onlyFilled = v),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
+            const Divider(height: 1),
+            Expanded(
+              child: visible.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'No hay productos para mostrar. Abrí "Opciones" para buscar o sacar el filtro.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      itemCount: visible.length,
+                      itemBuilder: (context, index) => _loadRow(visible[index], index, status[visible[index].id]),
+                    ),
             ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _confirmBar(filled),
+    );
+  }
+
+  /// Si alcanza lo del depósito para lo que se va a cargar (abriendo cajas si hace falta).
+  Map<String, SummaryRow> _loadStatus() {
+    final lines = <SummaryLine>[];
+    for (final item in widget.items) {
+      final q = parseQty(_qty[item.id]?.text ?? '');
+      if (q != null && q > 0) lines.add(SummaryLine(item.id, item.name, q));
+    }
+    if (lines.isEmpty) return const {};
+    final deposit = {for (final i in widget.items) i.id: i.depositOnly()};
+    return {for (final r in evaluateSummary(lines, deposit)) r.line.productId!: r};
+  }
+
+  /// Barra fija: "3 de 9 cargados", "Falta cargar", compartir y "Opciones".
+  Widget _loadBar() {
+    final filled = widget.items.where((i) => _filled(i.id)).toList();
+    final done = filled.where((i) => _loaded.contains(i.id)).length;
+    final complete = filled.isNotEmpty && done == filled.length;
+    return Container(
+      color: const Color(0xFFF4F4F2),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    filled.isEmpty ? 'Escribí qué cargar' : '$done de ${filled.length} cargados',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: complete ? AppColors.verde : null,
+                    ),
+                  ),
+                ),
+                if (filled.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  LinearProgressIndicator(
+                    value: done / filled.length,
+                    minHeight: 4,
+                    color: complete ? AppColors.verde : _fluorEdge,
+                    backgroundColor: Colors.black12,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (filled.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            FilterChip(
+              visualDensity: VisualDensity.compact,
+              label: const Text('Falta cargar'),
+              selected: _onlyPending,
+              onSelected: (v) => setState(() => _onlyPending = v),
+            ),
+            IconButton(
+              tooltip: 'Compartir lista',
+              icon: const Icon(Icons.share),
+              onPressed: _sharePending,
+            ),
+          ],
+          TextButton.icon(
+            icon: Icon(_optionsOpen ? Icons.expand_less : Icons.tune),
+            label: const Text('Opciones'),
+            onPressed: () => setState(() {
+              _optionsOpen = !_optionsOpen;
+              if (!_optionsOpen && _search.text.isNotEmpty) _search.clear();
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _loadRow(StockItem item, int index, SummaryRow? st) {
+    final closed = item.parentId == null
+        ? null
+        : widget.items.where((i) => i.id == item.parentId).firstOrNull;
+    final loaded = _loaded.contains(item.id);
+    final filled = _filled(item.id);
+    final zebra = !loaded && index.isOdd;
+    final textColor = zebra ? _zebraText : Colors.black87;
+    String have(double v) => formatQty(v < 0 ? 0 : v);
+    final badge = st == null
+        ? null
+        : switch (st.state) {
+            SummaryState.enough => 'Hay ${have(st.have ?? 0)}',
+            SummaryState.open => 'Abrir ${formatQty(st.openParents)} × ${st.parentName}',
+            SummaryState.missing => st.openParents > 0
+                ? 'Abrir ${formatQty(st.openParents)} × ${st.parentName} · faltan ${formatQty(st.missing)}'
+                : 'Faltan ${formatQty(st.missing)} · hay ${have(st.have ?? 0)}',
+            SummaryState.onDemand => 'A pedido',
+            SummaryState.unknown => null,
+          };
+    final info = !item.controlled
+        ? 'A pedido'
+        : [
+            'Depósito ${formatQty(item.deposit)}',
+            if (closed != null && closed.controlled) '${closed.name}: ${formatQty(closed.deposit)}',
+          ].join(' · ');
+    return Material(
+      color: loaded ? _fluor : (zebra ? _zebra : Colors.white),
+      child: InkWell(
+        onTap: filled || loaded ? () => _toggleLoaded(item.id) : null,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(color: loaded ? _fluorEdge : Colors.transparent, width: 6),
+            ),
+          ),
+          padding: EdgeInsets.fromLTRB(closed != null ? 18 : 0, 3, 10, 3),
+          child: Row(
+            children: [
+              Checkbox(
+                value: loaded,
+                visualDensity: VisualDensity.compact,
+                onChanged: filled || loaded ? (_) => _toggleLoaded(item.id) : null,
+              ),
+              if (closed != null)
+                const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: Icon(Icons.subdirectory_arrow_right, size: 18, color: AppColors.gris),
+                ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.name, style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
+                    const SizedBox(height: 2),
+                    if (badge != null && st != null)
+                      summaryBadge(badge, st.state)
+                    else
+                      Text(info, style: TextStyle(fontSize: 12, color: zebra ? _zebraText : AppColors.gris)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 64,
+                child: TextField(
+                  key: ValueKey('cantidad-${item.id}'),
+                  controller: _controller(item.id),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    hintText: 'Cant.',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) {
+                    setState(() {});
+                    _saveDraft();
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -619,7 +876,6 @@ class _StockFormPageState extends State<StockFormPage> {
               ),
             ],
           ),
-          _loadProgress(),
         ];
       case StockFormKind.unload:
         return [
@@ -645,40 +901,6 @@ class _StockFormPageState extends State<StockFormPage> {
     }
   }
 
-  /// "18 de 30 cargados", "Falta cargar" y "Compartir lista".
-  Widget _loadProgress() {
-    final filled = widget.items.where((i) => _filled(i.id)).toList();
-    if (filled.isEmpty) return const SizedBox.shrink();
-    final done = filled.where((i) => _loaded.contains(i.id)).length;
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text(
-            '$done de ${filled.length} cargados',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: done == filled.length ? AppColors.verde : null,
-            ),
-          ),
-          FilterChip(
-            label: const Text('Falta cargar'),
-            selected: _onlyPending,
-            onSelected: (v) => setState(() => _onlyPending = v),
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.share, size: 18),
-            label: const Text('Compartir lista'),
-            onPressed: _sharePending,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _row(StockItem item) {
     final closed = item.parentId == null
         ? null
@@ -697,13 +919,6 @@ class _StockFormPageState extends State<StockFormPage> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            if (_kind == StockFormKind.load)
-              Checkbox(
-                value: _loaded.contains(item.id),
-                onChanged: _filled(item.id) || _loaded.contains(item.id)
-                    ? (_) => _toggleLoaded(item.id)
-                    : null,
-              ),
             if (closed != null)
               const Padding(
                 padding: EdgeInsets.only(right: 6),
@@ -715,11 +930,7 @@ class _StockFormPageState extends State<StockFormPage> {
                 children: [
                   Text(
                     item.name,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: _loaded.contains(item.id) ? AppColors.gris : null,
-                      decoration: _loaded.contains(item.id) ? TextDecoration.lineThrough : null,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   Text(
                     _kind == StockFormKind.closeTrip && item.controlled

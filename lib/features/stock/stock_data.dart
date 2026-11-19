@@ -121,6 +121,21 @@ class StockItem {
   double get total => deposit + vehicle;
 
   bool get negative => controlled && (deposit < 0 || vehicle < 0);
+
+  /// Lo mismo, pero contando solo el depósito (para ver si alcanza al cargar el vehículo).
+  StockItem depositOnly() => StockItem(
+    id: id,
+    name: name,
+    code: code,
+    category: category,
+    photo: photo,
+    controlled: controlled,
+    deposit: deposit,
+    vehicle: 0,
+    parentId: parentId,
+    unitsPerParent: unitsPerParent,
+    cost: cost,
+  );
 }
 
 Future<List<StockItem>> fetchStockItems(SupabaseClient client) async {

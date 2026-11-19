@@ -35,6 +35,7 @@
 | `stock_contar(id, 'deposito_alberdi'\|'vehiculo', items, fecha)` | Deja lo contado; pasa los productos a "con stock"; devuelve diferencias. |
 | `stock_marcar_a_pedido(producto)` | Vuelve el producto a "a pedido". |
 | `stock_cargar_vehiculo(id, items, fecha, preventista?)` | Depósito → vehículo. Abre el viaje si no hay uno abierto. |
+| `stock_viaje_preventista(viaje, preventista?)` | Pone, cambia o saca el preventista del viaje abierto (solo informa). |
 | `stock_bajar_vehiculo(id, items, fecha)` | Vehículo → depósito. |
 | `stock_registrar_compra(id, ubicación, items con costo_unitario, fecha, proveedor?, actualizar_costo?)` | Ingreso de mercadería; un producto "a pedido" pasa a llevar stock con lo comprado (`20261122010000`). |
 | `stock_cerrar_viaje(id, viaje, conteo?, bajar, fecha)` | Cuenta lo que sobró (debe incluir todo lo de arriba), diferencias, baja al depósito y cierra. |
@@ -57,9 +58,14 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   N", "La última vez llevó N" primero, y antes de ver el pedido "¿Ofreciste todo?" con lo del
   vehículo que no está en la venta (una vez por venta).
 - Sin señal, las operaciones de stock quedan en "Pendientes de enviar" (mismo id, hora real).
-- **Cargar vehículo como lista para tachar** (reemplaza el papel): casilla por producto (tachado),
-  "N de M cargados", filtro "Falta cargar", "Compartir lista" (lo que falta, por WhatsApp). Queda
-  guardada en el teléfono hasta confirmar; al confirmar avisa si quedan sin tachar.
+- **Cargar vehículo como lista para marcar** (reemplaza el papel): pantalla completa con una barra
+  fija ("N de M cargados", "Falta cargar", compartir por WhatsApp, "Opciones" con con quién sale,
+  propuestas y búsqueda). Filas alternadas como el resumen, con el color del stock del depósito
+  (verde "Hay N", rojo "Faltan X · hay Y", violeta "Abrir N × caja", gris "A pedido"). Lo cargado
+  queda resaltado en flúor (como el marcador sobre el papel); se marca tocando cualquier parte de
+  la fila. Queda guardada en el teléfono hasta confirmar; al confirmar avisa si quedan sin marcar.
+- **Preventista del viaje**: con el viaje abierto, "Elegir/Cambiar preventista" en la tarjeta del
+  viaje (por si se confirmó la carga sin elegirlo).
 - "Anotar compra" también desde Gestión de reparto (entra al vehículo) y con el costo actual
   precargado (si se pagó lo mismo, no hay que escribirlo).
 - Se quitó la pantalla vieja de Stock V2 (`ENABLE_STOCK`).

@@ -108,6 +108,12 @@ do $$ begin perform stock_bajar_vehiculo(gen_random_uuid(), jsonb_build_array(
   jsonb_build_object('producto_id',current_setting('e.pa'),'cantidad',1)), now() - interval '80 hours'); raise exception 'debió fallar';
 exception when others then if sqlerrm not like 'La operación tiene más de 72 horas%' then raise; end if; end $$;
 
+-- 7b) Cambiar el preventista del viaje abierto (sacarlo y volver a ponerlo).
+select stock_viaje_preventista(:'viaje', null) as p1 \gset
+select preventista_id is null as sinprev from viajes_vehiculo where id=:'viaje' \gset
+select stock_viaje_preventista(:'viaje', :'prev') as p2 \gset
+insert into r select 'preventista', :'sinprev' and (select preventista_id from viajes_vehiculo where id=:'viaje')=:'prev'::uuid;
+
 -- 8) Cerrar el viaje: el conteo tiene que incluir todo lo de arriba; muestra diferencias y baja.
 do $$ begin perform stock_cerrar_viaje(gen_random_uuid(), (select id from viajes_vehiculo where estado='abierto'),
   jsonb_build_array(jsonb_build_object('producto_id',current_setting('e.pa'),'cantidad',3)), true, now()); raise exception 'debió fallar';
@@ -122,6 +128,10 @@ insert into r select 'cierre', jsonb_array_length(:'r8'::jsonb->'diferencias')=1
   and (select cantidad from stock_actual where ubicacion_id=:'dep' and producto_id=:'pa')=16
   and (select estado from viajes_vehiculo where id=:'viaje')='cerrado';
 
+do $$ begin perform stock_viaje_preventista((select id from viajes_vehiculo order by abierto_at desc limit 1), null);
+  raise exception 'debió fallar';
+exception when others then if sqlerrm <> 'El viaje ya está cerrado' then raise; end if; end $$;
+
 -- 9) Sin viaje abierto la venta directa no queda en ningún viaje; "a pedido" deja de mover stock.
 select set_config('request.jwt.claim.sub', :'prev', true);
 select crear_pedido_sin_conexion(gen_random_uuid(), :'cli', 'normal', 'venta_directa', '', current_date,
@@ -135,7 +145,7 @@ insert into r select 'fin', (select viaje_id from pedidos where id=:'v4') is nul
   and (select count(*) from stock_estado())>0;
 reset role;
 select coalesce(string_agg(paso, ', ') filter (where not ok), '') as fallas,
-  bool_and(ok) and count(*) = 8 as todo_ok from r \gset
+  bool_and(ok) and count(*) = 9 as todo_ok from r \gset
 \if :todo_ok \else \echo 'FALLA en:' :'fallas' \quit \endif
 rollback;
 \echo ESCENARIO_OK

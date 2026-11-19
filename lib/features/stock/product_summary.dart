@@ -368,17 +368,20 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
     );
   }
 
-  Widget _badge(String text, SummaryState state) {
-    final (bg, fg) = switch (state) {
-      SummaryState.enough => (const Color(0xFFEAF3DE), const Color(0xFF27500A)),
-      SummaryState.missing => (const Color(0xFFFCEBEB), const Color(0xFF791F1F)),
-      SummaryState.open => (const Color(0xFFEEEDFE), const Color(0xFF3C3489)),
-      _ => (const Color(0xFFF1EFE8), const Color(0xFF444441)),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w600)),
-    );
-  }
+  Widget _badge(String text, SummaryState state) => summaryBadge(text, state);
+}
+
+/// Etiqueta de color: verde alcanza, rojo falta, violeta abrir, gris a pedido.
+Widget summaryBadge(String text, SummaryState state) {
+  final (bg, fg) = switch (state) {
+    SummaryState.enough => (const Color(0xFFEAF3DE), const Color(0xFF27500A)),
+    SummaryState.missing => (const Color(0xFFFCEBEB), const Color(0xFF791F1F)),
+    SummaryState.open => (const Color(0xFFEEEDFE), const Color(0xFF3C3489)),
+    _ => (const Color(0xFFF1EFE8), const Color(0xFF444441)),
+  };
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+    child: Text(text, style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w600)),
+  );
 }
