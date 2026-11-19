@@ -35,6 +35,7 @@ import 'features/home/home_menu.dart';
 import 'features/stock/stock_home_page.dart';
 import 'features/stock/vehicle_load_page.dart';
 import 'features/orders/finalization_request.dart';
+import 'features/finance/finance_home_page.dart';
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 final _localAuthentication = LocalAuthentication();
@@ -671,6 +672,7 @@ class _HomePageState extends State<HomePage> {
                 HomeSection(
                   title: 'ADMINISTRACIÓN',
                   actions: [
+                    HomeAction(Icons.savings_outlined, 'Plata del negocio', () => _abrir(const FinanceHomePage())),
                     HomeAction(Icons.account_balance_wallet_outlined, 'Saldos', () => _abrir(const BalancesPage())),
                     HomeAction(Icons.admin_panel_settings_outlined, 'Administración', () => _abrir(const AdminPage())),
                   ],

@@ -10,6 +10,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/app_config.dart';
 import 'product_summary.dart';
+import '../finance/finance_data.dart';
+import '../finance/finance_forms.dart' show isoDate;
 
 enum StockFormKind { count, load, unload, purchase, closeTrip }
 
@@ -58,6 +60,11 @@ class _StockFormPageState extends State<StockFormPage> {
   bool _allProducts = false;
   bool _unloadAll = false;
   bool _updateCost = false;
+
+  // Compra: cómo se pagó (va a "Plata del negocio"). "nada" = no anotar el pago.
+  String _payWith = efectivo;
+  DateTime _due = DateTime.now().add(const Duration(days: 15));
+  String? _payNote;
   bool _saving = false;
   String? _sellerId;
   List<StockRow> _sellers = const [];
@@ -493,9 +500,56 @@ class _StockFormPageState extends State<StockFormPage> {
     // Sin la ruedita girando detrás del resultado.
     setState(() => _saving = false);
     if (_kind == StockFormKind.load) await _clearDraft();
+    if (_kind == StockFormKind.purchase) await _registerPayment(total);
     if (!mounted) return;
     await _showResult(outcome.result);
     if (mounted) Navigator.of(context).pop(true);
+  }
+
+  /// La compra ya quedó en el stock: ahora el pago (si falla, la compra igual queda).
+  Future<void> _registerPayment(double total) async {
+    if (_payWith == 'nada') return;
+    if (total <= 0) {
+      _payNote = 'El pago no se anotó: faltan los costos. Anotalo en "Plata del negocio".';
+      return;
+    }
+    final supplier = _supplier.text.trim();
+    final (rpc, args) = _payWith == 'a_pagar'
+        ? (
+            'fin_deuda',
+            <String, dynamic>{
+              'p_proveedor': supplier.isEmpty ? 'Proveedor' : supplier,
+              'p_importe': total,
+              'p_vence': isoDate(_due),
+              'p_descripcion': 'Compra de mercadería',
+            },
+          )
+        : (
+            'fin_movimiento',
+            <String, dynamic>{
+              'p_tipo': 'compra',
+              'p_cuenta': _payWith,
+              'p_importe': total,
+              'p_categoria': 'Mercadería',
+              'p_descripcion': supplier.isEmpty ? null : supplier,
+            },
+          );
+    try {
+      final outcome = await runFinOp(
+        widget.client,
+        rpc: rpc,
+        args: args,
+        description: _payWith == 'a_pagar' ? 'A pagar · $supplier' : 'Pago de compra',
+        total: total,
+        runner: widget.runner,
+      );
+      _payNote = _payWith == 'a_pagar'
+          ? 'Queda a pagar ${pesos(total)} (vence el ${diaMes(_due)}).'
+          : 'Pago anotado: ${pesos(total)} en ${cuentaNombre(_payWith).toLowerCase()}'
+                '${outcome.savedOffline ? ' (se envía al volver la señal)' : ''}.';
+    } catch (error) {
+      _payNote = 'El pago no se anotó: ${stockErrorText(error)}';
+    }
   }
 
   Future<void> _showResult(Map<String, dynamic>? result) async {
@@ -505,6 +559,7 @@ class _StockFormPageState extends State<StockFormPage> {
         'No hay señal: quedó guardado en el teléfono y se envía solo cuando vuelva la conexión. '
         'Lo ves en "Pendientes de enviar".',
       );
+      if (_kind == StockFormKind.purchase && _payNote != null) lines.add(_payNote!);
     } else {
       switch (_kind) {
         case StockFormKind.count:
@@ -534,6 +589,7 @@ class _StockFormPageState extends State<StockFormPage> {
           }
           final pasaron = stockNum(result['nuevos_con_stock']).round();
           if (pasaron > 0) lines.add('$pasaron productos "a pedido" pasaron a llevar stock.');
+          if (_payNote != null) lines.add(_payNote!);
         case StockFormKind.closeTrip:
           final diffs = (result['diferencias'] as List? ?? const []);
           lines.add(diffs.isEmpty ? 'Viaje cerrado: todo coincide.' : 'Viaje cerrado. Diferencias:');
@@ -965,6 +1021,36 @@ class _StockFormPageState extends State<StockFormPage> {
               value: _updateCost,
               onChanged: (v) => setState(() => _updateCost = v),
             ),
+            const Text('¿Cómo pagaste?', style: TextStyle(color: AppColors.gris)),
+            const SizedBox(height: 4),
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: efectivo, label: Text('Efectivo')),
+                ButtonSegment(value: billetera, label: Text('Billetera')),
+                ButtonSegment(value: 'a_pagar', label: Text('A pagar')),
+                ButtonSegment(value: 'nada', label: Text('No anotar')),
+              ],
+              selected: {_payWith},
+              onSelectionChanged: (v) => setState(() => _payWith = v.first),
+            ),
+            if (_payWith == 'a_pagar')
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.event),
+                  label: Text('Vence el ${diaMes(_due)}'),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _due,
+                      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                      lastDate: DateTime.now().add(const Duration(days: 120)),
+                    );
+                    if (picked != null) setState(() => _due = picked);
+                  },
+                ),
+              ),
           ],
         ];
       case StockFormKind.load:
