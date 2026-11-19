@@ -13,6 +13,8 @@ delete from stock_movimientos where producto_id in (:'pa',:'pb',:'pc');
 delete from stock_actual where producto_id in (:'pa',:'pb',:'pc');
 update productos set control_stock=false, fracciona_de=null, unidades_por_origen=null where id in (:'pa',:'pb',:'pc');
 update productos set fracciona_de=null, unidades_por_origen=null where fracciona_de in (:'pa',:'pb',:'pc');
+-- Sin viaje abierto (en TESTING puede haber uno de pruebas a mano): el paso 3 lo necesita.
+update viajes_vehiculo set estado='cerrado', cerrado_at=clock_timestamp() where estado='abierto';
 set session_replication_role = origin;
 create temp table r(paso text, ok boolean) on commit drop;
 grant all on r to authenticated;
