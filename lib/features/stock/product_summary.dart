@@ -309,7 +309,7 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
   Widget build(BuildContext context) {
     final stock = _stock;
     final free = widget.subtractCommitted && stock != null && _committed.isNotEmpty;
-    final all = evaluateSummary(widget.lines, free ? availableAfter(stock!, _committed) : stock);
+    final all = evaluateSummary(widget.lines, stock != null && free ? availableAfter(stock, _committed) : stock);
     final withStock = _stock != null;
     int count(SummaryState s) => all.where((r) => r.state == s).length;
     final rows = _onlyMissing ? all.where((r) => r.state != SummaryState.enough).toList() : all;
