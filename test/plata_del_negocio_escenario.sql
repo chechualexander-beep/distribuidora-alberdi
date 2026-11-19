@@ -9,7 +9,7 @@ select id as ped from pedidos order by created_at limit 1 \gset
 -- Partir de cero (en TESTING puede haber una foto inicial de pruebas a mano).
 set session_replication_role = replica;
 delete from fin_arqueos; delete from fin_movimientos; delete from fin_deudas; delete from fin_gastos_fijos;
-update fin_config set inicio = null;
+update fin_config set inicio = null where id;
 -- Un cobro de antes de la foto (no cuenta) y dos de después.
 insert into cobros_cliente(cliente_id, importe, medio_pago, fecha_pago) values
  (:'cli', 777, 'Efectivo', now() - interval '3 hours'),
