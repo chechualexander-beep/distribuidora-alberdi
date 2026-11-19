@@ -33,12 +33,25 @@ Windows: menú).
 
 Prueba: `test/plata_del_negocio_escenario.sql`, `test/finance_test.dart`.
 
+## Etapa 2 — Tablero del mes (1.9.0)
+
+Migración `20261127010000_tablero_del_mes`. Pantalla "Tablero del mes" (celular: Administración;
+Windows: menú; también desde "Plata del negocio").
+
+- **Resultado**: ventas entregadas − costo − comisiones ± notas de crédito = ganancia comercial (de
+  `resumen_comercial`, igual que el "Resumen comercial"); − gastos del negocio = ganancia del
+  negocio; − para la casa = quedó para el negocio. Si es negativo: "salió del capital". Gastos y casa
+  se cuentan desde la foto inicial. Mes en curso: "al día N" y ritmo de ventas.
+- **¿Cuánto hay que vender?**: (gastos del negocio + casa) / margen.
+- **Capital del negocio**: plata + mercadería al costo (productos con stock) + lo que deben los
+  clientes − saldo a favor de clientes − proveedores a pagar. Una foto por día (`fin_capital_fotos`)
+  al abrir el tablero o la plata; se compara con la última foto antes del mes.
+- **Ventas de los últimos 12 meses** (para la categoría del monotributo, con el contador).
+
+Prueba: `test/tablero_del_mes_escenario.sql`, `test/finance_test.dart`.
+
 ## Próximas etapas
 
-2. **Tablero del mes**: ventas − costo de mercadería − comisiones − gastos = ganancia; ganancia
-   contra plata para la casa (aviso "salió del capital"); capital del negocio mes a mes (plata +
-   mercadería al costo + lo que deben los clientes − proveedores); total vendido en 12 meses (para
-   elegir la categoría de monotributo con el contador).
 3. **Crecer**: margen por producto, categoría y cliente; punto de equilibrio; días de cobro;
    rotación; fondo de reserva.
 4. **Hogar con detalle** (más adelante, si hace falta): presupuesto semanal y en qué se gasta.

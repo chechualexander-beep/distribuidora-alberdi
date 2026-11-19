@@ -8,6 +8,7 @@ import '../invoicing/atomic_invoice.dart' show newInvoiceRequestId;
 import '../stock/stock_data.dart';
 import 'finance_data.dart';
 import 'finance_forms.dart';
+import 'finance_dashboard_page.dart';
 
 /// "Plata del negocio": cuánto hay, cuánto está apartado para los gastos fijos, qué se debe a
 /// proveedores y cuánto queda para mercadería. Solo administración.
@@ -57,6 +58,8 @@ class _FinanceHomePageState extends State<FinanceHomePage> {
     });
     try {
       final state = await fetchFinState(_client);
+      // Foto del capital de hoy, para comparar mes a mes en el tablero.
+      if (state.started) saveCapitalSnapshot(_client);
       if (!mounted) return;
       setState(() {
         _state = state;
@@ -198,6 +201,14 @@ class _FinanceHomePageState extends State<FinanceHomePage> {
       appBar: AppBar(
         title: const Text('Plata del negocio'),
         actions: [
+          if (state != null && state.started)
+            IconButton(
+              tooltip: 'Tablero del mes',
+              icon: const Icon(Icons.insights),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => FinanceDashboardPage(client: widget.client)),
+              ),
+            ),
           if (state != null && state.started)
             IconButton(
               tooltip: 'Movimientos',

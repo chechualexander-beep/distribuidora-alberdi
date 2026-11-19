@@ -1,3 +1,4 @@
+import 'package:distribuidora_alberdi/features/finance/finance_dashboard_page.dart';
 import 'package:distribuidora_alberdi/features/finance/finance_data.dart';
 import 'package:distribuidora_alberdi/features/finance/finance_home_page.dart';
 import 'package:distribuidora_alberdi/features/stock/stock_data.dart';
@@ -170,5 +171,33 @@ void main() {
     expect(pago!['p_cuenta'], 'billetera');
     expect(pago!['p_importe'], 4500);
     expect(find.textContaining('Pago anotado: \$ 4.500 en billetera virtual'), findsOneWidget);
+  });
+
+  testWidgets('Tablero: ganancia, lo de la casa, cuánto vender y capital', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final d = Dashboard.fromJson({
+      'mes': '2026-11-01', 'actual': true, 'dia': 15, 'dias': 30,
+      'ventas': 12000000, 'costo': 9000000, 'comisiones': 350000, 'notas_credito': 0,
+      'ganancia_comercial': 2650000, 'margen': 0.22,
+      'gastos_negocio': 900000, 'ganancia_negocio': 1750000, 'hogar': 2110000, 'quedo': -360000,
+      'plata_desde': '2026-11-01T03:00:00Z', 'plata_parcial': false,
+      'ventas_necesarias': 13636363.64, 'ventas_12_meses': 27849600,
+      'capital': {'fecha': '2026-11-15', 'plata': 1200000, 'mercaderia': 6500000, 'clientes': 2300000,
+        'a_favor': 0, 'proveedores': 1100000, 'total': 8900000, 'productos_con_stock': 80,
+        'productos_sin_costo': 0, 'plata_iniciada': true},
+      'capital_inicio': {'fecha': '2026-10-31', 'plata': 0, 'mercaderia': 0, 'clientes': 0, 'a_favor': 0,
+        'proveedores': 0, 'total': 9260000},
+      'capital_cierre': null,
+    });
+    expect(d.capitalCierre, isNull);
+    expect(d.capital!.total, 8900000);
+    await tester.pumpWidget(MaterialApp(home: FinanceDashboardPage(initial: d)));
+    expect(find.text('Resultado · al día 15 de 30'), findsOneWidget);
+    expect(find.text('−\$ 360.000'), findsOneWidget);
+    expect(find.textContaining('Salió del capital'), findsOneWidget);
+    expect(find.textContaining('hay que vender \$ 13.636.363,64'), findsOneWidget);
+    expect(find.text('El negocio se achicó \$ 360.000.'), findsOneWidget);
+    expect(find.text('\$ 27.849.600'), findsOneWidget);
   });
 }
