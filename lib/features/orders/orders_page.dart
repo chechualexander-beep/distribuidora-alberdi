@@ -629,7 +629,8 @@ tipo_operacion,
 
   /// Resumen de productos. Con [alto] se desplaza adentro (Windows); sin él se ve completo.
   Widget _tarjetaResumen(List<SummaryLine> lineas, {double? alto}) {
-    final tabla = ProductSummaryTable(lines: lineas);
+    // Pedidos nuevos: lo ya facturado para el reparto no está libre.
+    final tabla = ProductSummaryTable(lines: lineas, subtractCommitted: true);
     return Card(
       margin: alto == null ? EdgeInsets.zero : const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: ExpansionTile(

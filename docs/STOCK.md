@@ -67,6 +67,13 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   Al tocar una cantidad queda seleccionada (se escribe la nueva directo); si se deja vacía vuelve
   la del pedido ("Pedidos: N" muestra la original si se cambió); 0 = no se carga. Las filas no
   desaparecen de "Solo con cantidad" mientras se editan.
+- **"Pedidos a entregar" propone solo lo que falta subir**: lo que piden los pedidos facturados sin
+  entregar menos lo que ya está en el vehículo (los sueltos se cubren con cajas que ya estén arriba;
+  los "a pedido" van completos). Sirve para los pedidos que llegan fuera de horario. "PROPONER TODO"
+  vuelve a la lista completa.
+- **Resumen de pedidos nuevos (sin facturar) contra lo libre**: lo que hay menos lo comprometido
+  (pedidos facturados sin entregar y ventas directas del viaje sin entregar), con "N para el reparto".
+  El resumen de Gestión de reparto sigue comparando contra todo lo que hay.
 - **Preventista del viaje**: con el viaje abierto, "Elegir/Cambiar preventista" en la tarjeta del
   viaje (por si se confirmó la carga sin elegirlo).
 - "Anotar compra" también desde Gestión de reparto (entra al vehículo) y con el costo actual

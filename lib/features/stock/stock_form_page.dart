@@ -293,6 +293,33 @@ class _StockFormPageState extends State<StockFormPage> {
     }
   }
 
+  /// "Pedidos a entregar": solo lo que falta subir (lo demás ya está arriba del vehículo).
+  Future<void> _proposeForDeliveries() async {
+    try {
+      final all = await fetchPendingDeliveries(_client);
+      if (!mounted) return;
+      if (all.isEmpty) {
+        _snack('No hay pedidos facturados para entregar.');
+        return;
+      }
+      final missing = stillToLoad(all, widget.items);
+      final partial = missing.length != all.length || missing.entries.any((e) => e.value < (all[e.key] ?? 0));
+      if (missing.isNotEmpty) _fill(missing);
+      if (!partial) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          content: Text(missing.isEmpty
+              ? 'Ya está todo arriba del vehículo para los pedidos a entregar.'
+              : 'Propuesto solo lo que falta subir: lo demás ya está en el vehículo.'),
+          action: SnackBarAction(label: 'PROPONER TODO', onPressed: () => _fill(all)),
+        ),
+      );
+    } catch (error) {
+      _snack(stockErrorText(error));
+    }
+  }
+
   List<StockItem> get _visible {
     final text = _normalize(_search.text);
     final base = widget.items.where((item) {
@@ -948,7 +975,7 @@ class _StockFormPageState extends State<StockFormPage> {
               OutlinedButton.icon(
                 icon: const Icon(Icons.receipt_long_outlined),
                 label: const Text('Pedidos a entregar'),
-                onPressed: () => _propose(fetchPendingDeliveries, 'No hay pedidos facturados para entregar.'),
+                onPressed: _proposeForDeliveries,
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.replay),

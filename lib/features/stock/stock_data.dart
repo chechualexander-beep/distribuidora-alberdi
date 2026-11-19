@@ -122,8 +122,8 @@ class StockItem {
 
   bool get negative => controlled && (deposit < 0 || vehicle < 0);
 
-  /// Lo mismo, pero contando solo el depósito (para ver si alcanza al cargar el vehículo).
-  StockItem depositOnly() => StockItem(
+  /// Lo mismo con otras cantidades (para comparar contra una parte del stock).
+  StockItem withStock({required double deposit, required double vehicle}) => StockItem(
     id: id,
     name: name,
     code: code,
@@ -131,11 +131,17 @@ class StockItem {
     photo: photo,
     controlled: controlled,
     deposit: deposit,
-    vehicle: 0,
+    vehicle: vehicle,
     parentId: parentId,
     unitsPerParent: unitsPerParent,
     cost: cost,
   );
+
+  /// Solo el depósito (para ver si alcanza al cargar el vehículo).
+  StockItem depositOnly() => withStock(deposit: deposit, vehicle: 0);
+
+  /// Solo lo que ya está arriba del vehículo.
+  StockItem vehicleOnly() => withStock(deposit: 0, vehicle: vehicle);
 }
 
 Future<List<StockItem>> fetchStockItems(SupabaseClient client) async {
@@ -232,6 +238,22 @@ Future<Map<String, double>> fetchPendingDeliveries(SupabaseClient client) async 
     final id = r['producto_id'].toString();
     totals[id] = (totals[id] ?? 0) + q;
   }
+  return totals;
+}
+
+/// Lo comprometido y todavía sin entregar: pedidos facturados del reparto y ventas directas del
+/// viaje. Si no se puede consultar (sin permiso o sin señal), lo que se pudo.
+Future<Map<String, double>> fetchCommitted(SupabaseClient client) async {
+  final totals = <String, double>{};
+  try {
+    totals.addAll(await fetchPendingDeliveries(client));
+  } catch (_) {}
+  try {
+    final vehicle = await fetchVehicleStock(client);
+    for (final e in vehicle.lines.entries) {
+      if (e.value.committed > 0) totals[e.key] = (totals[e.key] ?? 0) + e.value.committed;
+    }
+  } catch (_) {}
   return totals;
 }
 

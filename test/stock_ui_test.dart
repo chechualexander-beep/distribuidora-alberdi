@@ -156,6 +156,49 @@ void main() {
     expect(find.text('Lista de compras'), findsOneWidget, reason: 'con stock cargado (vacío) se ofrece');
   });
 
+  test('pedidos nuevos: se compara con lo libre (sin lo facturado para el reparto)', () {
+    final caja = StockItem(id: 'caja', name: 'Caja x 5', code: '', category: 'x', photo: null,
+        controlled: true, deposit: 2, vehicle: 0);
+    final suelto = StockItem(id: 's', name: 'Suelto', code: '', category: 'x', photo: null,
+        controlled: true, deposit: 1, vehicle: 0, parentId: 'caja', unitsPerParent: 5);
+    final libre = availableAfter({'a': item('a', deposit: 6, vehicle: 4), 'caja': caja, 's': suelto},
+        {'a': 8, 's': 3});
+    expect(libre['a']!.total, 2);
+    expect(libre['caja']!.total, 1, reason: 'faltaban 2 sueltos: se abre 1 caja');
+    expect(libre['s']!.total, 3, reason: '1 + 5 de la caja − 3 comprometidos');
+  });
+
+  test('cargar vehículo: "Pedidos a entregar" propone solo lo que falta subir', () {
+    final caja = StockItem(id: 'caja', name: 'Caja x 5', code: '', category: 'x', photo: null,
+        controlled: true, deposit: 5, vehicle: 1);
+    final suelto = StockItem(id: 's', name: 'Suelto', code: '', category: 'x', photo: null,
+        controlled: true, deposit: 0, vehicle: 0, parentId: 'caja', unitsPerParent: 5);
+    final items = [item('a', vehicle: 4), item('b', vehicle: 0), item('c', controlled: false), caja, suelto];
+    expect(stillToLoad({'a': 6, 'b': 2, 'c': 1}, items), {'a': 2, 'b': 2, 'c': 1});
+    expect(stillToLoad({'a': 3}, items), isEmpty, reason: 'ya está arriba');
+    expect(stillToLoad({'s': 3}, items), isEmpty, reason: 'se abre la caja que ya está arriba');
+  });
+
+  testWidgets('resumen de pedidos nuevos: libres y "para el reparto"', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ProductSummaryTable(
+              stock: {'a': item('a', deposit: 6, vehicle: 4)},
+              committed: const {'a': 8},
+              subtractCommitted: true,
+              lines: const [SummaryLine('a', 'Producto a', 3)],
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Libres'), findsOneWidget);
+    expect(find.text('8 para el reparto'), findsOneWidget);
+    expect(find.text('Faltan 1'), findsOneWidget);
+  });
+
   test('lo que lleva el vehículo: disponible = arriba − vendido sin entregar', () {
     final v = VehicleStock.fromJson({
       'viaje': {'id': 'v1', 'preventista_id': 'mary', 'abierto_at': '2026-11-17T12:00:00Z'},

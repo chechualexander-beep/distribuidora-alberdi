@@ -130,6 +130,57 @@ List<SummaryRow> evaluateSummary(List<SummaryLine> lines, Map<String, StockItem>
   return rows;
 }
 
+/// Stock libre: lo que hay menos lo comprometido (pedidos facturados sin entregar). Si los
+/// sueltos comprometidos no alcanzan, se descuentan cajas cerradas del producto de origen.
+Map<String, StockItem> availableAfter(Map<String, StockItem> stock, Map<String, double> committed) {
+  final left = {for (final e in stock.entries) e.key: e.value.total};
+  for (final e in committed.entries) {
+    final item = stock[e.key];
+    if (item == null || !item.controlled || e.value <= 0) continue;
+    final own = item.total > 0 ? item.total : 0.0;
+    final parentId = item.parentId;
+    final parent = parentId == null ? null : stock[parentId];
+    final units = item.unitsPerParent ?? 0;
+    final short = e.value - own;
+    if (short > 0 && parent != null && parent.controlled && units > 0) {
+      final bags = (short / units).ceilToDouble();
+      left[parentId!] = left[parentId]! - bags;
+      left[e.key] = left[e.key]! - e.value + bags * units;
+    } else {
+      left[e.key] = left[e.key]! - e.value;
+    }
+  }
+  return {
+    for (final e in stock.entries) e.key: e.value.withStock(deposit: left[e.key]!, vehicle: 0),
+  };
+}
+
+/// Lo que falta subir al vehículo para los pedidos: lo pedido menos lo que ya está arriba (los
+/// sueltos se cubren abriendo cajas que ya estén arriba). Los "a pedido" van completos.
+Map<String, double> stillToLoad(Map<String, double> pending, List<StockItem> items) {
+  final byId = {for (final i in items) i.id: i};
+  final lines = [
+    for (final e in pending.entries)
+      if (byId[e.key] != null && e.value > 0) SummaryLine(e.key, byId[e.key]!.name, e.value),
+  ];
+  final vehicle = {for (final i in items) i.id: i.vehicleOnly()};
+  final out = <String, double>{};
+  for (final r in evaluateSummary(lines, vehicle)) {
+    final id = r.line.productId!;
+    switch (r.state) {
+      case SummaryState.enough:
+      case SummaryState.open:
+        break;
+      case SummaryState.missing:
+      case SummaryState.onDemand:
+        if (r.missing > 0) out[id] = r.missing;
+      case SummaryState.unknown:
+        out[id] = r.line.quantity;
+    }
+  }
+  return out;
+}
+
 /// "Comprar:\n2 × Aceite de coco x 360 ml\n1 × Copos 3A x 4 kg"
 String shoppingList(List<SummaryRow> rows) {
   final totals = <String, double>{};
@@ -164,9 +215,22 @@ String shoppingList(List<SummaryRow> rows) {
 
 /// Resumen de productos fácil de leer: filas alternadas, lo que hay al lado y qué falta.
 class ProductSummaryTable extends StatefulWidget {
-  const ProductSummaryTable({super.key, required this.lines, this.client, this.stock});
+  const ProductSummaryTable({
+    super.key,
+    required this.lines,
+    this.client,
+    this.stock,
+    this.subtractCommitted = false,
+    this.committed,
+  });
   final List<SummaryLine> lines;
   final SupabaseClient? client;
+
+  /// Pedidos nuevos: comparar contra lo libre (sin lo comprometido con el reparto).
+  final bool subtractCommitted;
+
+  /// Para pruebas: lo comprometido ya cargado.
+  final Map<String, double>? committed;
 
   /// Para pruebas: stock ya cargado (si no, se consulta; si no se puede, se muestra sin stock).
   final Map<String, StockItem>? stock;
@@ -177,6 +241,7 @@ class ProductSummaryTable extends StatefulWidget {
 
 class _ProductSummaryTableState extends State<ProductSummaryTable> {
   Map<String, StockItem>? _stock;
+  Map<String, double> _committed = const {};
   bool _onlyMissing = false;
 
   static const _zebra = Color(0xFFE6F1FB);
@@ -186,14 +251,22 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
   void initState() {
     super.initState();
     _stock = widget.stock;
+    _committed = widget.committed ?? const {};
     if (_stock == null) _load();
   }
 
   Future<void> _load() async {
     try {
-      final items = await fetchStockItems(widget.client ?? Supabase.instance.client);
+      final client = widget.client ?? Supabase.instance.client;
+      final items = await fetchStockItems(client);
+      final committed = widget.subtractCommitted && widget.committed == null
+          ? await fetchCommitted(client)
+          : _committed;
       if (!mounted) return;
-      setState(() => _stock = {for (final i in items) i.id: i});
+      setState(() {
+        _stock = {for (final i in items) i.id: i};
+        _committed = committed;
+      });
     } catch (_) {
       // Sin permiso (preventista) o sin señal: el resumen queda sin la columna de stock.
     }
@@ -234,7 +307,9 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
 
   @override
   Widget build(BuildContext context) {
-    final all = evaluateSummary(widget.lines, _stock);
+    final stock = _stock;
+    final free = widget.subtractCommitted && stock != null && _committed.isNotEmpty;
+    final all = evaluateSummary(widget.lines, free ? availableAfter(stock!, _committed) : stock);
     final withStock = _stock != null;
     int count(SummaryState s) => all.where((r) => r.state == s).length;
     final rows = _onlyMissing ? all.where((r) => r.state != SummaryState.enough).toList() : all;
@@ -275,7 +350,15 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
           ),
           const SizedBox(height: 8),
         ],
-        _header(withStock),
+        if (free)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Text(
+              'Se compara con lo libre: lo que hay menos lo de los pedidos facturados sin entregar.',
+              style: TextStyle(fontSize: 12, color: AppColors.gris),
+            ),
+          ),
+        _header(withStock, free: free),
         for (var i = 0; i < rows.length; i++) _row(rows[i], i.isOdd, withStock),
         if (rows.isEmpty)
           const Padding(
@@ -286,7 +369,7 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
     );
   }
 
-  Widget _header(bool withStock) => Padding(
+  Widget _header(bool withStock, {bool free = false}) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     child: Row(
       children: [
@@ -296,9 +379,13 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
           child: Text('Pedido', textAlign: TextAlign.end, style: TextStyle(fontSize: 12, color: AppColors.gris)),
         ),
         if (withStock)
-          const SizedBox(
+          SizedBox(
             width: 52,
-            child: Text('Hay', textAlign: TextAlign.end, style: TextStyle(fontSize: 12, color: AppColors.gris)),
+            child: Text(
+              free ? 'Libres' : 'Hay',
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontSize: 12, color: AppColors.gris),
+            ),
           ),
       ],
     ),
@@ -327,8 +414,13 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
                 Text(r.line.name, style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
                 if (withStock && r.closedName != null)
                   Text(
-                    'Sueltos ${r.have == null ? '—' : formatQty(r.have!)} · '
+                    'Sueltos ${r.have == null ? '—' : _shown(r.have!)} · '
                     '${r.closedName}: ${r.closedStock == null ? '—' : formatQty(r.closedStock!)}',
+                    style: TextStyle(fontSize: 12, color: textColor ?? AppColors.gris),
+                  ),
+                if (withStock && (_committed[r.line.productId] ?? 0) > 0 && widget.subtractCommitted)
+                  Text(
+                    '${formatQty(_committed[r.line.productId]!)} para el reparto',
                     style: TextStyle(fontSize: 12, color: textColor ?? AppColors.gris),
                   ),
                 if (badge != null) ...[
@@ -350,7 +442,7 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
             SizedBox(
               width: 52,
               child: Text(
-                r.have == null ? '—' : formatQty(r.have!),
+                r.have == null ? '—' : _shown(r.have!),
                 textAlign: TextAlign.end,
                 style: TextStyle(
                   fontSize: 16,
@@ -369,6 +461,9 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
   }
 
   Widget _badge(String text, SummaryState state) => summaryBadge(text, state);
+
+  /// Comparando contra lo libre, lo comprometido de más no se muestra en negativo.
+  String _shown(double value) => formatQty(widget.subtractCommitted && value < 0 ? 0 : value);
 }
 
 /// Etiqueta de color: verde alcanza, rojo falta, violeta abrir, gris a pedido.
