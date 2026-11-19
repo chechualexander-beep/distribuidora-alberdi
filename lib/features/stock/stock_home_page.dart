@@ -118,7 +118,8 @@ class _StockHomePageState extends State<StockHomePage> {
               title: Text(item.parentId == null ? 'Sale de otro producto (fraccionado)' : 'Cambiar de qué producto sale'),
               onTap: () => Navigator.pop(context, 'configurar'),
             ),
-            if (item.controlled)
+            if (item.controlled &&
+                !_items.any((p) => p.id == item.parentId && p.controlled))
               ListTile(
                 leading: const Icon(Icons.shopping_basket_outlined),
                 title: const Text('Pasar a "a pedido"'),
@@ -158,10 +159,7 @@ class _StockHomePageState extends State<StockHomePage> {
 
   /// "Abrí 1 bolsa de 4 kg" → suma las unidades sueltas y resta la bolsa.
   Future<void> _fraction(StockItem item) async {
-    if (!item.controlled) {
-      _snack('Primero contá "${item.name}" para que lleve stock.');
-      return;
-    }
+
     final count = TextEditingController(text: '1');
     var location = _vehicle.tripOpen ? vehiculoCodigo : depositoCodigo;
     final ok = await showDialog<bool>(

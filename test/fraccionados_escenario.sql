@@ -6,16 +6,17 @@ select u.id as prev, c.id as cli from usuarios u join clientes c on c.preventist
   where u.rol='preventista' and u.activo order by c.nombre_comercio limit 1 \gset
 select id as pa from productos where activo and visible_preventistas and precio_normal>1 order by nombre limit 1 \gset
 select id as pb, precio_normal as qb from productos where activo and visible_preventistas and precio_normal>1 and id<>:'pa' order by nombre limit 1 \gset
+select id as pc from productos where activo and visible_preventistas and precio_normal>1 and id not in (:'pa',:'pb') order by nombre limit 1 \gset
 select id as veh from ubicaciones_stock where codigo='vehiculo' \gset
 set session_replication_role = replica;
-delete from stock_movimientos where producto_id in (:'pa',:'pb');
-delete from stock_actual where producto_id in (:'pa',:'pb');
-update productos set control_stock=false, fracciona_de=null, unidades_por_origen=null where id in (:'pa',:'pb');
-update productos set fracciona_de=null, unidades_por_origen=null where fracciona_de in (:'pa',:'pb');
+delete from stock_movimientos where producto_id in (:'pa',:'pb',:'pc');
+delete from stock_actual where producto_id in (:'pa',:'pb',:'pc');
+update productos set control_stock=false, fracciona_de=null, unidades_por_origen=null where id in (:'pa',:'pb',:'pc');
+update productos set fracciona_de=null, unidades_por_origen=null where fracciona_de in (:'pa',:'pb',:'pc');
 set session_replication_role = origin;
 create temp table r(paso text, ok boolean) on commit drop;
 grant all on r to authenticated;
-select set_config('e.pa', :'pa', true), set_config('e.pb', :'pb', true);
+select set_config('e.pa', :'pa', true), set_config('e.pb', :'pb', true), set_config('e.pc', :'pc', true);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', :'adm', true);
@@ -56,9 +57,15 @@ insert into r select 'sin_origen', (select cantidad from stock_actual where ubic
   and (select cantidad from stock_actual s join ubicaciones_stock u on u.id=s.ubicacion_id
    where u.codigo='deposito_alberdi' and s.producto_id=:'pb')=-3
   and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pa')=0;
+-- 4) Un suelto que se vincula a un cerrado con stock pasa a llevar stock solo (en 0) y no se
+--    puede dejar "a pedido".
+do $$ begin perform stock_configurar_fraccion(current_setting('e.pc')::uuid, current_setting('e.pa')::uuid, 3); end $$;
+insert into r select 'suelto_automatico', (select control_stock from productos where id=:'pc');
+do $$ begin perform stock_marcar_a_pedido(current_setting('e.pc')::uuid); raise exception 'debió fallar';
+exception when others then if sqlerrm not like 'Este producto sale de otro%' then raise; end if; end $$;
 reset role;
 select coalesce(string_agg(paso, ', ') filter (where not ok), '') as fallas,
-  bool_and(ok) and count(*) = 3 as todo_ok from r \gset
+  bool_and(ok) and count(*) = 4 as todo_ok from r \gset
 \if :todo_ok \else \echo 'FALLA en:' :'fallas' \quit \endif
 rollback;
 \echo ESCENARIO_OK

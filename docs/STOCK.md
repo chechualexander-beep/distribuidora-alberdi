@@ -92,6 +92,8 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   2 sueltos = 52 × Papas Facu x 1 kg"); al contar aparecen aunque sean "a pedido". En el resumen,
   cada suelto muestra "Sueltos 2 · Caja: 10".
 - No se arma un cerrado con sueltos (pedido de caja sin cajas cerradas = falta).
+- **Sueltos automáticos** (`20261123010000`): si el cerrado lleva stock, su suelto también (arranca
+  en 0) y no se puede pasar a "a pedido". "Fraccionar" activa el suelto si hacía falta.
 - Prueba: `test/fraccionados_escenario.sql`.
 
 ## Etapas
