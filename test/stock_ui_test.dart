@@ -205,8 +205,12 @@ void main() {
       'productos': [
         {'producto_id': 'a', 'en_vehiculo': 8, 'comprometido': 3, 'disponible': 5},
         {'producto_id': 'b', 'en_vehiculo': '2', 'comprometido': '2', 'disponible': 0},
+        {'producto_id': 'c', 'en_vehiculo': 5, 'ventas': 0, 'reparto': 3, 'comprometido': 3, 'disponible': 2},
       ],
     });
+    expect(v.lines['c']!.available, 2, reason: 'lo del reparto no está libre para venta directa');
+    expect(v.lines['c']!.reparto, 3);
+    expect(v.lines['c']!.sold, 0);
     expect(v.tripOpen, isTrue);
     expect(v.sellerId, 'mary');
     expect(v.lines['a']!.available, 5);

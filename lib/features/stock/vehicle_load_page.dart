@@ -154,10 +154,18 @@ class _VehicleLoadPageState extends State<VehicleLoadPage> {
           ),
         ),
         subtitle: line.committed > 0
-            ? Text('Arriba ${formatQty(line.inVehicle)} · vendido sin entregar ${formatQty(line.committed)}')
+            ? Text([
+                'Arriba ${formatQty(line.inVehicle)}',
+                if (line.reparto > 0) 'reparto ${formatQty(line.reparto)}',
+                if (line.sold > 0) 'vendido sin entregar ${formatQty(line.sold)}',
+              ].join(' · '))
             : null,
         trailing: Text(
-          out ? 'Agotado' : 'Quedan ${formatQty(line.available)}',
+          !out
+              ? 'Quedan ${formatQty(line.available)}'
+              : line.inVehicle > 0 && line.reparto > 0
+              ? 'Es del reparto'
+              : 'Agotado',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,

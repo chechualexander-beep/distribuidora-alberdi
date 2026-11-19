@@ -39,7 +39,7 @@
 | `stock_bajar_vehiculo(id, items, fecha)` | Vehículo → depósito. |
 | `stock_registrar_compra(id, ubicación, items con costo_unitario, fecha, proveedor?, actualizar_costo?)` | Ingreso de mercadería; un producto "a pedido" pasa a llevar stock con lo comprado (`20261122010000`). |
 | `stock_cerrar_viaje(id, viaje, conteo?, bajar, fecha)` | Cuenta lo que sobró (debe incluir todo lo de arriba), diferencias, baja al depósito y cierra. |
-| `stock_vehiculo_disponible()` | **Personal activo** (preventista incluido), por GET: en vehículo, comprometido (ventas directas del viaje sin entregar) y disponible. |
+| `stock_vehiculo_disponible()` | **Personal activo** (preventista incluido), por GET: en vehículo, ventas (directas del viaje sin entregar), reparto (pedidos facturados sin entregar), comprometido = ventas + reparto, y disponible = en vehículo − comprometido. |
 | `stock_estado()` | Depósito y vehículo de cada producto activo. |
 
 Toda venta directa creada con un viaje abierto queda en ese viaje (`pedidos.viaje_id`).
@@ -52,7 +52,7 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   Contar (depósito o vehículo), Cerrar viaje (conteo precargado con lo que debería quedar,
   diferencias, bajar todo). Filtros: con stock, a pedido, en negativo. Tocar un producto: contar
   o pasar a "a pedido".
-- **Lo que llevamos** (preventista; el administrador desde Stock): por categoría, "Quedan N",
+- **Lo que llevamos** (preventista; el administrador desde Stock): por categoría, "Quedan N" (lo arriba menos lo del reparto y lo vendido sin entregar; "Es del reparto" si todo es para pedidos),
   agotados al final, con copia sin señal ("Trabajar sin señal → Preparar" la baja).
 - **Venta directa con viaje abierto**: "Solo lo del vehículo" (por categoría), "Vehículo: quedan
   N", "La última vez llevó N" primero, y antes de ver el pedido "¿Ofreciste todo?" con lo del

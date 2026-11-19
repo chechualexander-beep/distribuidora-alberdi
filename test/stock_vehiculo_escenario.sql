@@ -52,8 +52,29 @@ select crear_pedido_sin_conexion(gen_random_uuid(), :'cli', 'normal', 'venta_dir
 select stock_vehiculo_disponible() as d1 \gset
 insert into r select 'disponible', (select viaje_id from pedidos where id=:'v1')=:'viaje'::uuid
   and exists(select 1 from jsonb_array_elements(:'d1'::jsonb->'productos') x where x->>'producto_id'=:'pa'
-   and (x->>'en_vehiculo')::numeric=8 and (x->>'comprometido')::numeric=3 and (x->>'disponible')::numeric=5)
+   and (x->>'en_vehiculo')::numeric=8 and (x->>'ventas')::numeric=3
+   and (x->>'disponible')::numeric = 8 - 3 - (x->>'reparto')::numeric)
   and not exists(select 1 from jsonb_array_elements(:'d1'::jsonb->'productos') x where x->>'producto_id'=:'pc');
+
+-- 3b) Un pedido facturado del reparto con A x2: lo libre para venta directa baja 2.
+select (x->>'reparto')::numeric as rep0 from jsonb_array_elements(:'d1'::jsonb->'productos') x where x->>'producto_id'=:'pa' \gset
+select crear_pedido_sin_conexion(gen_random_uuid(), :'cli', 'normal', 'pedido', '', current_date,
+  jsonb_build_array(jsonb_build_object('producto_id',:'pa','cantidad',2,'precio_unitario',:qa,'subtotal',2*:qa,'tipo_precio','normal')),
+  now()) as rp \gset
+reset role;
+set session_replication_role = replica;
+update pedidos set facturado = true where id = :'rp';
+set session_replication_role = origin;
+set local role authenticated;
+select stock_vehiculo_disponible() as d1b \gset
+insert into r select 'reparto', exists(select 1 from jsonb_array_elements(:'d1b'::jsonb->'productos') x
+  where x->>'producto_id'=:'pa' and (x->>'reparto')::numeric = :rep0 + 2
+   and (x->>'disponible')::numeric = 8 - 3 - :rep0 - 2 and (x->>'comprometido')::numeric = 3 + :rep0 + 2);
+reset role;
+set session_replication_role = replica;
+update pedidos set estado = 'anulado' where id = :'rp';
+set session_replication_role = origin;
+set local role authenticated;
 do $$ begin perform stock_contar(gen_random_uuid(), 'deposito_alberdi', jsonb_build_array(
   jsonb_build_object('producto_id',current_setting('e.pa'),'cantidad',1)), now()); raise exception 'debió fallar';
 exception when others then if sqlerrm not like 'Solo administración%' then raise; end if; end $$;
@@ -145,7 +166,7 @@ insert into r select 'fin', (select viaje_id from pedidos where id=:'v4') is nul
   and (select count(*) from stock_estado())>0;
 reset role;
 select coalesce(string_agg(paso, ', ') filter (where not ok), '') as fallas,
-  bool_and(ok) and count(*) = 9 as todo_ok from r \gset
+  bool_and(ok) and count(*) = 10 as todo_ok from r \gset
 \if :todo_ok \else \echo 'FALLA en:' :'fallas' \quit \endif
 rollback;
 \echo ESCENARIO_OK

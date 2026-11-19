@@ -36,11 +36,17 @@ double? parseQty(String text) {
 }
 
 class VehicleLine {
-  const VehicleLine(this.inVehicle, this.committed);
+  const VehicleLine(this.inVehicle, this.committed, [this.reparto = 0]);
   final double inVehicle;
 
-  /// Vendido en el viaje y todavía sin entregar.
+  /// Comprometido: vendido en el viaje sin entregar + pedidos del reparto sin entregar.
   final double committed;
+
+  /// De eso, lo de los pedidos facturados del reparto.
+  final double reparto;
+
+  /// Ventas directas del viaje sin entregar.
+  double get sold => committed - reparto;
   double get available => inVehicle - committed;
 }
 
@@ -68,6 +74,7 @@ class VehicleStock {
       lines[row['producto_id'].toString()] = VehicleLine(
         stockNum(row['en_vehiculo']),
         stockNum(row['comprometido']),
+        stockNum(row['reparto']),
       );
     }
     return VehicleStock(
@@ -251,7 +258,8 @@ Future<Map<String, double>> fetchCommitted(SupabaseClient client) async {
   try {
     final vehicle = await fetchVehicleStock(client);
     for (final e in vehicle.lines.entries) {
-      if (e.value.committed > 0) totals[e.key] = (totals[e.key] ?? 0) + e.value.committed;
+      // Solo las ventas directas: lo del reparto ya viene en los pedidos a entregar.
+      if (e.value.sold > 0) totals[e.key] = (totals[e.key] ?? 0) + e.value.sold;
     }
   } catch (_) {}
   return totals;
