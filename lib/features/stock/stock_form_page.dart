@@ -67,6 +67,12 @@ class _StockFormPageState extends State<StockFormPage> {
   final _loaded = <String>{};
   bool _onlyPending = false;
 
+  /// Cantidad propuesta (pedidos a entregar o última carga): si se borra, vuelve esta.
+  final _proposed = <String, String>{};
+
+  /// Filas que siguen a la vista con "Solo con cantidad" aunque se borre el número al editarlo.
+  final _kept = <String>{};
+
   /// Arriba solo queda la barra del avance; lo demás se abre con "Opciones".
   bool _optionsOpen = true;
   static const _zebra = Color(0xFFE6F1FB);
@@ -117,11 +123,20 @@ class _StockFormPageState extends State<StockFormPage> {
       final data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
       final quantities = Map<String, dynamic>.from(data['cantidades'] as Map? ?? const {});
       final loaded = List<String>.from(data['cargados'] as List? ?? const []);
+      final proposed = Map<String, dynamic>.from(data['propuestas'] as Map? ?? const {});
       bool known(String id) => widget.items.any((i) => i.id == id);
       if (!mounted) return;
       setState(() {
+        for (final e in proposed.entries) {
+          if (!known(e.key)) continue;
+          _proposed[e.key] = e.value.toString();
+          _controller(e.key).text = e.value.toString();
+          _kept.add(e.key);
+        }
         for (final e in quantities.entries) {
-          if (known(e.key)) _controller(e.key).text = e.value.toString();
+          if (!known(e.key)) continue;
+          _controller(e.key).text = e.value.toString();
+          _kept.add(e.key);
         }
         _loaded.addAll(loaded.where(known));
         if (quantities.isNotEmpty) {
@@ -140,10 +155,13 @@ class _StockFormPageState extends State<StockFormPage> {
         for (final e in _qty.entries)
           if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
       };
-      if (quantities.isEmpty && _loaded.isEmpty) {
+      if (quantities.isEmpty && _loaded.isEmpty && _proposed.isEmpty) {
         await prefs.remove(_draftKey);
       } else {
-        await prefs.setString(_draftKey, jsonEncode({'cantidades': quantities, 'cargados': _loaded.toList()}));
+        await prefs.setString(
+          _draftKey,
+          jsonEncode({'cantidades': quantities, 'cargados': _loaded.toList(), 'propuestas': _proposed}),
+        );
       }
     } catch (_) {}
   }
@@ -162,7 +180,36 @@ class _StockFormPageState extends State<StockFormPage> {
     _saveDraft();
   }
 
-  bool _filled(String id) => _qty[id]?.text.trim().isNotEmpty ?? false;
+  bool _hasText(String id) => _qty[id]?.text.trim().isNotEmpty ?? false;
+
+  /// Con cantidad para mandar. Al cargar, 0 quiere decir "no se carga".
+  bool _filled(String id) {
+    final text = _qty[id]?.text.trim() ?? '';
+    if (text.isEmpty) return false;
+    return !(_kind == StockFormKind.load && parseQty(text) == 0);
+  }
+
+  /// Al tocar la cantidad queda toda seleccionada: se escribe la nueva sin borrar antes.
+  void _selectAll(String id) {
+    final c = _controller(id);
+    c.selection = TextSelection(baseOffset: 0, extentOffset: c.text.length);
+  }
+
+  /// Si se dejó vacía, vuelve la cantidad del pedido.
+  void _restoreIfEmpty(String id) {
+    if (_kind != StockFormKind.load || _hasText(id)) return;
+    final original = _proposed[id];
+    if (original == null || !mounted) return;
+    setState(() => _controller(id).text = original);
+    _saveDraft();
+  }
+
+  void _quantityChanged(String id) {
+    setState(() {
+      if (_hasText(id)) _kept.add(id);
+    });
+    _saveDraft();
+  }
 
   /// Lo que falta subir, para mandar por WhatsApp a quien ayuda a cargar.
   String _pendingText() {
@@ -221,6 +268,8 @@ class _StockFormPageState extends State<StockFormPage> {
       for (final entry in values.entries) {
         if (!widget.items.any((i) => i.id == entry.key)) continue;
         _controller(entry.key).text = formatQty(entry.value);
+        _kept.add(entry.key);
+        if (_kind == StockFormKind.load) _proposed[entry.key] = formatQty(entry.value);
       }
       _onlyFilled = true;
       if (_kind == StockFormKind.load) _optionsOpen = false;
@@ -253,9 +302,13 @@ class _StockFormPageState extends State<StockFormPage> {
           !item.code.toLowerCase().contains(text)) {
         return false;
       }
-      final filled = (_qty[item.id]?.text.trim().isNotEmpty ?? false);
-      if (_onlyFilled && text.isEmpty && !filled) return false;
-      if (_onlyPending && text.isEmpty && (!filled || _loaded.contains(item.id))) return false;
+      final filled = _hasText(item.id);
+      final kept = filled || _kept.contains(item.id);
+      if (_onlyFilled && text.isEmpty && !kept) return false;
+      if (_onlyPending && text.isEmpty &&
+          (!kept || _loaded.contains(item.id) || (filled && !_filled(item.id)))) {
+        return false;
+      }
       if (_kind == StockFormKind.count && !_allProducts && !item.controlled && !filled &&
           text.isEmpty && widget.onlyIds == null) {
         return false;
@@ -283,7 +336,9 @@ class _StockFormPageState extends State<StockFormPage> {
       final text = _qty[item.id]?.text ?? '';
       if (text.trim().isEmpty) continue;
       final q = parseQty(text);
-      if (q == null || (!_zeroAllowed && q == 0)) return null;
+      if (q == null) return null;
+      if (q == 0 && _kind == StockFormKind.load) continue;
+      if (!_zeroAllowed && q == 0) return null;
       final line = <String, dynamic>{'producto_id': item.id, 'cantidad': q};
       if (_kind == StockFormKind.purchase) {
         final costText = _costController(item).text;
@@ -480,7 +535,7 @@ class _StockFormPageState extends State<StockFormPage> {
   Widget build(BuildContext context) {
     if (_kind == StockFormKind.load) return _buildLoad();
     final visible = _visible;
-    final filled = _qty.values.where((c) => c.text.trim().isNotEmpty).length;
+    final filled = widget.items.where((i) => _filled(i.id)).length;
     return Scaffold(
       appBar: AppBar(title: Text(_title)),
       body: DesktopForm(
@@ -573,7 +628,7 @@ class _StockFormPageState extends State<StockFormPage> {
   Widget _buildLoad() {
     final visible = _visible;
     final status = _loadStatus();
-    final filled = _qty.values.where((c) => c.text.trim().isNotEmpty).length;
+    final filled = widget.items.where((i) => _filled(i.id)).length;
     return Scaffold(
       appBar: AppBar(title: Text(_title)),
       body: DesktopForm(
@@ -608,7 +663,12 @@ class _StockFormPageState extends State<StockFormPage> {
                           FilterChip(
                             label: const Text('Solo con cantidad'),
                             selected: _onlyFilled,
-                            onSelected: (v) => setState(() => _onlyFilled = v),
+                            onSelected: (v) => setState(() {
+                              _onlyFilled = v;
+                              _kept
+                                ..clear()
+                                ..addAll(widget.items.where((i) => _hasText(i.id)).map((i) => i.id));
+                            }),
                           ),
                         ],
                       ),
@@ -738,7 +798,12 @@ class _StockFormPageState extends State<StockFormPage> {
             SummaryState.onDemand => 'A pedido',
             SummaryState.unknown => null,
           };
-    final info = !item.controlled
+    final skipped = _hasText(item.id) && !filled;
+    final original = _proposed[item.id];
+    final changed = original != null && _qty[item.id]!.text.trim() != original;
+    final info = skipped
+        ? 'No se carga'
+        : !item.controlled
         ? 'A pedido'
         : [
             'Depósito ${formatQty(item.deposit)}',
@@ -773,34 +838,50 @@ class _StockFormPageState extends State<StockFormPage> {
                   children: [
                     Text(item.name, style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
                     const SizedBox(height: 2),
-                    if (badge != null && st != null)
-                      summaryBadge(badge, st.state)
-                    else
-                      Text(info, style: TextStyle(fontSize: 12, color: zebra ? _zebraText : AppColors.gris)),
+                    Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (badge != null && st != null)
+                          summaryBadge(badge, st.state)
+                        else
+                          Text(info, style: TextStyle(fontSize: 12, color: zebra ? _zebraText : AppColors.gris)),
+                        if (changed)
+                          Text(
+                            'Pedidos: $original',
+                            style: TextStyle(fontSize: 12, color: zebra ? _zebraText : AppColors.gris),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
               SizedBox(
                 width: 64,
-                child: TextField(
-                  key: ValueKey('cantidad-${item.id}'),
-                  controller: _controller(item.id),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  textAlign: TextAlign.end,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    hintText: 'Cant.',
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (_) {
-                    setState(() {});
-                    _saveDraft();
+                child: Focus(
+                  skipTraversal: true,
+                  onFocusChange: (focused) {
+                    if (!focused) _restoreIfEmpty(item.id);
                   },
+                  child: TextField(
+                    key: ValueKey('cantidad-${item.id}'),
+                    controller: _controller(item.id),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: _proposed[item.id] ?? 'Cant.',
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      border: const OutlineInputBorder(),
+                    ),
+                    onTap: () => _selectAll(item.id),
+                    onChanged: (_) => _quantityChanged(item.id),
+                    onSubmitted: (_) => _restoreIfEmpty(item.id),
+                  ),
                 ),
               ),
             ],
@@ -972,10 +1053,8 @@ class _StockFormPageState extends State<StockFormPage> {
                   labelText: 'Cantidad',
                   border: OutlineInputBorder(),
                 ),
-                onChanged: (_) {
-                  setState(() {});
-                  _saveDraft();
-                },
+                onTap: () => _selectAll(item.id),
+                onChanged: (_) => _quantityChanged(item.id),
               ),
             ),
           ],

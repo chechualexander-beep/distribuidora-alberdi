@@ -325,6 +325,44 @@ void main() {
     expect(find.textContaining('Vehículo cargado'), findsOneWidget);
   });
 
+  testWidgets('cargar vehículo: borrar la cantidad no saca la fila; 0 no se carga', (tester) async {
+    Map<String, dynamic>? enviado;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StockFormPage(
+          kind: StockFormKind.load,
+          items: [item('a'), item('b'), item('c')],
+          runner: (fn, args) async {
+            enviado = args;
+            return const StockOpOutcome({'viaje_nuevo': false, 'movidos': 1, 'a_pedido': 0});
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('cantidad-a')), '3');
+    await tester.enterText(find.byKey(const ValueKey('cantidad-b')), '2');
+    await tester.pump();
+    await tester.ensureVisible(find.text('Solo con cantidad'));
+    await tester.tap(find.text('Solo con cantidad'));
+    await tester.pump();
+    expect(find.text('Producto c'), findsNothing);
+    await tester.enterText(find.byKey(const ValueKey('cantidad-a')), '');
+    await tester.pump();
+    expect(find.text('Producto a'), findsOneWidget, reason: 'sigue a la vista mientras se edita');
+    await tester.enterText(find.byKey(const ValueKey('cantidad-a')), '0');
+    await tester.pump();
+    expect(find.text('No se carga'), findsOneWidget);
+    expect(find.text('0 de 1 cargados'), findsOneWidget);
+    await tester.tap(find.text('Producto b'));
+    await tester.pump();
+    await tester.tap(find.text('CONFIRMAR (1 producto)'));
+    await tester.pumpAndSettle();
+    expect(enviado!['p_items'], [
+      {'producto_id': 'b', 'cantidad': 2.0},
+    ]);
+  });
+
   Future<void> openHome(WidgetTester tester, {required bool admin}) async {
     await tester.binding.setSurfaceSize(const Size(1280, 1000));
     addTearDown(() => tester.binding.setSurfaceSize(null));

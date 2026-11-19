@@ -64,6 +64,9 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   (verde "Hay N", rojo "Faltan X · hay Y", violeta "Abrir N × caja", gris "A pedido"). Lo cargado
   queda resaltado en flúor (como el marcador sobre el papel); se marca tocando cualquier parte de
   la fila. Queda guardada en el teléfono hasta confirmar; al confirmar avisa si quedan sin marcar.
+  Al tocar una cantidad queda seleccionada (se escribe la nueva directo); si se deja vacía vuelve
+  la del pedido ("Pedidos: N" muestra la original si se cambió); 0 = no se carga. Las filas no
+  desaparecen de "Solo con cantidad" mientras se editan.
 - **Preventista del viaje**: con el viaje abierto, "Elegir/Cambiar preventista" en la tarjeta del
   viaje (por si se confirmó la carga sin elegirlo).
 - "Anotar compra" también desde Gestión de reparto (entra al vehículo) y con el costo actual
