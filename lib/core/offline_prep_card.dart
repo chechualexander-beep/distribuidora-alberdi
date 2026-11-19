@@ -78,10 +78,15 @@ class _OfflinePrepCardState extends State<OfflinePrepCard> {
     final ultima = _ultima;
     final antigua =
         ultima == null || DateTime.now().difference(ultima.fecha).inHours >= 12;
+    final oscuro = Theme.of(context).brightness == Brightness.dark;
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: oscuro ? Colors.white24 : AppColors.borde, width: 1.2),
+      ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -90,7 +95,7 @@ class _OfflinePrepCardState extends State<OfflinePrepCard> {
                 Icon(
                   antigua ? Icons.cloud_download_outlined : Icons.offline_pin_outlined,
                   color: antigua ? AppColors.naranja : AppColors.verde,
-                  size: 28,
+                  size: 24,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

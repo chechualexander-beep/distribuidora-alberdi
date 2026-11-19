@@ -244,8 +244,6 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
   Map<String, double> _committed = const {};
   bool _onlyMissing = false;
 
-  static const _zebra = Color(0xFFE6F1FB);
-  static const _zebraText = Color(0xFF0C447C);
 
   @override
   void initState() {
@@ -392,7 +390,8 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
   );
 
   Widget _row(SummaryRow r, bool zebra, bool withStock) {
-    final textColor = zebra ? _zebraText : null;
+    final t = Tonos.of(context);
+    final textColor = zebra ? t.cebraTexto : null;
     final badge = switch (r.state) {
       SummaryState.missing => r.openParents > 0
           ? 'Abrir ${formatQty(r.openParents)} × ${r.parentName} · faltan ${formatQty(r.missing)}'
@@ -402,7 +401,7 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
       _ => null,
     };
     return Container(
-      color: zebra ? _zebra : null,
+      color: zebra ? t.cebra : null,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,12 +415,12 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
                   Text(
                     'Sueltos ${r.have == null ? '—' : _shown(r.have!)} · '
                     '${r.closedName}: ${r.closedStock == null ? '—' : formatQty(r.closedStock!)}',
-                    style: TextStyle(fontSize: 12, color: textColor ?? AppColors.gris),
+                    style: TextStyle(fontSize: 12, color: textColor ?? t.secundario),
                   ),
                 if (withStock && (_committed[r.line.productId] ?? 0) > 0 && widget.subtractCommitted)
                   Text(
                     '${formatQty(_committed[r.line.productId]!)} para el reparto',
-                    style: TextStyle(fontSize: 12, color: textColor ?? AppColors.gris),
+                    style: TextStyle(fontSize: 12, color: textColor ?? t.secundario),
                   ),
                 if (badge != null) ...[
                   const SizedBox(height: 3),
@@ -447,10 +446,10 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
                 style: TextStyle(
                   fontSize: 16,
                   color: r.state == SummaryState.enough
-                      ? AppColors.verde
+                      ? t.verde
                       : r.have == null
-                      ? (textColor ?? AppColors.gris)
-                      : AppColors.rojo,
+                      ? (textColor ?? t.secundario)
+                      : t.rojo,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -467,16 +466,19 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
 }
 
 /// Etiqueta de color: verde alcanza, rojo falta, violeta abrir, gris a pedido.
-Widget summaryBadge(String text, SummaryState state) {
-  final (bg, fg) = switch (state) {
-    SummaryState.enough => (const Color(0xFFEAF3DE), const Color(0xFF27500A)),
-    SummaryState.missing => (const Color(0xFFFCEBEB), const Color(0xFF791F1F)),
-    SummaryState.open => (const Color(0xFFEEEDFE), const Color(0xFF3C3489)),
-    _ => (const Color(0xFFF1EFE8), const Color(0xFF444441)),
-  };
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-    child: Text(text, style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w600)),
-  );
-}
+Widget summaryBadge(String text, SummaryState state) => Builder(
+  builder: (context) {
+    final t = Tonos.of(context);
+    final (bg, fg) = switch (state) {
+      SummaryState.enough => t.etiquetaVerde,
+      SummaryState.missing => t.etiquetaRoja,
+      SummaryState.open => t.etiquetaVioleta,
+      _ => t.etiquetaGris,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      child: Text(text, style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w600)),
+    );
+  },
+);

@@ -31,6 +31,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'core/pending_orders.dart';
 import 'core/pending_orders_page.dart';
+import 'features/home/home_menu.dart';
 import 'features/stock/stock_home_page.dart';
 import 'features/stock/vehicle_load_page.dart';
 import 'features/orders/finalization_request.dart';
@@ -571,16 +572,6 @@ class _HomePageState extends State<HomePage> {
         onSignOut: _cerrarSesion,
       );
     }
-    final bool esModoOscuro = Theme.of(context).brightness == Brightness.dark;
-
-    final Color colorPrincipal = esModoOscuro
-        ? Colors.white
-        : AppColors.negro;
-
-    final Color colorSecundario = esModoOscuro
-        ? Colors.white70
-        : const Color(0xFF4A4A4A);
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.negro,
@@ -621,424 +612,76 @@ class _HomePageState extends State<HomePage> {
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Hola, ${_nombre ?? 'Usuario'}',
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 10,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    'Hola, ${_nombre ?? 'Usuario'}',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Tonos.of(context).etiquetaGris.$1,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      esAdministrador ? 'Administrador' : 'Preventista',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Tonos.of(context).etiquetaGris.$2,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                esAdministrador ? 'Administrador' : 'Preventista',
-                style: const TextStyle(fontSize: 17, color: AppColors.gris),
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
+              NewOrderButton(onTap: () => _abrir(const NewOrderPage())),
+              const SizedBox(height: 10),
               const PendingOrdersCard(),
               const OfflinePrepCard(),
-              const SizedBox(height: 12),
-
-              // CLIENTES
-              Card(
-                elevation: 2,
-                margin: const EdgeInsets.only(bottom: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 8,
-                  ),
-                  leading: Icon(
-                    Icons.people_outline,
-                    size: 32,
-                    color: colorPrincipal,
-                  ),
-                  title: Text(
-                    'Clientes',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: colorPrincipal,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: EdgeInsets.only(top: 3),
-                    child: Text(
-                      'Gestión de clientes',
-                      style: TextStyle(fontSize: 13, color: colorSecundario),
-                    ),
-                  ),
-                  trailing: Icon(Icons.chevron_right, color: colorPrincipal),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ClientsPage()),
-                    );
-                  },
-                ),
-              ),
-
-              // PRODUCTOS
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  leading: Icon(
-                    Icons.inventory_2_outlined,
-                    size: 30,
-                    color: colorPrincipal,
-                  ),
-                  title: Text(
-                    'Productos',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colorPrincipal,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: EdgeInsets.only(top: 3),
-                    child: Text(
-                      'Consultá precios y stock',
-                      style: TextStyle(fontSize: 13, color: colorSecundario),
-                    ),
-                  ),
-                  trailing: Icon(Icons.chevron_right, color: colorPrincipal),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ProductsPage()),
-                    );
-                  },
-                ),
-              ),
-
-              // NUEVO PEDIDO
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                color: const Color(0xFF1565C0),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  leading: const Icon(
-                    Icons.shopping_cart_outlined,
-                    size: 30,
-                    color: Colors.white,
-                  ),
-                  title: const Text(
-                    'Nuevo pedido',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                  subtitle: const Padding(
-                    padding: EdgeInsets.only(top: 3),
-                    child: Text(
-                      'Crear un nuevo pedido',
-                      style: TextStyle(fontSize: 13, color: Colors.white70),
-                    ),
-                  ),
-                  trailing: const Icon(
-                    Icons.chevron_right,
-                    color: Colors.white,
-                  ),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const NewOrderPage()),
-                    );
-                  },
-                ),
-              ),
-
-              // PEDIDOS
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  leading: Icon(
-                    Icons.receipt_long_outlined,
-                    size: 30,
-                    color: colorPrincipal,
-                  ),
-                  title: Text(
-                    'Pedidos',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colorPrincipal,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: EdgeInsets.only(top: 3),
-                    child: Text(
-                      'Ver pedidos realizados',
-                      style: TextStyle(fontSize: 13, color: colorSecundario),
-                    ),
-                  ),
-                  trailing: Icon(Icons.chevron_right, color: colorPrincipal),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const OrdersPage()),
-                    );
-                  },
-                ),
-              ),
-              Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  leading: Icon(Icons.payments_outlined, color: colorPrincipal),
-                  title: Text(
-                    'Mis comisiones',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colorPrincipal,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text(
-                      'Consultar mis ganancias',
-                      style: TextStyle(fontSize: 13, color: colorSecundario),
-                    ),
-                  ),
-                  trailing: Icon(Icons.chevron_right, color: colorPrincipal),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => MyCommissionsPage()),
-                    );
-                  },
-                ),
-              ),
-
-              // SALDOS (acceso directo en el celular; en Windows está en el menú lateral)
-              if (esAdministrador)
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    leading: Icon(
-                      Icons.account_balance_wallet_outlined,
-                      color: colorPrincipal,
-                      size: 28,
-                    ),
-                    title: Text(
-                      'Saldos',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: colorPrincipal,
-                      ),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(
-                        'Saldos de clientes y cobros',
-                        style: TextStyle(fontSize: 13, color: colorSecundario),
-                      ),
-                    ),
-                    trailing: Icon(Icons.chevron_right, color: colorPrincipal),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const BalancesPage()),
-                      );
-                    },
-                  ),
-                ),
-
-              // STOCK (administrador) y LO QUE LLEVAMOS (preventista)
-              if (esAdministrador)
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    leading: Icon(
-                      Icons.warehouse_outlined,
-                      color: colorPrincipal,
-                      size: 28,
-                    ),
-                    title: Text(
-                      'Stock y vehículo',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: colorPrincipal,
-                      ),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(
-                        'Contar, cargar el vehículo, compras y viaje',
-                        style: TextStyle(fontSize: 13, color: colorSecundario),
-                      ),
-                    ),
-                    trailing: Icon(Icons.chevron_right, color: colorPrincipal),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const StockHomePage()),
-                      );
-                    },
-                  ),
-                ),
-              if (!esAdministrador)
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    leading: Icon(
-                      Icons.local_shipping_outlined,
-                      color: colorPrincipal,
-                      size: 28,
-                    ),
-                    title: Text(
-                      'Lo que llevamos',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: colorPrincipal,
-                      ),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(
-                        'Lo que va en el vehículo para ofrecer',
-                        style: TextStyle(fontSize: 13, color: colorSecundario),
-                      ),
-                    ),
-                    trailing: Icon(Icons.chevron_right, color: colorPrincipal),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const VehicleLoadPage()),
-                      );
-                    },
-                  ),
-                ),
-
-              // CATÁLOGO GENERAL (administrador y preventistas habilitados)
-              if (_puedeCatalogoGeneral)
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    leading: Icon(
+              HomeSection(
+                title: 'TRABAJO DIARIO',
+                actions: [
+                  HomeAction(Icons.receipt_long_outlined, 'Pedidos', () => _abrir(const OrdersPage())),
+                  HomeAction(Icons.people_outline, 'Clientes', () => _abrir(const ClientsPage())),
+                  HomeAction(Icons.inventory_2_outlined, 'Productos', () => _abrir(const ProductsPage())),
+                  if (esAdministrador)
+                    HomeAction(Icons.warehouse_outlined, 'Stock y vehículo', () => _abrir(const StockHomePage()))
+                  else
+                    HomeAction(Icons.local_shipping_outlined, 'Lo que llevamos', () => _abrir(const VehicleLoadPage())),
+                  HomeAction(Icons.payments_outlined, 'Mis comisiones', () => _abrir(MyCommissionsPage())),
+                  if (_puedeCatalogoGeneral)
+                    HomeAction(
                       Icons.storefront_outlined,
-                      color: colorPrincipal,
-                      size: 28,
-                    ),
-                    title: Text(
                       'Catálogo general',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: colorPrincipal,
-                      ),
+                      () => _abrir(GeneralCatalogPage(isAdmin: esAdministrador)),
                     ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(
-                        'Un enlace para muchos clientes',
-                        style: TextStyle(fontSize: 13, color: colorSecundario),
-                      ),
-                    ),
-                    trailing: Icon(Icons.chevron_right, color: colorPrincipal),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              GeneralCatalogPage(isAdmin: esAdministrador),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-              // ADMINISTRACIÓN
+                ],
+              ),
               if (esAdministrador)
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    leading: Icon(
-                      Icons.admin_panel_settings_outlined,
-                      color: colorPrincipal,
-                      size: 28,
-                    ),
-                    title: Text(
-                      'Administración',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: colorPrincipal,
-                      ),
-                    ),
-                    subtitle: Padding(
-                      padding: EdgeInsets.only(top: 3),
-                      child: Text(
-                        'Solo administrador',
-                        style: TextStyle(fontSize: 13, color: colorSecundario),
-                      ),
-                    ),
-                    trailing: Icon(Icons.chevron_right, color: colorPrincipal),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const AdminPage()),
-                      );
-                    },
-                  ),
+                HomeSection(
+                  title: 'ADMINISTRACIÓN',
+                  actions: [
+                    HomeAction(Icons.account_balance_wallet_outlined, 'Saldos', () => _abrir(const BalancesPage())),
+                    HomeAction(Icons.admin_panel_settings_outlined, 'Administración', () => _abrir(const AdminPage())),
+                  ],
                 ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  void _abrir(Widget page) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
   }
 }

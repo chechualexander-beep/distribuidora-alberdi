@@ -372,6 +372,30 @@ void main() {
     expect(find.textContaining('Vehículo cargado'), findsOneWidget);
   });
 
+  testWidgets('cargar vehículo en Windows (modo oscuro): sin filas blancas, flúor oscuro', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(brightness: Brightness.dark),
+        home: StockFormPage(
+          kind: StockFormKind.load,
+          items: [item('a'), item('b')],
+          runner: (fn, args) async => const StockOpOutcome({'viaje_nuevo': true}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('cantidad-a')), '3');
+    await tester.pump();
+    Color? fila(String nombre) => tester
+        .widget<Material>(find.ancestor(of: find.text(nombre), matching: find.byType(Material)).first)
+        .color;
+    expect(fila('Producto a'), isNot(Colors.white));
+    expect(fila('Producto b'), isNot(Colors.white));
+    await tester.tap(find.text('Producto a'));
+    await tester.pump();
+    expect(fila('Producto a'), const Color(0xFF4A4000));
+  });
+
   testWidgets('cargar vehículo: borrar la cantidad no saca la fila; 0 no se carga', (tester) async {
     Map<String, dynamic>? enviado;
     await tester.pumpWidget(

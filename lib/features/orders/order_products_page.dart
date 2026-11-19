@@ -509,12 +509,12 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                         backgroundColor: WidgetStateProperty.resolveWith<Color?>(
                           (states) => states.contains(WidgetState.selected)
                               ? colorLista(_tipoPrecio)
-                              : Colors.white,
+                              : (Tonos.of(context).oscuro ? null : Colors.white),
                         ),
                         foregroundColor: WidgetStateProperty.resolveWith<Color?>(
                           (states) => states.contains(WidgetState.selected)
                               ? Colors.white
-                              : AppColors.negro,
+                              : (Tonos.of(context).oscuro ? Colors.white : AppColors.negro),
                         ),
                       ),
                       segments: const [

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 
 /// Keeps observations visible when scanning the order inbox.
 class OrderObservationIndicator extends StatelessWidget {
@@ -17,11 +18,14 @@ class OrderObservationIndicator extends StatelessWidget {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: Colors.amber.shade100,
+            color: Tonos.of(context).oscuro ? const Color(0xFF3A2A12) : Colors.amber.shade100,
             shape: BoxShape.circle,
             border: Border.all(color: Colors.orange.shade800),
           ),
-          child: Icon(Icons.priority_high, color: Colors.orange.shade900),
+          child: Icon(
+            Icons.priority_high,
+            color: Tonos.of(context).oscuro ? Colors.orange.shade300 : Colors.orange.shade900,
+          ),
         ),
       ),
     );

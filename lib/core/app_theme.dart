@@ -137,3 +137,51 @@ ThemeData temaOscuro() {
     ),
   );
 }
+
+/// Colores de fondo y texto que cambian con el tema: en Windows (modo oscuro) nada de
+/// fondos blancos ni claros; los números conservan su color, un poco más claros.
+class Tonos {
+  const Tonos._(this.oscuro);
+  final bool oscuro;
+
+  static Tonos of(BuildContext context) => Tonos._(Theme.of(context).brightness == Brightness.dark);
+
+  /// Filas de listas (resumen, cargar vehículo).
+  Color get fila => oscuro ? const Color(0xFF1C1B1F) : Colors.white;
+  Color get filaTexto => oscuro ? const Color(0xFFE6E1E5) : Colors.black87;
+  Color get cebra => oscuro ? const Color(0xFF0C2A44) : const Color(0xFFE6F1FB);
+  Color get cebraTexto => oscuro ? const Color(0xFFB5D4F4) : const Color(0xFF0C447C);
+  Color get secundario => oscuro ? const Color(0xFFB0B0B0) : AppColors.gris;
+
+  /// Lo cargado: como el marcador flúor sobre el papel.
+  Color get fluor => oscuro ? const Color(0xFF4A4000) : const Color(0xFFFFF176);
+  Color get fluorBorde => const Color(0xFFF2D600);
+  Color get fluorTexto => oscuro ? Colors.white : Colors.black87;
+
+  /// Barra fija de arriba y casilleros de cantidad.
+  Color get barra => oscuro ? const Color(0xFF26252A) : const Color(0xFFF4F4F2);
+  Color get campo => oscuro ? const Color(0xFF121212) : Colors.white;
+
+  /// Números de estado.
+  Color get verde => oscuro ? const Color(0xFF81C784) : AppColors.verde;
+  Color get rojo => oscuro ? const Color(0xFFEF8A8A) : AppColors.rojo;
+
+  /// Etiquetas: (fondo, texto).
+  (Color, Color) get etiquetaVerde =>
+      oscuro ? (const Color(0xFF173404), const Color(0xFFC0DD97)) : (const Color(0xFFEAF3DE), const Color(0xFF27500A));
+  (Color, Color) get etiquetaRoja =>
+      oscuro ? (const Color(0xFF501313), const Color(0xFFF7C1C1)) : (const Color(0xFFFCEBEB), const Color(0xFF791F1F));
+  (Color, Color) get etiquetaVioleta =>
+      oscuro ? (const Color(0xFF26215C), const Color(0xFFCECBF6)) : (const Color(0xFFEEEDFE), const Color(0xFF3C3489));
+  (Color, Color) get etiquetaGris =>
+      oscuro ? (const Color(0xFF2C2C2A), const Color(0xFFD3D1C7)) : (const Color(0xFFF1EFE8), const Color(0xFF444441));
+
+  /// Cajitas de aviso (fondo).
+  Color get avisoFondo => oscuro ? const Color(0xFF3A2A12) : const Color(0xFFFFF3E0);
+  Color get errorFondo => oscuro ? const Color(0xFF3B1818) : const Color(0xFFFDECEA);
+  Color get exitoFondo => oscuro ? const Color(0xFF16301A) : const Color(0xFFE8F5E9);
+  Color get infoFondo => oscuro ? const Color(0xFF14243B) : const Color(0xFFF0F5FF);
+  Color get infoCirculo => oscuro ? const Color(0xFF1E3A5F) : const Color(0xFFD8E6FF);
+  Color get infoIcono => oscuro ? const Color(0xFF85B7EB) : const Color(0xFF1565C0);
+  Color get infoTitulo => oscuro ? const Color(0xFFB5D4F4) : const Color(0xFF0B4A91);
+}

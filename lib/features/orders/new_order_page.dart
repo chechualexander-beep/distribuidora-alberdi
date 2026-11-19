@@ -11,6 +11,7 @@ import 'order_detail_page.dart';
 import '../clients/new_client_page.dart';
 import '../../core/offline_queries.dart';
 import '../../core/pending_orders.dart';
+import '../../core/app_theme.dart';
 
 class NewOrderPage extends StatefulWidget {
   const NewOrderPage({super.key, this.clienteId, this.client});
@@ -610,7 +611,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Material(
-            color: const Color(0xFFF0F5FF),
+            color: Tonos.of(context).infoFondo,
             borderRadius: BorderRadius.circular(14),
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
@@ -652,18 +653,18 @@ class _NewOrderPageState extends State<NewOrderPage> {
                     Container(
                       width: 48,
                       height: 48,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFD8E6FF),
+                      decoration: BoxDecoration(
+                        color: Tonos.of(context).infoCirculo,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.person_add_alt_1,
-                        color: Color(0xFF1565C0),
+                        color: Tonos.of(context).infoIcono,
                         size: 27,
                       ),
                     ),
                     const SizedBox(width: 14),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -672,21 +673,21 @@ class _NewOrderPageState extends State<NewOrderPage> {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF0B4A91),
+                              color: Tonos.of(context).infoTitulo,
                             ),
                           ),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           Text(
                             'Agregar un cliente nuevo',
                             style: TextStyle(
                               fontSize: 13,
-                              color: Color(0xFF1565C0),
+                              color: Tonos.of(context).infoIcono,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const Icon(Icons.chevron_right, color: Color(0xFF0B4A91)),
+                    Icon(Icons.chevron_right, color: Tonos.of(context).infoTitulo),
                   ],
                 ),
               ),

@@ -354,9 +354,9 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                 ),
               ),
             if (_sinEnviar)
-              const Card(
-                color: Color(0xFFFFF3E0),
-                child: ListTile(
+              Card(
+                color: Tonos.of(context).avisoFondo,
+                child: const ListTile(
                   leading: Icon(Icons.cloud_upload_outlined, color: AppColors.naranja),
                   title: Text('Guardado en el teléfono'),
                   subtitle: Text(

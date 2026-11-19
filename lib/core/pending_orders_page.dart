@@ -25,7 +25,7 @@ class PendingOrdersCard extends StatelessWidget {
       if (items.isEmpty) return const SizedBox.shrink();
       final rejected = items.where((o) => o.rejected != null).length;
       return Card(
-        color: rejected > 0 ? const Color(0xFFFDECEA) : const Color(0xFFFFF3E0),
+        color: rejected > 0 ? Tonos.of(context).errorFondo : Tonos.of(context).avisoFondo,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         child: ListTile(
           leading: Icon(

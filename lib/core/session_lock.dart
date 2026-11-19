@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 
 /// Impide que Atrás cierre un formulario oculto por el bloqueo.
 class SessionLockNavigation extends NavigatorObserver
@@ -57,6 +58,14 @@ class _SessionLockState extends State<SessionLock> with WidgetsBindingObserver {
   final _elapsed = Stopwatch();
   Timer? _timer;
   bool _locked = false, _hidden = false, _busy = false;
+
+  /// Solo si el teléfono no pudo verificar la identidad aparece la salida (y pide confirmar):
+  /// así no se cierra la sesión sin querer al ir a desbloquear.
+  bool _verifyFailed = false, _confirmExit = false;
+
+  /// Intentos seguidos sin desbloquear: a los 3 también aparece la salida (por si el teléfono
+  /// quedó sin huella, PIN ni patrón y nunca puede verificar).
+  int _failures = 0;
   String? _message;
   @override
   void initState() {
@@ -123,9 +132,16 @@ class _SessionLockState extends State<SessionLock> with WidgetsBindingObserver {
         if (!ok) {
           _message =
               'No se desbloqueó la aplicación. Podés volver a intentarlo.';
+          _failures++;
+          if (_failures >= 3) _verifyFailed = true;
         }
       });
       if (ok) {
+        setState(() {
+          _verifyFailed = false;
+          _confirmExit = false;
+          _failures = 0;
+        });
         _elapsed
           ..reset()
           ..start();
@@ -133,10 +149,11 @@ class _SessionLockState extends State<SessionLock> with WidgetsBindingObserver {
       }
     } catch (_) {
       if (mounted) {
-        setState(
-          () => _message =
-              'No se pudo verificar tu identidad. Usá el bloqueo del teléfono o volvé a iniciar sesión.',
-        );
+        setState(() {
+          _verifyFailed = true;
+          _message =
+              'No se pudo verificar tu identidad. Revisá el bloqueo del teléfono (huella, PIN o patrón) y volvé a intentar.';
+        });
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -198,16 +215,40 @@ class _SessionLockState extends State<SessionLock> with WidgetsBindingObserver {
                             onPressed: _busy || _hidden ? null : _unlock,
                             child: Text(_busy ? 'Verificando…' : 'Desbloquear'),
                           ),
-                          TextButton(
-                            onPressed: _busy
-                                ? null
-                                : () async {
-                                    await widget.signOut();
-                                  },
-                            child: const Text(
-                              'Cerrar sesión y descartar lo no guardado',
+                          if (_verifyFailed && !_confirmExit) ...[
+                            const SizedBox(height: 24),
+                            TextButton(
+                              onPressed: _busy ? null : () => setState(() => _confirmExit = true),
+                              child: const Text('Cerrar sesión'),
                             ),
-                          ),
+                          ],
+                          if (_verifyFailed && _confirmExit) ...[
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Se pierde lo que no se envió. ¿Cerrar sesión igual?',
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 12,
+                              alignment: WrapAlignment.center,
+                              children: [
+                                OutlinedButton(
+                                  onPressed: () => setState(() => _confirmExit = false),
+                                  child: const Text('No'),
+                                ),
+                                TextButton(
+                                  style: TextButton.styleFrom(foregroundColor: AppColors.rojo),
+                                  onPressed: _busy
+                                      ? null
+                                      : () async {
+                                          await widget.signOut();
+                                        },
+                                  child: const Text('Sí, cerrar sesión'),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),

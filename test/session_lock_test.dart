@@ -70,7 +70,7 @@ void main() {
     },
   );
   testWidgets(
-    'error de autenticación mantiene bloqueo y permite cerrar sesión',
+    'error de autenticación mantiene bloqueo y permite cerrar sesión confirmando',
     (tester) async {
       var signedOut = false;
       await tester.pumpWidget(
@@ -85,11 +85,15 @@ void main() {
           ),
         ),
       );
+      expect(find.text('Cerrar sesión'), findsNothing, reason: 'al desbloquear no hay salida a mano');
       await tester.tap(find.text('Desbloquear'));
       await tester.pumpAndSettle();
       expect(find.text('Datos privados'), findsNothing);
       expect(find.textContaining('No se pudo verificar'), findsOneWidget);
-      await tester.tap(find.text('Cerrar sesión y descartar lo no guardado'));
+      await tester.tap(find.text('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      expect(signedOut, isFalse, reason: 'pide confirmar');
+      await tester.tap(find.text('Sí, cerrar sesión'));
       await tester.pumpAndSettle();
       expect(signedOut, isTrue);
       await tester.pumpWidget(const SizedBox());

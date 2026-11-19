@@ -75,10 +75,6 @@ class _StockFormPageState extends State<StockFormPage> {
 
   /// Arriba solo queda la barra del avance; lo demás se abre con "Opciones".
   bool _optionsOpen = true;
-  static const _zebra = Color(0xFFE6F1FB);
-  static const _zebraText = Color(0xFF0C447C);
-  static const _fluor = Color(0xFFFFF176);
-  static const _fluorEdge = Color(0xFFF2D600);
   String get _draftKey => appConfig.localPreferenceKey('carga_vehiculo_borrador');
 
   StockFormKind get _kind => widget.kind;
@@ -765,8 +761,9 @@ class _StockFormPageState extends State<StockFormPage> {
     final filled = widget.items.where((i) => _filled(i.id)).toList();
     final done = filled.where((i) => _loaded.contains(i.id)).length;
     final complete = filled.isNotEmpty && done == filled.length;
+    final t = Tonos.of(context);
     return Container(
-      color: const Color(0xFFF4F4F2),
+      color: t.barra,
       padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
       child: Row(
         children: [
@@ -782,7 +779,7 @@ class _StockFormPageState extends State<StockFormPage> {
                     filled.isEmpty ? 'Escribí qué cargar' : '$done de ${filled.length} cargados',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: complete ? AppColors.verde : null,
+                      color: complete ? t.verde : null,
                     ),
                   ),
                 ),
@@ -791,8 +788,8 @@ class _StockFormPageState extends State<StockFormPage> {
                   LinearProgressIndicator(
                     value: done / filled.length,
                     minHeight: 4,
-                    color: complete ? AppColors.verde : _fluorEdge,
-                    backgroundColor: Colors.black12,
+                    color: complete ? t.verde : t.fluorBorde,
+                    backgroundColor: t.oscuro ? Colors.white24 : Colors.black12,
                   ),
                 ],
               ],
@@ -832,7 +829,8 @@ class _StockFormPageState extends State<StockFormPage> {
     final loaded = _loaded.contains(item.id);
     final filled = _filled(item.id);
     final zebra = !loaded && index.isOdd;
-    final textColor = zebra ? _zebraText : Colors.black87;
+    final t = Tonos.of(context);
+    final textColor = loaded ? t.fluorTexto : (zebra ? t.cebraTexto : t.filaTexto);
     String have(double v) => formatQty(v < 0 ? 0 : v);
     final badge = st == null
         ? null
@@ -857,13 +855,13 @@ class _StockFormPageState extends State<StockFormPage> {
             if (closed != null && closed.controlled) '${closed.name}: ${formatQty(closed.deposit)}',
           ].join(' · ');
     return Material(
-      color: loaded ? _fluor : (zebra ? _zebra : Colors.white),
+      color: loaded ? t.fluor : (zebra ? t.cebra : t.fila),
       child: InkWell(
         onTap: filled || loaded ? () => _toggleLoaded(item.id) : null,
         child: Container(
           decoration: BoxDecoration(
             border: Border(
-              left: BorderSide(color: loaded ? _fluorEdge : Colors.transparent, width: 6),
+              left: BorderSide(color: loaded ? t.fluorBorde : Colors.transparent, width: 6),
             ),
           ),
           padding: EdgeInsets.fromLTRB(closed != null ? 18 : 0, 3, 10, 3),
@@ -875,9 +873,9 @@ class _StockFormPageState extends State<StockFormPage> {
                 onChanged: filled || loaded ? (_) => _toggleLoaded(item.id) : null,
               ),
               if (closed != null)
-                const Padding(
-                  padding: EdgeInsets.only(right: 4),
-                  child: Icon(Icons.subdirectory_arrow_right, size: 18, color: AppColors.gris),
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Icon(Icons.subdirectory_arrow_right, size: 18, color: t.secundario),
                 ),
               Expanded(
                 child: Column(
@@ -892,11 +890,11 @@ class _StockFormPageState extends State<StockFormPage> {
                         if (badge != null && st != null)
                           summaryBadge(badge, st.state)
                         else
-                          Text(info, style: TextStyle(fontSize: 12, color: zebra ? _zebraText : AppColors.gris)),
+                          Text(info, style: TextStyle(fontSize: 12, color: zebra ? t.cebraTexto : t.secundario)),
                         if (changed)
                           Text(
                             'Pedidos: $original',
-                            style: TextStyle(fontSize: 12, color: zebra ? _zebraText : AppColors.gris),
+                            style: TextStyle(fontSize: 12, color: zebra ? t.cebraTexto : t.secundario),
                           ),
                       ],
                     ),
@@ -921,7 +919,7 @@ class _StockFormPageState extends State<StockFormPage> {
                       isDense: true,
                       hintText: _proposed[item.id] ?? 'Cant.',
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: t.campo,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       border: const OutlineInputBorder(),
                     ),

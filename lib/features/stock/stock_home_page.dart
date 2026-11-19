@@ -529,7 +529,7 @@ class _StockHomePageState extends State<StockHomePage> {
     final seller = _vehicle.sellerId == null ? null : _sellerNames[_vehicle.sellerId];
     final units = _vehicle.lines.values.fold<double>(0, (s, l) => s + (l.inVehicle > 0 ? l.inVehicle : 0));
     return Card(
-      color: open ? const Color(0xFFE8F5E9) : null,
+      color: open ? Tonos.of(context).exitoFondo : null,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(

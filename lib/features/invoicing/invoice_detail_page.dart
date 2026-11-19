@@ -11,6 +11,7 @@ import '../../core/app_config.dart';
 import '../../core/local_outbox.dart';
 import 'invoice_request.dart';
 import 'invoice_snapshot_pdf.dart';
+import '../../core/app_theme.dart';
 
 class InvoiceDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -713,9 +714,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       padding: const EdgeInsets.all(16),
       children: [
         if (_pendingInvoice != null)
-          const Card(
-            color: Color(0xFFFFF3E0),
-            child: ListTile(
+          Card(
+            color: Tonos.of(context).avisoFondo,
+            child: const ListTile(
               leading: Icon(Icons.sync_problem_outlined, color: Color(0xFFC05A00)),
               title: Text('Facturación sin confirmar'),
               subtitle: Text(
