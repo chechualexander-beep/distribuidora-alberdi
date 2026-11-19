@@ -285,6 +285,34 @@ void main() {
     expect(find.textContaining('Producto a: había 10, contaste 7'), findsOneWidget);
   });
 
+  testWidgets('cargar vehículo: tachar lo cargado y confirmar', (tester) async {
+    String? rpc;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StockFormPage(
+          kind: StockFormKind.load,
+          items: [item('a'), item('b')],
+          runner: (fn, args) async {
+            rpc = fn;
+            return const StockOpOutcome({'viaje_nuevo': true, 'movidos': 1, 'a_pedido': 0});
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Cantidad').first, '3');
+    await tester.pump();
+    expect(find.text('0 de 1 cargados'), findsOneWidget);
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pump();
+    expect(find.text('1 de 1 cargados'), findsOneWidget);
+    await tester.tap(find.text('CONFIRMAR (1 producto)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Faltan tachar'), findsNothing);
+    expect(rpc, 'stock_cargar_vehiculo');
+    expect(find.textContaining('Vehículo cargado'), findsOneWidget);
+  });
+
   Future<void> openHome(WidgetTester tester, {required bool admin}) async {
     await tester.binding.setSurfaceSize(const Size(1280, 1000));
     addTearDown(() => tester.binding.setSurfaceSize(null));

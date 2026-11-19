@@ -4,6 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/app_theme.dart';
 import '../../core/desktop_records.dart';
 import 'stock_data.dart';
+import 'dart:convert';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/app_config.dart';
 
 enum StockFormKind { count, load, unload, purchase, closeTrip }
 
@@ -56,6 +61,12 @@ class _StockFormPageState extends State<StockFormPage> {
   String? _sellerId;
   List<StockRow> _sellers = const [];
 
+  // Carga del vehículo como lista para tachar (reemplaza el papel). Queda guardada en el
+  // teléfono hasta confirmar, aunque se cierre la pantalla.
+  final _loaded = <String>{};
+  bool _onlyPending = false;
+  String get _draftKey => appConfig.localPreferenceKey('carga_vehiculo_borrador');
+
   StockFormKind get _kind => widget.kind;
 
   @override
@@ -69,7 +80,10 @@ class _StockFormPageState extends State<StockFormPage> {
       }
       _onlyFilled = true;
     }
-    if (_kind == StockFormKind.load) _loadSellers();
+    if (_kind == StockFormKind.load) {
+      _loadSellers();
+      _restoreDraft();
+    }
   }
 
   @override
@@ -85,6 +99,79 @@ class _StockFormPageState extends State<StockFormPage> {
       final sellers = await fetchSellers(_client);
       if (mounted) setState(() => _sellers = sellers);
     } catch (_) {}
+  }
+
+  Future<void> _restoreDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null) return;
+      final data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final quantities = Map<String, dynamic>.from(data['cantidades'] as Map? ?? const {});
+      final loaded = List<String>.from(data['cargados'] as List? ?? const []);
+      bool known(String id) => widget.items.any((i) => i.id == id);
+      if (!mounted) return;
+      setState(() {
+        for (final e in quantities.entries) {
+          if (known(e.key)) _controller(e.key).text = e.value.toString();
+        }
+        _loaded.addAll(loaded.where(known));
+        if (quantities.isNotEmpty) _onlyFilled = true;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _saveDraft() async {
+    if (_kind != StockFormKind.load) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final quantities = {
+        for (final e in _qty.entries)
+          if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
+      };
+      if (quantities.isEmpty && _loaded.isEmpty) {
+        await prefs.remove(_draftKey);
+      } else {
+        await prefs.setString(_draftKey, jsonEncode({'cantidades': quantities, 'cargados': _loaded.toList()}));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _clearDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+    } catch (_) {}
+  }
+
+  void _toggleLoaded(String id) {
+    setState(() {
+      if (!_loaded.remove(id)) _loaded.add(id);
+    });
+    _saveDraft();
+  }
+
+  bool _filled(String id) => _qty[id]?.text.trim().isNotEmpty ?? false;
+
+  /// Lo que falta subir, para mandar por WhatsApp a quien ayuda a cargar.
+  String _pendingText() {
+    final lines = [
+      for (final item in pairLooseWithClosed(widget.items, widget.items))
+        if (_filled(item.id) && !_loaded.contains(item.id)) '• ${_qty[item.id]!.text.trim()} × ${item.name}',
+    ];
+    return lines.isEmpty
+        ? 'Ya está todo cargado en el vehículo.'
+        : 'Falta cargar en el vehículo (${lines.length}):\n${lines.join('\n')}';
+  }
+
+  Future<void> _sharePending() async {
+    final text = _pendingText();
+    try {
+      await SharePlus.instance.share(ShareParams(text: text));
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: text));
+      _snack('Lista copiada: pegala en WhatsApp.');
+    }
   }
 
   TextEditingController _controller(String id) => _qty.putIfAbsent(id, TextEditingController.new);
@@ -126,6 +213,7 @@ class _StockFormPageState extends State<StockFormPage> {
       }
       _onlyFilled = true;
     });
+    _saveDraft();
   }
 
   Future<void> _propose(Future<Map<String, double>> Function(SupabaseClient) source, String empty) async {
@@ -155,6 +243,7 @@ class _StockFormPageState extends State<StockFormPage> {
       }
       final filled = (_qty[item.id]?.text.trim().isNotEmpty ?? false);
       if (_onlyFilled && text.isEmpty && !filled) return false;
+      if (_onlyPending && text.isEmpty && (!filled || _loaded.contains(item.id))) return false;
       if (_kind == StockFormKind.count && !_allProducts && !item.controlled && !filled &&
           text.isEmpty && widget.onlyIds == null) {
         return false;
@@ -211,6 +300,26 @@ class _StockFormPageState extends State<StockFormPage> {
     if (lines.isEmpty && !(_kind == StockFormKind.closeTrip)) {
       _snack('Escribí la cantidad de al menos un producto.');
       return;
+    }
+    if (_kind == StockFormKind.load) {
+      final missing = lines.where((l) => !_loaded.contains(l['producto_id'])).length;
+      if (missing > 0) {
+        final go = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Faltan tachar'),
+            content: Text(
+              'Quedan $missing ${missing == 1 ? 'producto' : 'productos'} sin tachar. '
+              '¿Confirmar la carga igual?',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Volver')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirmar')),
+            ],
+          ),
+        );
+        if (go != true || !mounted) return;
+      }
     }
     final total = lines.fold<double>(
       0,
@@ -273,6 +382,8 @@ class _StockFormPageState extends State<StockFormPage> {
     if (!mounted) return;
     // Sin la ruedita girando detrás del resultado.
     setState(() => _saving = false);
+    if (_kind == StockFormKind.load) await _clearDraft();
+    if (!mounted) return;
     await _showResult(outcome.result);
     if (mounted) Navigator.of(context).pop(true);
   }
@@ -508,6 +619,7 @@ class _StockFormPageState extends State<StockFormPage> {
               ),
             ],
           ),
+          _loadProgress(),
         ];
       case StockFormKind.unload:
         return [
@@ -533,6 +645,40 @@ class _StockFormPageState extends State<StockFormPage> {
     }
   }
 
+  /// "18 de 30 cargados", "Falta cargar" y "Compartir lista".
+  Widget _loadProgress() {
+    final filled = widget.items.where((i) => _filled(i.id)).toList();
+    if (filled.isEmpty) return const SizedBox.shrink();
+    final done = filled.where((i) => _loaded.contains(i.id)).length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            '$done de ${filled.length} cargados',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: done == filled.length ? AppColors.verde : null,
+            ),
+          ),
+          FilterChip(
+            label: const Text('Falta cargar'),
+            selected: _onlyPending,
+            onSelected: (v) => setState(() => _onlyPending = v),
+          ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.share, size: 18),
+            label: const Text('Compartir lista'),
+            onPressed: _sharePending,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _row(StockItem item) {
     final closed = item.parentId == null
         ? null
@@ -551,6 +697,13 @@ class _StockFormPageState extends State<StockFormPage> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
+            if (_kind == StockFormKind.load)
+              Checkbox(
+                value: _loaded.contains(item.id),
+                onChanged: _filled(item.id) || _loaded.contains(item.id)
+                    ? (_) => _toggleLoaded(item.id)
+                    : null,
+              ),
             if (closed != null)
               const Padding(
                 padding: EdgeInsets.only(right: 6),
@@ -560,7 +713,14 @@ class _StockFormPageState extends State<StockFormPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    item.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: _loaded.contains(item.id) ? AppColors.gris : null,
+                      decoration: _loaded.contains(item.id) ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
                   Text(
                     _kind == StockFormKind.closeTrip && item.controlled
                         ? 'Debería quedar ${formatQty(item.vehicle)}'
@@ -601,7 +761,10 @@ class _StockFormPageState extends State<StockFormPage> {
                   labelText: 'Cantidad',
                   border: OutlineInputBorder(),
                 ),
-                onChanged: (_) => setState(() {}),
+                onChanged: (_) {
+                  setState(() {});
+                  _saveDraft();
+                },
               ),
             ),
           ],

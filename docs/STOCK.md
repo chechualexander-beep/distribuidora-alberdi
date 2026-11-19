@@ -57,6 +57,9 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   N", "La última vez llevó N" primero, y antes de ver el pedido "¿Ofreciste todo?" con lo del
   vehículo que no está en la venta (una vez por venta).
 - Sin señal, las operaciones de stock quedan en "Pendientes de enviar" (mismo id, hora real).
+- **Cargar vehículo como lista para tachar** (reemplaza el papel): casilla por producto (tachado),
+  "N de M cargados", filtro "Falta cargar", "Compartir lista" (lo que falta, por WhatsApp). Queda
+  guardada en el teléfono hasta confirmar; al confirmar avisa si quedan sin tachar.
 - "Anotar compra" también desde Gestión de reparto (entra al vehículo) y con el costo actual
   precargado (si se pagó lo mismo, no hay que escribirlo).
 - Se quitó la pantalla vieja de Stock V2 (`ENABLE_STOCK`).
