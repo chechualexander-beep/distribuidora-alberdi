@@ -328,6 +328,11 @@ tipo_operacion,
         if (productoId != null) idsResumen[nombre] = productoId;
       }
     }
+    final lineasResumen = [
+      for (final entry in (resumenProductos.entries.toList()
+        ..sort((a, b) => a.key.compareTo(b.key))))
+        SummaryLine(idsResumen[entry.key], entry.key, entry.value),
+    ];
     final preventistasDisponibles = <String, String>{};
 
     for (final pedido in _pedidos) {
@@ -466,33 +471,10 @@ tipo_operacion,
                 },
               ),
             ),
-          Card(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: ExpansionTile(
-              leading: const Icon(Icons.inventory_2_outlined),
-              title: const Text(
-                'RESUMEN DE PRODUCTOS',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text('${resumenProductos.length} productos distintos'),
-              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              children: [
-                SizedBox(
-                  height: 360,
-                  child: SingleChildScrollView(
-                    child: ProductSummaryTable(
-                      lines: [
-                        for (final entry
-                            in (resumenProductos.entries.toList()
-                              ..sort((a, b) => a.key.compareTo(b.key))))
-                          SummaryLine(idsResumen[entry.key], entry.key, entry.value),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // En Windows arriba de la tabla; en el celular va como primer elemento de la lista
+          // (se ve completo al desplegarlo, como en Gestión de reparto).
+          if (useDesktopLayout(context))
+            _tarjetaResumen(lineasResumen, alto: 360),
           Expanded(
             child: useDesktopLayout(context)
                 ? DesktopRecords(
@@ -533,10 +515,11 @@ tipo_operacion,
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
-                    itemCount: pedidosFiltrados.length,
+                    itemCount: pedidosFiltrados.length + 1,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
-                      final pedido = pedidosFiltrados[index];
+                      if (index == 0) return _tarjetaResumen(lineasResumen);
+                      final pedido = pedidosFiltrados[index - 1];
 
                       final cliente =
                           pedido['clientes'] as Map<String, dynamic>?;
@@ -639,6 +622,29 @@ tipo_operacion,
                     },
                   ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Resumen de productos. Con [alto] se desplaza adentro (Windows); sin él se ve completo.
+  Widget _tarjetaResumen(List<SummaryLine> lineas, {double? alto}) {
+    final tabla = ProductSummaryTable(lines: lineas);
+    return Card(
+      margin: alto == null ? EdgeInsets.zero : const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: ExpansionTile(
+        leading: const Icon(Icons.inventory_2_outlined),
+        title: const Text(
+          'RESUMEN DE PRODUCTOS',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text('${lineas.length} productos distintos'),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        children: [
+          if (alto == null)
+            tabla
+          else
+            SizedBox(height: alto, child: SingleChildScrollView(child: tabla)),
         ],
       ),
     );

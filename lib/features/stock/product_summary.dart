@@ -26,6 +26,8 @@ class SummaryRow {
     this.parentName,
     this.buyName,
     this.buyQuantity = 0,
+    this.closedName,
+    this.closedStock,
   });
 
   final SummaryLine line;
@@ -42,6 +44,10 @@ class SummaryRow {
   /// Qué comprar y cuánto (en unidades del origen si es fraccionado).
   final String? buyName;
   final double buyQuantity;
+
+  /// Suelto que sale de un cerrado: cuántos cerrados hay (para mostrar "2 sueltas · 10 cajas").
+  final String? closedName;
+  final double? closedStock;
 }
 
 /// Compara lo pedido con el stock. Sin [stock] (preventista o sin señal) solo lista cantidades.
@@ -72,10 +78,18 @@ List<SummaryRow> evaluateSummary(List<SummaryLine> lines, Map<String, StockItem>
       });
     }
     final parentHave = parentId == null ? 0.0 : (parentLeft[parentId] ?? 0.0);
+    final closedName = parent?.name;
+    final closedStock = parent != null && parent.controlled ? parent.total : null;
     final have = item.controlled ? item.total : 0.0;
     final q = line.quantity;
     if (item.controlled && have >= q) {
-      rows.add(SummaryRow(line: line, state: SummaryState.enough, have: have));
+      rows.add(SummaryRow(
+        line: line,
+        state: SummaryState.enough,
+        have: have,
+        closedName: closedName,
+        closedStock: closedStock,
+      ));
       continue;
     }
     final short = q - (have > 0 ? have : 0);
@@ -93,6 +107,8 @@ List<SummaryRow> evaluateSummary(List<SummaryLine> lines, Map<String, StockItem>
         have: item.controlled ? have : null,
         openParents: open,
         parentName: parent?.name,
+        closedName: closedName,
+        closedStock: closedStock,
       ));
       continue;
     }
@@ -107,6 +123,8 @@ List<SummaryRow> evaluateSummary(List<SummaryLine> lines, Map<String, StockItem>
       parentName: parent?.name,
       buyName: buyParent ? parentName : item.name,
       buyQuantity: buyParent ? (left / units).ceilToDouble() : left,
+      closedName: closedName,
+      closedStock: closedStock,
     ));
   }
   return rows;
@@ -307,6 +325,12 @@ class _ProductSummaryTableState extends State<ProductSummaryTable> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(r.line.name, style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
+                if (withStock && r.closedName != null)
+                  Text(
+                    'Sueltos ${r.have == null ? '—' : formatQty(r.have!)} · '
+                    '${r.closedName}: ${r.closedStock == null ? '—' : formatQty(r.closedStock!)}',
+                    style: TextStyle(fontSize: 12, color: textColor ?? AppColors.gris),
+                  ),
                 if (badge != null) ...[
                   const SizedBox(height: 3),
                   _badge(badge, r.state),

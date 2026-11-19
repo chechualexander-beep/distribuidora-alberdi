@@ -351,7 +351,11 @@ class _StockHomePageState extends State<StockHomePage> {
   );
 
   Widget _content() {
-    final visible = _visible;
+    final visible = pairLooseWithClosed(
+      _visible,
+      _items,
+      addLoose: _filter == _Filter.controlled || _filter == _Filter.all,
+    );
     final controlled = _items.where((i) => i.controlled).length;
     final negatives = _items.where((i) => i.negative).length;
     return DesktopForm(
@@ -430,11 +434,18 @@ class _StockHomePageState extends State<StockHomePage> {
             ),
           for (final item in visible)
             Card(
+              margin: item.parentId != null && visible.any((v) => v.id == item.parentId)
+                  ? const EdgeInsets.only(left: 28, top: 2, bottom: 6, right: 4)
+                  : null,
               child: ListTile(
+                leading: item.parentId != null && visible.any((v) => v.id == item.parentId)
+                    ? const Icon(Icons.subdirectory_arrow_right)
+                    : null,
                 title: Text(item.name),
                 subtitle: Text(
                   '${item.controlled ? item.category : '${item.category} · a pedido'}'
-                  '${item.parentId == null ? '' : '\nSale de ${_name(item.parentId)} (1 → ${formatQty(item.unitsPerParent ?? 0)})'}',
+                  '${item.parentId == null ? '' : '\nSuelto de ${_name(item.parentId)} (1 → ${formatQty(item.unitsPerParent ?? 0)})'}'
+                  '${[for (final c in _items) if (c.parentId == item.id) '\n${looseSummary(item, c)}'].join()}',
                 ),
                 trailing: item.controlled
                     ? Column(

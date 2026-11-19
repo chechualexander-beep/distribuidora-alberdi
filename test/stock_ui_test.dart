@@ -119,6 +119,25 @@ void main() {
     expect(list, contains('Abrir 1 × Facu x 5 kg'));
   });
 
+  test('sueltos debajo de su cerrado y total combinado', () {
+    final caja = StockItem(id: 'caja', name: 'Papas Facu caja x 5 kg', code: '', category: 'x', photo: null,
+        controlled: true, deposit: 10, vehicle: 0);
+    final suelta = StockItem(id: 'kg', name: 'Papas Facu x 1 kg', code: '', category: 'x', photo: null,
+        controlled: false, deposit: 0, vehicle: 2, parentId: 'caja', unitsPerParent: 5);
+    final otro = StockItem(id: 'y', name: 'Yerba', code: '', category: 'x', photo: null,
+        controlled: true, deposit: 3, vehicle: 0);
+    final todos = [suelta, caja, otro];
+    expect(pairLooseWithClosed([caja, otro], todos, addLoose: true).map((i) => i.id), ['caja', 'kg', 'y']);
+    expect(pairLooseWithClosed([caja, otro], todos).map((i) => i.id), ['caja', 'y']);
+    expect(pairLooseWithClosed([suelta, caja, otro], todos).map((i) => i.id), ['caja', 'kg', 'y']);
+    expect(looseSummary(caja, suelta), '10 cerrados + 2 sueltos = 52 × Papas Facu x 1 kg');
+    final rows = evaluateSummary(const [SummaryLine('kg', 'Papas Facu x 1 kg', 3)], {
+      for (final i in todos) i.id: i,
+    });
+    expect(rows.single.closedName, 'Papas Facu caja x 5 kg');
+    expect(rows.single.closedStock, 10);
+  });
+
   testWidgets('resumen sin stock (preventista): filas con cantidades, sin columna Hay', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

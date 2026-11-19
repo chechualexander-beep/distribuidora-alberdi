@@ -146,7 +146,7 @@ class _StockFormPageState extends State<StockFormPage> {
 
   List<StockItem> get _visible {
     final text = _normalize(_search.text);
-    return widget.items.where((item) {
+    final base = widget.items.where((item) {
       if (widget.onlyIds != null && !widget.onlyIds!.contains(item.id)) return false;
       if (text.isNotEmpty &&
           !_normalize(item.name).contains(text) &&
@@ -161,6 +161,8 @@ class _StockFormPageState extends State<StockFormPage> {
       }
       return true;
     }).toList();
+    // Cada suelto justo debajo de su cerrado; al contar, aparecen aunque sean "a pedido".
+    return pairLooseWithClosed(base, widget.items, addLoose: _kind == StockFormKind.count);
   }
 
   static String _normalize(String text) => text
@@ -532,14 +534,28 @@ class _StockFormPageState extends State<StockFormPage> {
   }
 
   Widget _row(StockItem item) {
-    final info = !item.controlled
-        ? 'A pedido'
-        : 'Depósito ${formatQty(item.deposit)} · Vehículo ${formatQty(item.vehicle)}';
+    final closed = item.parentId == null
+        ? null
+        : widget.items.where((i) => i.id == item.parentId).firstOrNull;
+    final hasLoose = widget.items.any((i) => i.parentId == item.id);
+    final info = [
+      if (closed != null) 'Sueltos de ${closed.name}',
+      if (hasLoose) 'Cerrados',
+      !item.controlled
+          ? 'A pedido'
+          : 'Depósito ${formatQty(item.deposit)} · Vehículo ${formatQty(item.vehicle)}',
+    ].join(' · ');
     return Card(
+      margin: closed != null ? const EdgeInsets.only(left: 24, top: 2, bottom: 6, right: 4) : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
+            if (closed != null)
+              const Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: Icon(Icons.subdirectory_arrow_right, size: 20),
+              ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

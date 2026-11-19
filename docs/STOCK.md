@@ -86,6 +86,12 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   - A mano: "Fraccionar" (`stock_fraccionar`): origen −N, fraccionado +N×unidades.
   - Automático: si una entrega deja el fraccionado en negativo y hay unidades del origen en el
     mismo lugar, se abren solas las necesarias ("Fraccionado automático al entregar").
+- **Cerrados y sueltos juntos** (inventario): el producto grande es "lo cerrado" y el chico
+  "lo suelto" (bolsa abierta, cajas sin abrir, sobres sueltos), con decimales (1,5 kg). En Stock y
+  en Contar cada suelto aparece debajo de su cerrado, con el total combinado ("10 cerrados +
+  2 sueltos = 52 × Papas Facu x 1 kg"); al contar aparecen aunque sean "a pedido". En el resumen,
+  cada suelto muestra "Sueltos 2 · Caja: 10".
+- No se arma un cerrado con sueltos (pedido de caja sin cajas cerradas = falta).
 - Prueba: `test/fraccionados_escenario.sql`.
 
 ## Etapas

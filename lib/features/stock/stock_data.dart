@@ -166,6 +166,41 @@ Future<List<StockItem>> fetchStockItems(SupabaseClient client) async {
   ];
 }
 
+/// Ordena para que cada suelto quede justo debajo de su cerrado. Con [addLoose] también suma
+/// los sueltos de un cerrado visible que el filtro dejó afuera (por ejemplo, al contar).
+List<StockItem> pairLooseWithClosed(
+  List<StockItem> visible,
+  List<StockItem> all, {
+  bool addLoose = false,
+}) {
+  final ids = {for (final i in visible) i.id};
+  final childrenOf = <String, List<StockItem>>{};
+  for (final i in all) {
+    final parent = i.parentId;
+    if (parent != null && ids.contains(parent) && (addLoose || ids.contains(i.id))) {
+      childrenOf.putIfAbsent(parent, () => []).add(i);
+    }
+  }
+  final placed = <String>{};
+  final out = <StockItem>[];
+  for (final i in visible) {
+    if (i.parentId != null && ids.contains(i.parentId)) continue; // va debajo de su cerrado
+    if (!placed.add(i.id)) continue;
+    out.add(i);
+    for (final c in childrenOf[i.id] ?? const <StockItem>[]) {
+      if (placed.add(c.id)) out.add(c);
+    }
+  }
+  return out;
+}
+
+/// "10 cerrados + 2 sueltos = 52 × Papas Facu x 1 kg".
+String looseSummary(StockItem closed, StockItem loose) {
+  final units = loose.unitsPerParent ?? 0;
+  return '${formatQty(closed.total)} cerrados + ${formatQty(loose.total)} sueltos = '
+      '${formatQty(closed.total * units + loose.total)} × ${loose.name}';
+}
+
 /// Productos de los pedidos facturados que todavía hay que entregar (para proponer la carga).
 Future<Map<String, double>> fetchPendingDeliveries(SupabaseClient client) async {
   final rows = await client
