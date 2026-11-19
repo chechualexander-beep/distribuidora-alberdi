@@ -102,6 +102,7 @@ class _StockFormPageState extends State<StockFormPage> {
 
   @override
   void dispose() {
+    _closeProposeSnack();
     for (final c in [..._qty.values, ..._cost.values, _search, _supplier]) {
       c.dispose();
     }
@@ -293,6 +294,15 @@ class _StockFormPageState extends State<StockFormPage> {
     }
   }
 
+  /// Aviso de "PROPONER TODO" abierto (se cierra con la X, solo o al salir de la pantalla).
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _proposeSnack;
+
+  void _closeProposeSnack() {
+    final snack = _proposeSnack;
+    _proposeSnack = null;
+    snack?.close();
+  }
+
   /// "Pedidos a entregar": solo lo que falta subir (lo demás ya está arriba del vehículo).
   Future<void> _proposeForDeliveries() async {
     try {
@@ -306,15 +316,25 @@ class _StockFormPageState extends State<StockFormPage> {
       final partial = missing.length != all.length || missing.entries.any((e) => e.value < (all[e.key] ?? 0));
       if (missing.isNotEmpty) _fill(missing);
       if (!partial) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _closeProposeSnack();
+      final snack = ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          duration: const Duration(seconds: 8),
+          duration: const Duration(seconds: 10),
+          showCloseIcon: true,
           content: Text(missing.isEmpty
               ? 'Ya está todo arriba del vehículo para los pedidos a entregar.'
               : 'Propuesto solo lo que falta subir: lo demás ya está en el vehículo.'),
           action: SnackBarAction(label: 'PROPONER TODO', onPressed: () => _fill(all)),
         ),
       );
+      _proposeSnack = snack;
+      snack.closed.then((_) {
+        if (identical(_proposeSnack, snack)) _proposeSnack = null;
+      });
+      // Con botón, el aviso no se va solo: se cierra a los 10 segundos o al salir.
+      Future.delayed(const Duration(seconds: 10), () {
+        if (identical(_proposeSnack, snack)) _closeProposeSnack();
+      });
     } catch (error) {
       _snack(stockErrorText(error));
     }
