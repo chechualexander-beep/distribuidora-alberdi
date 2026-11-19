@@ -6,6 +6,7 @@ import 'settlement_review_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_order_detail.dart';
 import '../../core/argentina_date_utils.dart';
+import '../../core/app_theme.dart';
 
 class MyCommissionsPage extends StatefulWidget {
   const MyCommissionsPage({super.key});
@@ -354,6 +355,8 @@ class _MyCommissionsPageState extends State<MyCommissionsPage> {
       appBar: AppBar(
         actions: [
           TextButton.icon(
+            // Dorado: en la barra negra, el texto negro no se veía.
+            style: TextButton.styleFrom(foregroundColor: AppColors.dorado),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => CommissionStatisticsPage()),
             ),

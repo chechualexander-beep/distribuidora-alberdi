@@ -586,6 +586,7 @@ productos (
           ),
           if (!_mostrarVentaDirecta)
             TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.dorado),
               onPressed: _cargando ? null : _alternarSinProgramar,
               child: Text(_sinProgramar ? 'Volver a reparto' : 'Sin programar'),
             ),

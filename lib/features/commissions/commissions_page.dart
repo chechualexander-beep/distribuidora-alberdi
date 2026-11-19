@@ -328,6 +328,8 @@ class _CommissionsPageState extends State<CommissionsPage> {
         title: const Text('Liquidación de comisiones'),
         actions: [
           TextButton.icon(
+            // Dorado: en la barra negra, el texto negro no se veía.
+            style: TextButton.styleFrom(foregroundColor: AppColors.dorado),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) =>
