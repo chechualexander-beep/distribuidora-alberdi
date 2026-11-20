@@ -1,18 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 bool useDesktopLayout(BuildContext context) =>
     Theme.of(context).platform == TargetPlatform.windows &&
     MediaQuery.sizeOf(context).width >= 900;
 
-String desktopMoney(Object? value) {
-  final number = double.tryParse(value?.toString() ?? '') ?? 0;
-  final parts = number.toStringAsFixed(2).split('.');
-  final grouped = parts[0].replaceAllMapped(
-    RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-    (m) => '${m[1]}.',
-  );
-  return '\$$grouped,${parts[1]}';
-}
+String desktopMoney(Object? value) => formatoPesos(value);
 
 /// Both scroll axes have their own controller; desktop wheel/scrollbars work
 /// even inside the administration shell, and text scaling may grow rows.

@@ -17,6 +17,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/offline_queries.dart';
 import '../../core/pending_orders.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class ClientDetailPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -681,14 +682,14 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       Text(
-                        'Total vendido: \$${_totalCompras.toStringAsFixed(0)}',
+                        'Total vendido: ${formatoPesos(_totalCompras)}',
                       ),
                       Text(
-                        'Total pagado: \$${_totalPagado.toStringAsFixed(0)}',
+                        'Total pagado: ${formatoPesos(_totalPagado)}',
                       ),
                       if (_saldoPendiente > 0)
                         Text(
-                          'Deuda total: \$${_saldoPendiente.toStringAsFixed(0)}',
+                          'Deuda total: ${formatoPesos(_saldoPendiente)}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       if (_saldoPendiente > 0) ...[
@@ -720,9 +721,9 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 6),
                               child: Text(
-                                'Pedido $fechaPedido — Total \$${total.toStringAsFixed(0)} — '
-                                'Pagado \$${pagado.toStringAsFixed(0)} — '
-                                'Saldo \$${saldo.toStringAsFixed(0)}',
+                                'Pedido $fechaPedido — Total ${formatoPesos(total)} — '
+                                'Pagado ${formatoPesos(pagado)} — '
+                                'Saldo ${formatoPesos(saldo)}',
                               ),
                             );
                           }),
@@ -838,7 +839,7 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                     child: ListTile(
                       leading: const Icon(Icons.payments_outlined),
                       title: Text(
-                        '$fechaTexto — \$${importe.toStringAsFixed(0)}',
+                        '$fechaTexto — ${formatoPesos(importe)}',
                       ),
                       subtitle: Text(
                         observacion.isEmpty
@@ -1004,7 +1005,7 @@ https://www.google.com/maps/search/?api=1&query=$latitud,$longitud
                                 ),
                                 const SizedBox(height: 3),
                                 Text('Cantidad: $cantidad'),
-                                Text('Precio utilizado: \$$precio'),
+                                Text('Precio utilizado: ${formatoPesos(precio)}'),
                                 Text('Lista: $nombreTipoPrecio'),
                               ],
                             ),

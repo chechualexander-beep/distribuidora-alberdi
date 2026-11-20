@@ -7,6 +7,7 @@ import 'products_desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/offline_queries.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key});
@@ -90,13 +91,7 @@ class _ProductsPageState extends State<ProductsPage> {
     }
   }
 
-  String _precio(dynamic valor) {
-    if (valor == null) return '\$0';
-
-    final numero = double.tryParse(valor.toString()) ?? 0;
-
-    return '\$${numero.toStringAsFixed(2)}';
-  }
+  String _precio(dynamic valor) => formatoPesos(valor ?? 0);
 
   @override
   Widget build(BuildContext context) {

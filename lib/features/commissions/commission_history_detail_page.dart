@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'settlement_review_page.dart';
 import '../orders/credit_notes_page.dart' show ncMoney;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class CommissionHistoryDetailPage extends StatefulWidget {
   final Map<String, dynamic> liquidacion;
@@ -104,24 +105,7 @@ class _CommissionHistoryDetailPageState
     return double.tryParse(valor?.toString() ?? '0') ?? 0;
   }
 
-  String _formatearPrecio(double valor) {
-    final entero = valor.round().toString();
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    return '\$${buffer.toString().split('').reversed.join()}';
-  }
+  String _formatearPrecio(double valor) => formatoPesos(valor);
 
   String _formatearFecha(dynamic valor) {
     if (valor == null) return '';

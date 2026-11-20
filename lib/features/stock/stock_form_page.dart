@@ -12,6 +12,7 @@ import '../../core/app_config.dart';
 import 'product_summary.dart';
 import '../finance/finance_data.dart';
 import '../finance/finance_forms.dart' show isoDate;
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 enum StockFormKind { count, load, unload, purchase, closeTrip }
 
@@ -585,7 +586,7 @@ class _StockFormPageState extends State<StockFormPage> {
         case StockFormKind.purchase:
           lines.add('Compra anotada.');
           if (stockNum(result['total']) > 0) {
-            lines.add('Total: \$${formatQty(stockNum(result['total']))}');
+            lines.add('Total: ${formatoPesos(result['total'])}');
           }
           final pasaron = stockNum(result['nuevos_con_stock']).round();
           if (pasaron > 0) lines.add('$pasaron productos "a pedido" pasaron a llevar stock.');

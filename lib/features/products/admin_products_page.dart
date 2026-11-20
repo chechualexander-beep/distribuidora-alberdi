@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:csv/csv.dart';
 import 'price_list_page.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class AdminProductsPage extends StatefulWidget {
   const AdminProductsPage({super.key});
@@ -1542,15 +1543,15 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Text('Costo: \$${producto['costo'] ?? 0}'),
+                              Text('Costo: ${formatoPesos(producto['costo'])}'),
                               Text(
-                                'Precio normal: \$${producto['precio_normal'] ?? 0}',
+                                'Precio normal: ${formatoPesos(producto['precio_normal'])}',
                               ),
                               Text(
-                                'Precio promo: \$${producto['precio_promo'] ?? 0}',
+                                'Precio promo: ${formatoPesos(producto['precio_promo'])}',
                               ),
                               Text(
-                                'Precio interior: \$${producto['precio_interior'] ?? 0}',
+                                'Precio interior: ${formatoPesos(producto['precio_interior'])}',
                               ),
                               const SizedBox(height: 4),
                               Text(

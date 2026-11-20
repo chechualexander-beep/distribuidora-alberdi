@@ -11,6 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/network_status.dart';
 import '../../core/pending_orders.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
+import 'payment_choice.dart';
+import '../invoicing/atomic_invoice.dart' show newInvoiceRequestId;
 
 class ManageOrderPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -117,6 +120,52 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
     }
   }
 
+  /// Pago mixto: la parte que no fue con la entrega va como un cobro más del cliente. Sin
+  /// señal queda en "Pendientes de enviar", detrás de la entrega (la cola respeta el orden).
+  (double, String)? _segundoPago;
+
+  Future<String?> _registrarSegundoPago({bool soloEncolar = false}) async {
+    final segundo = _segundoPago;
+    if (segundo == null) return null;
+    _segundoPago = null;
+    final (importe, medio) = segundo;
+    final client = Supabase.instance.client;
+    final cliente = widget.pedido['clientes'];
+    final nombre = cliente is Map ? cliente['nombre_comercio']?.toString() ?? 'Cliente' : 'Cliente';
+    final texto = '${formatoPesos(importe)} en ${medio.toLowerCase()}';
+    final clienteId = widget.pedido['cliente_id']?.toString();
+    if (clienteId == null) return 'No se registró $texto: anotalo en Saldos.';
+    final args = <String, dynamic>{
+      'p_id': newInvoiceRequestId(),
+      'p_cliente_id': clienteId,
+      'p_importe': importe,
+      'p_medio_pago': medio,
+      'p_observacion': 'Pago mixto de la entrega',
+      'p_fecha': DateTime.now().toUtc().toIso8601String(),
+    };
+    Future<String> encolar() async {
+      await PendingOrders.instance.add(
+        PendingOrder.stock(
+          rpc: 'registrar_cobro_sin_conexion',
+          args: args,
+          description: 'Cobro $medio · $nombre',
+          total: importe,
+        ),
+        uid: client.auth.currentUser?.id,
+      );
+      return '$texto: se envía solo cuando haya señal.';
+    }
+
+    if (soloEncolar) return encolar();
+    try {
+      await client.rpc('registrar_cobro_sin_conexion', params: args).timeout(const Duration(seconds: 20));
+      return '$texto registrado.';
+    } catch (error) {
+      if (isUncertainRequestError(error)) return encolar();
+      return 'No se registró $texto (${error is PostgrestException ? error.message : error}). Anotalo en Saldos.';
+    }
+  }
+
   Future<void> _enviarPendiente() async {
     final payload = _pendiente;
     if (payload == null) return;
@@ -128,6 +177,7 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
         retry: true,
       );
       await _solicitudes!.acknowledge(widget.pedido['id'].toString());
+      final segundo = await _registrarSegundoPago();
       if (!mounted) return;
       _pendiente = null;
       await showDialog<void>(
@@ -135,7 +185,8 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
         builder: (context) => AlertDialog(
           title: const Text('Gestión confirmada'),
           content: Text(
-            'Resultado: ${_nombreResultado(result['resultado_entrega'].toString())}',
+            'Resultado: ${_nombreResultado(result['resultado_entrega'].toString())}'
+            '${segundo == null ? '' : '\nPago mixto: $segundo'}',
           ),
           actions: [
             FilledButton(
@@ -166,6 +217,8 @@ class _ManageOrderPageState extends State<ManageOrderPage> {
     } on LocalOutboxException catch (error) {
       _mostrarMensaje(error.message);
     } catch (_) {
+      // La entrega quedó guardada para reintentar: la otra parte del pago espera en la cola.
+      await _registrarSegundoPago(soloEncolar: true);
       _mostrarMensaje(
         'No se conoce el resultado. La solicitud quedó guardada; revisá o reintentá con la misma solicitud.',
       );
@@ -708,28 +761,7 @@ cantidad_entregada,
     }
   }
 
-  String _formatearPrecio(double valor) {
-    final partes = valor.toStringAsFixed(2).split('.');
-    final entero = partes.first;
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    final decimales = partes.length == 2 && partes.last != '00'
-        ? ',${partes.last}'
-        : '';
-    return '\$${buffer.toString().split('').reversed.join()}$decimales';
-  }
+  String _formatearPrecio(double valor) => formatoPesos(valor);
 
   double _totalEntregadoActual() {
     return _detalles.fold<double>(0, (total, detalle) {
@@ -903,122 +935,34 @@ cantidad_entregada,
     String? medioPagoCompleto;
     double? importePagoParcial;
     String? medioPagoParcial;
+    _segundoPago = null;
 
     if (resultado != 'no_entregado' && totalEntregado > 0) {
-      medioPagoCompleto = await showDialog<String>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('¿Cómo quedó el pago?'),
-            content: Text(
-              'Mercadería entregada: ${_formatearPrecio(totalEntregado)}\n\nSaldo a favor que se aplicará: ${_formatearPrecio(creditoAplicable)}\nImporte nuevo a cobrar: ${_formatearPrecio(efectivoCompleto)}\n¿Cómo pagó el cliente?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, null),
-                child: const Text('CANCELAR'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, 'Parcial'),
-                child: const Text('DEJÓ SALDO'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, 'Efectivo'),
-                child: const Text('EFECTIVO'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, 'Transferencia'),
-                child: const Text('TRANSFERENCIA'),
-              ),
-            ],
-          );
-        },
+      final eleccion = await showPaymentChoice(
+        context,
+        aCobrar: efectivoCompleto,
+        detalle: creditoAplicable > 0
+            ? 'Mercadería ${_formatearPrecio(totalEntregado)} · saldo a favor aplicado ${_formatearPrecio(creditoAplicable)}'
+            : 'Mercadería entregada: ${_formatearPrecio(totalEntregado)}',
       );
+      if (eleccion == null || !mounted) return;
+      final plan = planPago(eleccion, efectivoCompleto);
+      if (plan.completo != null) {
+        medioPagoCompleto = plan.completo;
+      } else {
+        // Mixto o dejó saldo: la entrega lleva una parte; la otra, un cobro más del cliente.
+        medioPagoCompleto = 'Parcial';
+        importePagoParcial = plan.parcialImporte;
+        medioPagoParcial = plan.parcialMedio;
+        if (plan.segundoImporte != null && plan.segundoMedio != null) {
+          _segundoPago = (plan.segundoImporte!, plan.segundoMedio!);
+        }
+      }
     }
     if (resultado != 'no_entregado' && medioPagoCompleto == null) {
       return;
     }
     if (!mounted) return;
-    if (resultado != 'no_entregado' && medioPagoCompleto == 'Parcial') {
-      final controller = TextEditingController();
-
-      final importe = await showDialog<double>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('Pago parcial'),
-            content: TextField(
-              controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Importe pagado',
-                prefixText: r'$ ',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('NO PAGÓ NADA'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final valor = double.tryParse(
-                    controller.text.trim().replaceAll(',', '.'),
-                  );
-
-                  if (valor == null || valor <= 0) return;
-
-                  Navigator.pop(dialogContext, valor);
-                },
-                child: const Text('CONTINUAR'),
-              ),
-            ],
-          );
-        },
-      );
-
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-
-      if (!mounted) return;
-
-      controller.dispose();
-
-      if (importe != null) {
-        importePagoParcial = importe;
-
-        medioPagoParcial = await showDialog<String>(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: const Text('Medio de pago'),
-              content: Text(
-                'Importe recibido: \$${importe.toStringAsFixed(0)}',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('CANCELAR'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'Efectivo'),
-                  child: const Text('EFECTIVO'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'Transferencia'),
-                  child: const Text('TRANSFERENCIA'),
-                ),
-              ],
-            );
-          },
-        );
-
-        if (!mounted) return;
-      }
-    }
 
     if ((resultado == 'no_entregado' || resultado == 'parcial') &&
         _motivoController.text.trim().isEmpty) {
@@ -1125,6 +1069,7 @@ cantidad_entregada,
             ),
             uid: client.auth.currentUser?.id,
           );
+          await _registrarSegundoPago(soloEncolar: true);
           if (!mounted) return;
           await showDialog<void>(
             context: context,
@@ -1166,6 +1111,7 @@ cantidad_entregada,
           'p_medio_pago': medioPago,
         },
       );
+      final segundo = await _registrarSegundoPago();
 
       if (!mounted) return;
 
@@ -1176,7 +1122,9 @@ cantidad_entregada,
           return AlertDialog(
             icon: const Icon(Icons.check_circle_outline, size: 48),
             title: const Text('Gestión guardada'),
-            content: Text('Resultado: ${_nombreResultado(resultado)}'),
+            content: Text(
+              'Resultado: ${_nombreResultado(resultado)}${segundo == null ? '' : '\nPago mixto: $segundo'}',
+            ),
             actions: [
               FilledButton(
                 onPressed: () {

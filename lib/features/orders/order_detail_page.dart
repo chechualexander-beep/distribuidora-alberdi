@@ -9,6 +9,7 @@ import 'correct_operation_page.dart';
 import 'credit_notes_page.dart';
 import 'order_whatsapp_button.dart';
 import 'delivery_date_picker.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class OrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -175,25 +176,7 @@ productos (
     }
   }
 
-  String _formatearPrecio(dynamic valor) {
-    final numero = double.tryParse(valor?.toString() ?? '') ?? 0;
-    final entero = numero.round().toString();
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    return '\$${buffer.toString().split('').reversed.join()}';
-  }
+  String _formatearPrecio(dynamic valor) => formatoPesos(valor);
 
   String _nombreLista(dynamic valor) {
     switch (valor?.toString()) {

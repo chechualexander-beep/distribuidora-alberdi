@@ -191,10 +191,10 @@ void main() {
           ),
         ),
       );
-      expect(find.text(r'$500,00'), findsOneWidget);
-      expect(find.text(r'$300,00'), findsOneWidget);
-      expect(find.text(r'$200,00'), findsOneWidget);
-      expect(find.text(r'$30,00'), findsOneWidget);
+      expect(find.text(r'$500'), findsOneWidget);
+      expect(find.text(r'$300'), findsOneWidget);
+      expect(find.text(r'$200'), findsOneWidget);
+      expect(find.text(r'$30'), findsOneWidget);
       await tester.tap(find.text('Almacén'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);

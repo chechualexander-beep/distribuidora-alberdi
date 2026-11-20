@@ -12,6 +12,7 @@ import '../../core/network_status.dart';
 import '../../core/pending_orders.dart';
 import '../../core/offline_cache.dart';
 import 'dart:async';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class OrderSummaryPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -142,24 +143,7 @@ class _OrderSummaryPageState extends State<OrderSummaryPage> {
     return total;
   }
 
-  String _formatearPrecio(double valor) {
-    final entero = valor.round().toString();
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    return '\$${buffer.toString().split('').reversed.join()}';
-  }
+  String _formatearPrecio(double valor) => formatoPesos(valor);
 
   String _textoPedido() {
     final buffer = StringBuffer();

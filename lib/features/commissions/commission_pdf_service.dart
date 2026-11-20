@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class CommissionPdfService {
   static Future<Uint8List> generarPdf({
@@ -566,26 +567,5 @@ class CommissionPdfService {
 
   static String _formatearPrecio(
     double valor,
-  ) {
-    final entero = valor.round().toString();
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (
-      int i = entero.length - 1;
-      i >= 0;
-      i--
-    ) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    return '\$${buffer.toString().split('').reversed.join()}';
-  }
+  ) => formatoPesos(valor);
 }

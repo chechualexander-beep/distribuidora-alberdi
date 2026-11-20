@@ -10,6 +10,7 @@ import 'delivery_date_picker.dart';
 import '../../core/offline_queries.dart';
 import '../../core/pending_orders.dart';
 import '../stock/stock_data.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class OrderProductsPage extends StatefulWidget {
   final Map<String, dynamic> cliente;
@@ -253,24 +254,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     return total;
   }
 
-  String _formatearPrecio(double valor) {
-    final entero = valor.round().toString();
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    return '\$${buffer.toString().split('').reversed.join()}';
-  }
+  String _formatearPrecio(double valor) => formatoPesos(valor);
 
   Future<void> _elegirFechaEntrega() async {
     final fecha = await pickDeliveryDate(context, selected: _fechaEntrega);

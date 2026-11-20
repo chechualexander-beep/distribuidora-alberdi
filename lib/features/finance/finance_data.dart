@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../stock/stock_data.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 // "Plata del negocio": efectivo y billetera, gastos, plata para el hogar, gastos fijos con sobre,
 // proveedores a pagar y arqueo. Ver docs/GESTION-NEGOCIO.md.
@@ -11,30 +12,10 @@ const billetera = 'billetera';
 String cuentaNombre(String codigo) => codigo == efectivo ? 'Efectivo' : 'Billetera virtual';
 
 /// 15000 → "$ 15.000"; 1500.5 → "$ 1.500,50"; −200 → "−$ 200".
-String pesos(double value) {
-  final cents = (value.abs() * 100).round();
-  final whole = (cents ~/ 100).toString().replaceAllMapped(
-    RegExp(r'(\d)(?=(\d{3})+$)'),
-    (m) => '${m[1]}.',
-  );
-  final rest = cents % 100;
-  final sign = value < 0 && cents > 0 ? '−' : '';
-  return '$sign\$ $whole${rest == 0 ? '' : ',${rest.toString().padLeft(2, '0')}'}';
-}
+String pesos(double value) => formatoPesos(value);
 
 /// "15000", "15.000", "15000,50" o "15.000,50" → número; vacío o inválido → null.
-double? parseMoney(String text) {
-  var t = text.trim().replaceAll('\$', '').replaceAll(' ', '');
-  if (t.isEmpty) return null;
-  if (t.contains(',')) {
-    t = t.replaceAll('.', '').replaceAll(',', '.');
-  } else if (RegExp(r'^\d{1,3}(\.\d{3})+$').hasMatch(t)) {
-    t = t.replaceAll('.', '');
-  }
-  final value = double.tryParse(t);
-  if (value == null || value.isNaN || value.isInfinite || value < 0) return null;
-  return (value * 100).round() / 100;
-}
+double? parseMoney(String text) => leerImporte(text);
 
 DateTime? _date(Object? value) => value == null ? null : DateTime.tryParse(value.toString());
 

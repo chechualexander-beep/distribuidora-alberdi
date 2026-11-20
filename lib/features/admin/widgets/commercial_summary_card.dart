@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class CommercialSummaryCard extends StatelessWidget {
   const CommercialSummaryCard({
@@ -19,14 +20,7 @@ class CommercialSummaryCard extends StatelessWidget {
   final String note;
 
   // Conservar centavos permite conciliar el total con el desglose visible.
-  static String money(double value) {
-    final parts = value.toStringAsFixed(2).split('.');
-    final integer = parts.first.replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-      (match) => '${match[1]}.',
-    );
-    return '\$$integer,${parts.last}';
-  }
+  static String money(double value) => formatoPesos(value);
 
   @override
   Widget build(BuildContext context) {

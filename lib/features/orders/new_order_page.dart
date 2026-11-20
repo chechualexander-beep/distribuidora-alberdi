@@ -12,6 +12,7 @@ import '../clients/new_client_page.dart';
 import '../../core/offline_queries.dart';
 import '../../core/pending_orders.dart';
 import '../../core/app_theme.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class NewOrderPage extends StatefulWidget {
   const NewOrderPage({super.key, this.clienteId, this.client});
@@ -407,7 +408,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
                               '${_pedidosPendientesCliente == 1 ? 'pedido pendiente' : 'pedidos pendientes'}',
                             ),
                             Text(
-                              'Deuda total: \$${_deudaCliente.toStringAsFixed(0)}',
+                              'Deuda total: ${formatoPesos(_deudaCliente)}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                               ),
@@ -501,7 +502,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
                                   child: Text('$fechaTexto · $nombreTipo'),
                                 ),
                                 Text(
-                                  '\$${total.toStringAsFixed(0)}',
+                                  '${formatoPesos(total)}',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),

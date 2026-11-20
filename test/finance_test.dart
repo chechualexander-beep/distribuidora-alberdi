@@ -51,14 +51,14 @@ void main() {
     expect(parseMoney('15.000'), 15000);
     expect(parseMoney('15.000,50'), 15000.5);
     expect(parseMoney('1500,5'), 1500.5);
-    expect(parseMoney('\$ 2.300.000'), 2300000);
+    expect(parseMoney('\$2.300.000'), 2300000);
     expect(parseMoney(''), isNull);
     expect(parseMoney('abc'), isNull);
     expect(parseMoney('-5'), isNull);
-    expect(pesos(15000), '\$ 15.000');
-    expect(pesos(1500.5), '\$ 1.500,50');
-    expect(pesos(-200), '−\$ 200');
-    expect(pesos(0), '\$ 0');
+    expect(pesos(15000), '\$15.000');
+    expect(pesos(1500.5), '\$1.500,50');
+    expect(pesos(-200), '-\$200');
+    expect(pesos(0), '\$0');
   });
 
   test('estado: sobre, por semana y disponible', () {
@@ -92,8 +92,8 @@ void main() {
       ),
     );
     expect(find.text('Disponible para mercadería'), findsOneWidget);
-    expect(find.text('\$ 800.000'), findsOneWidget);
-    expect(find.text('Apartá \$ 116.000 por semana'), findsOneWidget);
+    expect(find.text('\$800.000'), findsOneWidget);
+    expect(find.text('Apartá \$116.000 por semana'), findsOneWidget);
     await tester.tap(find.text('Anotar gasto'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Guardar'));
@@ -170,7 +170,7 @@ void main() {
     expect(pago!['p_tipo'], 'compra');
     expect(pago!['p_cuenta'], 'billetera');
     expect(pago!['p_importe'], 4500);
-    expect(find.textContaining('Pago anotado: \$ 4.500 en billetera virtual'), findsOneWidget);
+    expect(find.textContaining('Pago anotado: \$4.500 en billetera virtual'), findsOneWidget);
   });
 
   testWidgets('Tablero: ganancia, lo de la casa, cuánto vender y capital', (tester) async {
@@ -194,10 +194,10 @@ void main() {
     expect(d.capital!.total, 8900000);
     await tester.pumpWidget(MaterialApp(home: FinanceDashboardPage(initial: d)));
     expect(find.text('Resultado · al día 15 de 30'), findsOneWidget);
-    expect(find.text('−\$ 360.000'), findsOneWidget);
+    expect(find.text('-\$360.000'), findsOneWidget);
     expect(find.textContaining('Salió del capital'), findsOneWidget);
-    expect(find.textContaining('hay que vender \$ 13.636.363,64'), findsOneWidget);
-    expect(find.text('El negocio se achicó \$ 360.000.'), findsOneWidget);
-    expect(find.text('\$ 27.849.600'), findsOneWidget);
+    expect(find.textContaining('hay que vender \$13.636.363,64'), findsOneWidget);
+    expect(find.text('El negocio se achicó \$360.000.'), findsOneWidget);
+    expect(find.text('\$27.849.600'), findsOneWidget);
   });
 }

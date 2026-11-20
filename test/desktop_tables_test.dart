@@ -30,7 +30,7 @@ void main() {
   ];
   test('Importes conservan centavos y separadores argentinos', () {
     expect(desktopMoney(3200.25), '\$3.200,25');
-    expect(desktopMoney(161000), '\$161.000,00');
+    expect(desktopMoney(161000), '\$161.000');
   });
   testWidgets('La tabla filtra, suma lo visible y abre el pedido original', (
     tester,
@@ -52,12 +52,12 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Total visible: \$216.700,00'), findsOneWidget);
+    expect(find.text('Total visible: \$216.700'), findsOneWidget);
     expect(find.bySemanticsLabel('Pedido con observación'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'San Martín');
     await tester.pump();
     expect(find.text('Almacén B'), findsNothing);
-    expect(find.text('Total visible: \$161.000,00'), findsOneWidget);
+    expect(find.text('Total visible: \$161.000'), findsOneWidget);
     await tester.tap(find.text('Almacén A'));
     await tester.pump();
     expect(identical(opened, orders.first), isTrue);
@@ -123,9 +123,9 @@ void main() {
         ),
       ),
     );
-    expect(find.text('\$7.500,00'), findsOneWidget);
-    expect(find.text('\$6.100,00'), findsOneWidget);
-    expect(find.text('\$8.100,00'), findsOneWidget);
+    expect(find.text('\$7.500'), findsOneWidget);
+    expect(find.text('\$6.100'), findsOneWidget);
+    expect(find.text('\$8.100'), findsOneWidget);
     expect(tester.widget<ProductPhoto>(find.byType(ProductPhoto)).size, 34);
     expect(tester.takeException(), isNull);
   });

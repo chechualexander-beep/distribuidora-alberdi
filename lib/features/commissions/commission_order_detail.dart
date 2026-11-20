@@ -1,6 +1,7 @@
 import '../../core/desktop_records.dart';
 import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class CommissionOrderDetail extends StatelessWidget {
   final List<Map<String, dynamic>> detalles;
@@ -11,24 +12,7 @@ class CommissionOrderDetail extends StatelessWidget {
     return double.tryParse(valor?.toString() ?? '0') ?? 0;
   }
 
-  String _formatearPrecio(double valor) {
-    final entero = valor.round().toString();
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    return '\$${buffer.toString().split('').reversed.join()}';
-  }
+  String _formatearPrecio(double valor) => formatoPesos(valor);
 
   @override
   Widget build(BuildContext context) {

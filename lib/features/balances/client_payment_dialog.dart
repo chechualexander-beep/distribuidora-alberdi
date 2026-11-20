@@ -7,6 +7,7 @@ import '../../core/payment_money.dart';
 import 'balance_repository.dart';
 import '../../core/network_status.dart';
 import '../../core/pending_orders.dart';
+import '../../core/money_format.dart';
 
 Future<void> showClientPayment(
   BuildContext context,
@@ -155,7 +156,8 @@ class _ClientPaymentDialogState extends State<ClientPaymentDialog> {
         }
         final account = await widget.repository.account(widget.clientId);
         final debt = paymentCents(account['saldo_pendiente']);
-        final cents = paymentCents(amount.text);
+        // "100.000" o "1.500,50" (con puntos de miles) → "100000.00" para paymentCents.
+        final cents = paymentCents(leerImporte(amount.text)?.toStringAsFixed(2) ?? amount.text.trim());
         if (cents <= 0 || cents > debt) {
           if (mounted) {
             setState(
@@ -328,6 +330,7 @@ class _ClientPaymentDialogState extends State<ClientPaymentDialog> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
+                      inputFormatters: const [ImporteInputFormatter()],
                     ),
                     DropdownButtonFormField<String>(
                       initialValue: medium,

@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'invoice_request.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 /// Pure rendering: no Supabase, preferences, product catalogue or emission RPC.
 class InvoiceSnapshotPdf {
@@ -21,7 +22,6 @@ class InvoiceSnapshotPdf {
     final pdf = pw.Document(
       theme: pw.ThemeData.withFont(base: regular, bold: bold),
     );
-    String money(dynamic v) => (v as num).toStringAsFixed(2);
     // Reserve only the width required by the printed quantities, not a wide
     // fixed gutter for single-digit orders. Large figures retain their space.
     var quantityWidth = 28.0;
@@ -183,8 +183,8 @@ class InvoiceSnapshotPdf {
                       left: true,
                     ),
                     productCell(line['nombre'] as String),
-                    numberCell('\$ ${money(line['precio_unitario'])}'),
-                    numberCell('\$ ${money(line['subtotal'])}'),
+                    numberCell(formatoPesos(line['precio_unitario'])),
+                    numberCell(formatoPesos(line['subtotal'])),
                   ],
                 ),
             ],
@@ -194,7 +194,7 @@ class InvoiceSnapshotPdf {
             child: pw.Align(
               alignment: pw.Alignment.centerRight,
               child: pw.Text(
-                'TOTAL \$ ${money(c['total'])}',
+                'TOTAL ${formatoPesos(c['total'])}',
                 softWrap: false,
                 maxLines: 1,
                 style: pw.TextStyle(

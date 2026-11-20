@@ -3,16 +3,9 @@ import 'package:flutter/material.dart';
 import 'app_theme.dart';
 import 'network_status.dart';
 import 'pending_orders.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
-String _money(double value) {
-  final entero = value.round().toString();
-  final b = StringBuffer();
-  for (var i = 0; i < entero.length; i++) {
-    if (i > 0 && (entero.length - i) % 3 == 0) b.write('.');
-    b.write(entero[i]);
-  }
-  return '\$$b';
-}
+String _money(double value) => formatoPesos(value);
 
 /// Tarjeta del inicio: aparece solo si hay pedidos guardados en el teléfono sin enviar.
 class PendingOrdersCard extends StatelessWidget {

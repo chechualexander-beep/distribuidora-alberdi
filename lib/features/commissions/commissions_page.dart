@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_order_detail.dart';
 import 'commission_report_page.dart';
 import '../../core/argentina_date_utils.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class CommissionsPage extends StatefulWidget {
   const CommissionsPage({super.key});
@@ -227,24 +228,7 @@ class _CommissionsPageState extends State<CommissionsPage> {
     return grupos;
   }
 
-  String _formatearPrecio(double valor) {
-    final entero = valor.round().toString();
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    return '\$${buffer.toString().split('').reversed.join()}';
-  }
+  String _formatearPrecio(double valor) => formatoPesos(valor);
 
   String _formatearFecha(DateTime fecha) {
     final dia = fecha.day.toString().padLeft(2, '0');

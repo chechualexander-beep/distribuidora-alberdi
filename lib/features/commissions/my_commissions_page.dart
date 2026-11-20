@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_order_detail.dart';
 import '../../core/argentina_date_utils.dart';
 import '../../core/app_theme.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class MyCommissionsPage extends StatefulWidget {
   const MyCommissionsPage({super.key});
@@ -455,7 +456,7 @@ class _MyCommissionsPageState extends State<MyCommissionsPage> {
               child: ListTile(
                 title: Text('COMISIÓN BRUTA GENERADA'),
                 trailing: Text(
-                  _cargando ? '...' : '\$${_comisionTotal.toStringAsFixed(0)}',
+                  _cargando ? '...' : '${formatoPesos(_comisionTotal)}',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -526,7 +527,7 @@ class _MyCommissionsPageState extends State<MyCommissionsPage> {
                             leading: const Icon(Icons.storefront_outlined),
                             title: Text(entry.key),
                             trailing: Text(
-                              '\$${entry.value.toStringAsFixed(0)}',
+                              '${formatoPesos(entry.value)}',
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,

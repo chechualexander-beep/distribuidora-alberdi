@@ -1,3 +1,5 @@
+import 'money_format.dart';
+
 /// Integer cents for display totals and validation. Failed reads never mean zero.
 int paymentCents(Object? value) {
   final text = value?.toString().trim().replaceAll(',', '.') ?? '';
@@ -14,5 +16,4 @@ int paymentCents(Object? value) {
 }
 
 String paymentMoney(Object? value) => centsMoney(paymentCents(value));
-String centsMoney(int cents) =>
-    '\$${cents ~/ 100}.${(cents % 100).toString().padLeft(2, '0')}';
+String centsMoney(int cents) => formatoPesos(cents / 100);

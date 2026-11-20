@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/app_theme.dart';
+import '../../core/money_format.dart';
 import 'finance_data.dart';
 
 /// Lo que un formulario quiere enviar: función, parámetros y texto para "Pendientes de enviar".
@@ -20,6 +21,7 @@ Widget moneyField(TextEditingController controller, String label, {bool autofocu
       controller: controller,
       autofocus: autofocus,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: const [ImporteInputFormatter()],
       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       decoration: InputDecoration(
         labelText: label,
@@ -170,7 +172,7 @@ Future<FinRequest?> showMovementForm(BuildContext context, {required String tipo
 /// Alta o cambio de un gasto fijo. Devuelve los parámetros de fin_gasto_fijo_guardar (sin p_id).
 Future<Map<String, dynamic>?> showFixedExpenseForm(BuildContext context, {FixedExpense? current}) {
   final name = TextEditingController(text: current?.nombre ?? '');
-  final amount = TextEditingController(text: current == null ? '' : pesos(current.importe).replaceAll('\$ ', ''));
+  final amount = TextEditingController(text: current == null ? '' : importeEditable(current.importe));
   final day = TextEditingController(text: current?.diaPago.toString() ?? '1');
   var ambito = current?.ambito ?? 'negocio';
   var activo = current?.activo ?? true;
@@ -260,7 +262,7 @@ Future<Map<String, dynamic>?> showFixedExpenseForm(BuildContext context, {FixedE
 
 /// Pagar el gasto fijo del período que vence.
 Future<FinRequest?> showPayFixedForm(BuildContext context, FixedExpense expense) {
-  final amount = TextEditingController(text: pesos(expense.importe).replaceAll('\$ ', ''));
+  final amount = TextEditingController(text: importeEditable(expense.importe));
   final home = TextEditingController();
   var cuenta = efectivo;
   String? error;
@@ -319,7 +321,7 @@ Future<FinRequest?> showPayFixedForm(BuildContext context, FixedExpense expense)
 /// Compra a pagar (proveedor con plazo).
 Future<FinRequest?> showDebtForm(BuildContext context, {String? supplier, double? amount}) {
   final name = TextEditingController(text: supplier ?? '');
-  final total = TextEditingController(text: amount == null ? '' : pesos(amount).replaceAll('\$ ', ''));
+  final total = TextEditingController(text: amount == null ? '' : importeEditable(amount));
   final note = TextEditingController();
   var due = DateTime.now().add(const Duration(days: 15));
   String? error;
@@ -385,7 +387,7 @@ Future<FinRequest?> showDebtForm(BuildContext context, {String? supplier, double
 }
 
 Future<FinRequest?> showPayDebtForm(BuildContext context, Debt debt) {
-  final amount = TextEditingController(text: pesos(debt.resta).replaceAll('\$ ', ''));
+  final amount = TextEditingController(text: importeEditable(debt.resta));
   var cuenta = efectivo;
   String? error;
   return _form<FinRequest>(
@@ -407,7 +409,7 @@ Future<FinRequest?> showPayDebtForm(BuildContext context, Debt debt) {
     onSave: (set) {
       final value = parseMoney(amount.text);
       if (value == null || value <= 0 || value > debt.resta + 0.001) {
-        set(() => error = 'Entre \$ 1 y ${pesos(debt.resta)}.');
+        set(() => error = 'Entre \$1 y ${pesos(debt.resta)}.');
         return null;
       }
       return FinRequest(

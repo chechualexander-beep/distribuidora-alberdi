@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class PriceListPdfService {
   static Future<Uint8List> generarPdf({
@@ -183,24 +184,5 @@ class PriceListPdfService {
     return '$dia/$mes/${fecha.year}';
   }
 
-  static String _formatearPrecio(double valor) {
-    final partes = valor.toStringAsFixed(2).split('.');
-    final entero = partes.first;
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    final decimales = partes.last == '00' ? '' : ',${partes.last}';
-    return '\$${buffer.toString().split('').reversed.join()}$decimales';
-  }
+  static String _formatearPrecio(double valor) => formatoPesos(valor);
 }

@@ -12,6 +12,7 @@ import '../../core/local_outbox.dart';
 import 'invoice_request.dart';
 import 'invoice_snapshot_pdf.dart';
 import '../../core/app_theme.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class InvoiceDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -613,25 +614,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     return '$dia/$mes/$anio';
   }
 
-  String _formatearPrecio(dynamic valor) {
-    final numero = double.tryParse(valor?.toString() ?? '') ?? 0;
-    final entero = numero.round().toString();
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    return '\$${buffer.toString().split('').reversed.join()}';
-  }
+  String _formatearPrecio(dynamic valor) => formatoPesos(valor);
 
   @override
   Widget build(BuildContext context) {

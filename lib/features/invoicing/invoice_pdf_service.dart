@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class InvoicePdfService {
   static Future<Uint8List> generarBoleta({
@@ -308,24 +309,5 @@ final subtotal = cantidadNumero * precioNumero;
   return '$dia/$mes/$anio';
 }
 
-  static String _formatearPrecio(dynamic valor) {
-    final numero =
-        double.tryParse(valor?.toString() ?? '') ?? 0;
-
-    final entero = numero.round().toString();
-    final buffer = StringBuffer();
-
-    for (int i = 0; i < entero.length; i++) {
-      final posicionDesdeDerecha = entero.length - i;
-
-      buffer.write(entero[i]);
-
-      if (posicionDesdeDerecha > 1 &&
-          posicionDesdeDerecha % 3 == 1) {
-        buffer.write('.');
-      }
-    }
-
-    return '\$ ${buffer.toString()}';
-  }
+  static String _formatearPrecio(dynamic valor) => formatoPesos(valor);
 }

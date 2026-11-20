@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'commission_pdf_service.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class CommissionReportPage extends StatelessWidget {
   final String preventista;
@@ -39,24 +40,7 @@ class CommissionReportPage extends StatelessWidget {
     return double.tryParse(valor?.toString() ?? '0') ?? 0;
   }
 
-  String _formatearPrecio(double valor) {
-    final entero = valor.round().toString();
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    return '\$${buffer.toString().split('').reversed.join()}';
-  }
+  String _formatearPrecio(double valor) => formatoPesos(valor);
 
   String _formatearFecha(DateTime fecha) {
     final dia = fecha.day.toString().padLeft(2, '0');

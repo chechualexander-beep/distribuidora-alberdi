@@ -8,9 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/app_config.dart';
 import '../../core/return_outbox.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 double ncNumber(Object? v) => double.tryParse(v?.toString() ?? '') ?? 0;
-String ncMoney(Object? v) => '\$${ncNumber(v).toStringAsFixed(2)}';
+String ncMoney(Object? v) => formatoPesos(ncNumber(v));
 String ncKey() =>
     base64Url.encode(List.generate(24, (_) => Random.secure().nextInt(256)));
 

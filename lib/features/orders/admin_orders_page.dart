@@ -13,6 +13,7 @@ import 'pending_finalizations_page.dart';
 import '../stock/product_summary.dart';
 import '../stock/stock_data.dart';
 import '../stock/stock_form_page.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class AdminOrdersPage extends StatefulWidget {
   const AdminOrdersPage({super.key, this.client});
@@ -335,25 +336,7 @@ productos (
     }
   }
 
-  String _formatearPrecio(dynamic valor) {
-    final numero = double.tryParse(valor?.toString() ?? '') ?? 0;
-    final entero = numero.round().toString();
-
-    final buffer = StringBuffer();
-    int contador = 0;
-
-    for (int i = entero.length - 1; i >= 0; i--) {
-      buffer.write(entero[i]);
-      contador++;
-
-      if (contador == 3 && i != 0) {
-        buffer.write('.');
-        contador = 0;
-      }
-    }
-
-    return '\$${buffer.toString().split('').reversed.join()}';
-  }
+  String _formatearPrecio(dynamic valor) => formatoPesos(valor);
 
   String _formatearFecha(dynamic valor) {
     if (valor == null) return '';

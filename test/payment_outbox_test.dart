@@ -72,7 +72,7 @@ void main() {
   test('importes monetarios exactos y fecha argentina', () {
     expect(paymentCents('12,25'), 1225);
     expect(paymentCents('12.2500'), 1225);
-    expect(centsMoney(1225), r'$12.25');
+    expect(centsMoney(1225), r'$12,25');
     expect(balanceDate('2026-11-05T01:00:00Z'), '04/11/2026');
     for (final value in [null, 'NaN', '-1', '1.001', 'Infinity']) {
       expect(() => paymentCents(value), throwsFormatException);

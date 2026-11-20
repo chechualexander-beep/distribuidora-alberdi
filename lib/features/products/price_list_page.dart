@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'price_list_config.dart';
 import 'price_list_pdf_service.dart';
+import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class PriceListPage extends StatefulWidget {
   final List<Map<String, dynamic>> productos;
@@ -59,7 +60,7 @@ class _PriceListPageState extends State<PriceListPage> {
     'interior': 'Interior',
     'personalizada': 'Personalizada',
   }[value]!;
-  String _money(double value) => '\$${value.toStringAsFixed(2)}';
+  String _money(double value) => formatoPesos(value);
   void _mensaje(String message) {
     if (mounted) {
       ScaffoldMessenger.of(

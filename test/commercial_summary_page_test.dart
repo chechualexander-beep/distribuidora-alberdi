@@ -117,7 +117,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Cobros sin clasificar'), findsOneWidget);
       expectAmount('Cobros', r'$-50,00');
-      expectAmount('RECAUDACIÓN', r'$500,00');
+      expectAmount('RECAUDACIÓN', r'$500');
     },
   );
 
@@ -130,10 +130,10 @@ void main() {
         periods.add((start, end));
         return summary();
       }, balances);
-      expectAmount('VENTAS EFECTIVAS', r'$3.300,00');
-      expectAmount('RECAUDACIÓN', r'$500,00');
-      expectAmount('TOTAL POR COBRAR', r'$7.800,00');
-      expectAmount('RESULTADO COMERCIAL', r'$970,00');
+      expectAmount('VENTAS EFECTIVAS', r'$3.300');
+      expectAmount('RECAUDACIÓN', r'$500');
+      expectAmount('TOTAL POR COBRAR', r'$7.800');
+      expectAmount('RESULTADO COMERCIAL', r'$970');
       expect(find.text('Ajustes y devoluciones'), findsNothing);
       expect(find.text('Ir a Saldos'), findsOneWidget);
 
@@ -144,18 +144,18 @@ void main() {
         (DateTime.utc(2026, 11, 2, 3), DateTime.utc(2026, 11, 9, 3)),
       ]);
       expect(balances.accountReads, 1);
-      expectAmount('TOTAL POR COBRAR', r'$7.800,00');
+      expectAmount('TOTAL POR COBRAR', r'$7.800');
       expect(find.text('Ajustes y devoluciones'), findsNothing);
 
       await tester.tap(find.text('Ventas'));
       await tester.pumpAndSettle();
-      expectAmount('Ventas', r'$2.300,00');
-      expectAmount('Ventas', r'$4.000,00');
+      expectAmount('Ventas', r'$2.300');
+      expectAmount('Ventas', r'$4.000');
       await tester.tap(find.text('Cobros'));
       await tester.pumpAndSettle();
-      expect(find.text(r'$500,00'), findsNWidgets(3));
+      expect(find.text(r'$500'), findsNWidgets(3));
       expect(find.text('Aplicado a ventas directas'), findsNothing);
-      expectAmount('RECAUDACIÓN', r'$500,00');
+      expectAmount('RECAUDACIÓN', r'$500');
 
       await tester.tap(find.text('Personalizado'));
       await tester.pumpAndSettle();
@@ -170,7 +170,7 @@ void main() {
         DateTime.utc(2026, 11, 1, 3),
         DateTime.utc(2026, 11, 4, 3),
       ));
-      expectAmount('TOTAL POR COBRAR', r'$7.800,00');
+      expectAmount('TOTAL POR COBRAR', r'$7.800');
     },
   );
 
@@ -184,23 +184,23 @@ void main() {
       );
       await tester.tap(find.text('Semana'));
       await tester.pumpAndSettle();
-      expectAmount('VENTAS EFECTIVAS', r'$3.300,00');
-      expectAmount('RESULTADO COMERCIAL', r'$620,00');
+      expectAmount('VENTAS EFECTIVAS', r'$3.300');
+      expectAmount('RESULTADO COMERCIAL', r'$620');
       expect(find.text('Costo recuperado'), findsNothing);
       await tester.tap(find.text('Ajustes y devoluciones'));
       await tester.pumpAndSettle();
-      expectAmount('Ajustes y devoluciones', r'$1.500,00');
-      expectAmount('Ajustes y devoluciones', r'$1.000,00');
-      expectAmount('Ajustes y devoluciones', r'$150,00');
+      expectAmount('Ajustes y devoluciones', r'$1.500');
+      expectAmount('Ajustes y devoluciones', r'$1.000');
+      expectAmount('Ajustes y devoluciones', r'$150');
       await tester.tap(find.text('Costos y rentabilidad'));
       await tester.pumpAndSettle();
-      expectAmount('Costos y rentabilidad', r'$2.000,00');
-      expect(find.text(r'$330,00'), findsNWidgets(2));
-      expectAmount('Costos y rentabilidad', r'$620,00');
+      expectAmount('Costos y rentabilidad', r'$2.000');
+      expect(find.text(r'$330'), findsNWidgets(2));
+      expectAmount('Costos y rentabilidad', r'$620');
       await tester.tap(find.text('Cobros'));
       await tester.pumpAndSettle();
-      expectAmount('Cobros', r'$400,00');
-      expectAmount('RECAUDACIÓN', r'$500,00');
+      expectAmount('Cobros', r'$400');
+      expectAmount('RECAUDACIÓN', r'$500');
     },
   );
 
@@ -218,8 +218,8 @@ void main() {
         if (broken) data.remove('ganancia');
         return data;
       }, FakeBalanceRepository()..debt = 780000);
-      expectAmount('VENTAS EFECTIVAS', r'$0,00');
-      expectAmount('TOTAL POR COBRAR', r'$7.800,00');
+      expectAmount('VENTAS EFECTIVAS', r'$0');
+      expectAmount('TOTAL POR COBRAR', r'$7.800');
       broken = true;
       await tester.tap(find.text('Semana'));
       await tester.pumpAndSettle();
@@ -228,7 +228,7 @@ void main() {
         findsOneWidget,
       );
       expectAmount('RESULTADO COMERCIAL', 'No disponible');
-      expectAmount('TOTAL POR COBRAR', r'$7.800,00');
+      expectAmount('TOTAL POR COBRAR', r'$7.800');
     },
   );
 
@@ -245,7 +245,7 @@ void main() {
       await tester.pumpAndSettle();
       today.complete(summary()..['entrega_total'] = 999);
       await tester.pumpAndSettle();
-      expectAmount('VENTAS EFECTIVAS', r'$3.300,00');
+      expectAmount('VENTAS EFECTIVAS', r'$3.300');
       expectAmount('TOTAL POR COBRAR', 'No disponible');
       expect(
         find.text('No se pudo consultar la deuda acumulada.'),
