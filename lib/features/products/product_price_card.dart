@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
@@ -448,9 +447,12 @@ class _ProductPriceCardViewerState extends State<ProductPriceCardViewer> {
           allowedExtensions: ['jpg'],
         );
         if (ruta == null) return;
-        final archivo = File(ruta);
-        if (!await archivo.exists() || await archivo.length() == 0) {
-          await archivo.writeAsBytes(jpg, flush: true);
+        // En Windows devuelve la ruta elegida; si el archivo quedó vacío, se escribe acá.
+        if (ruta.isScheme('file')) {
+          final archivo = File.fromUri(ruta);
+          if (!await archivo.exists() || await archivo.length() == 0) {
+            await archivo.writeAsBytes(jpg, flush: true);
+          }
         }
         _aviso('Imagen guardada.');
       }
