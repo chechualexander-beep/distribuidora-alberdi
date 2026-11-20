@@ -116,7 +116,7 @@ void main() {
       await tester.tap(find.text('Cobros'));
       await tester.pumpAndSettle();
       expect(find.text('Cobros sin clasificar'), findsOneWidget);
-      expectAmount('Cobros', r'$-50,00');
+      expectAmount('Cobros', r'-$50');
       expectAmount('RECAUDACIÓN', r'$500');
     },
   );

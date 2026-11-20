@@ -194,7 +194,7 @@ void main() {
             expect(breakdown, findsOneWidget);
             expect(
               find.text(
-                r'1 del pedido a $1.500,00 + 1 adicionales a $1.600,00',
+                r'1 del pedido a $1.500 + 1 adicionales a $1.600',
               ),
               findsOneWidget,
             );

@@ -29,12 +29,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text(r'Total general por cobrar: $100.00'), findsOneWidget);
+    expect(find.text(r'Total general por cobrar: $100'), findsOneWidget);
     expect(find.text('Cliente QA'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'sin coincidencia');
     await tester.pump();
     expect(find.text('Sin coincidencias.'), findsOneWidget);
-    expect(find.text(r'Total general por cobrar: $100.00'), findsOneWidget);
+    expect(find.text(r'Total general por cobrar: $100'), findsOneWidget);
   });
 
   testWidgets('lista vacía y error son estados distintos', (tester) async {
@@ -114,8 +114,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining(r'Entregado: $150.00'), findsOneWidget);
-      expect(find.textContaining(r'Crédito aplicado: $20.00'), findsOneWidget);
+      expect(find.textContaining(r'Entregado: $150'), findsOneWidget);
+      expect(find.textContaining(r'Crédito aplicado: $20'), findsOneWidget);
       expect(find.text('Registrar pago'), findsNothing);
     },
   );
@@ -140,9 +140,9 @@ void main() {
     repo.favor = 15;
     await tester.tap(find.byTooltip('Actualizar cuenta'));
     await tester.pumpAndSettle();
-    expect(find.textContaining(r'Notas internas: $10.00'), findsOneWidget);
-    expect(find.textContaining(r'Crédito aplicado: $20.00'), findsOneWidget);
-    expect(find.textContaining(r'Saldo a favor: $15.00'), findsOneWidget);
+    expect(find.textContaining(r'Notas internas: $10'), findsOneWidget);
+    expect(find.textContaining(r'Crédito aplicado: $20'), findsOneWidget);
+    expect(find.textContaining(r'Saldo a favor: $15'), findsOneWidget);
   });
 
   for (final amount in ['25', '100']) {
