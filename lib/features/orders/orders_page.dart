@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'order_detail_page.dart';
 import '../stock/product_summary.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
+import '../../core/text_search.dart';
 
 class OrdersPage extends StatefulWidget {
   const OrdersPage({super.key});
@@ -246,13 +247,9 @@ tipo_operacion,
     final pedidosFiltrados = _pedidos.where((pedido) {
       final cliente = pedido['clientes'] as Map<String, dynamic>?;
 
-      final nombreCliente =
-          cliente?['nombre_comercio']?.toString().toLowerCase() ?? '';
-
-      final textoBuscado = _filtroCliente.trim().toLowerCase();
-
-      final coincideCliente =
-          textoBuscado.isEmpty || nombreCliente.contains(textoBuscado);
+      final coincideCliente = coincideBusqueda(_filtroCliente, [
+        cliente?['nombre_comercio'],
+      ]);
 
       bool coincideFecha = true;
 

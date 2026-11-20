@@ -14,6 +14,7 @@ import '../stock/product_summary.dart';
 import '../stock/stock_data.dart';
 import '../stock/stock_form_page.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
+import '../../core/text_search.dart';
 
 class AdminOrdersPage extends StatefulWidget {
   const AdminOrdersPage({super.key, this.client});
@@ -63,19 +64,9 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     super.dispose();
   }
 
-  static String _normalizar(String texto) => texto
-      .toLowerCase()
-      .replaceAll('á', 'a')
-      .replaceAll('é', 'e')
-      .replaceAll('í', 'i')
-      .replaceAll('ó', 'o')
-      .replaceAll('ú', 'u')
-      .replaceAll('ü', 'u')
-      .replaceAll('ñ', 'n');
+  static String _normalizar(String texto) => sinAcentos(texto);
 
-  List<String> get _palabrasBusqueda => _normalizar(
-    _busquedaReparto.trim(),
-  ).split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  List<String> get _palabrasBusqueda => palabrasBusqueda(_busquedaReparto);
 
   List<Map<String, dynamic>> _detallesDe(String pedidoId) => _detallesPedidos
       .where(

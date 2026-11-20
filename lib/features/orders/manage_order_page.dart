@@ -14,6 +14,7 @@ import '../../core/pending_orders.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
 import 'payment_choice.dart';
 import '../invoicing/atomic_invoice.dart' show newInvoiceRequestId;
+import '../../core/text_search.dart';
 
 class ManageOrderPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -547,30 +548,11 @@ cantidad_entregada,
 
           return StatefulBuilder(
             builder: (context, setModalState) {
-              final texto = busqueda
-                  .toLowerCase()
-                  .replaceAll('á', 'a')
-                  .replaceAll('é', 'e')
-                  .replaceAll('í', 'i')
-                  .replaceAll('ó', 'o')
-                  .replaceAll('ú', 'u');
-
               final filtrados = productosDisponibles.where((producto) {
-                final nombre =
-                    producto['nombre']
-                        ?.toString()
-                        .toLowerCase()
-                        .replaceAll('á', 'a')
-                        .replaceAll('é', 'e')
-                        .replaceAll('í', 'i')
-                        .replaceAll('ó', 'o')
-                        .replaceAll('ú', 'u') ??
-                    '';
-
-                final codigo =
-                    producto['codigo_original']?.toString().toLowerCase() ?? '';
-
-                return nombre.contains(texto) || codigo.contains(texto);
+                return coincideBusqueda(busqueda, [
+                  producto['nombre'],
+                  producto['codigo_original'],
+                ]);
               }).toList();
 
               return SafeArea(

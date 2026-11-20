@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/offline_queries.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
+import '../../core/text_search.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key});
@@ -171,23 +172,18 @@ class _ProductsPageState extends State<ProductsPage> {
       );
     }
 
-    final texto = _busqueda.toLowerCase();
-
     final productosFiltrados = _productos.where((producto) {
-      final nombre = producto['nombre']?.toString().toLowerCase() ?? '';
 
-      final codigo = producto['codigo']?.toString().toLowerCase() ?? '';
-
-      final descripcion =
-          producto['descripcion']?.toString().toLowerCase() ?? '';
 
       if (_soloSinFoto &&
           (producto['foto_path']?.toString() ?? '').isNotEmpty) {
         return false;
       }
-      return nombre.contains(texto) ||
-          codigo.contains(texto) ||
-          descripcion.contains(texto);
+      return coincideBusqueda(_busqueda, [
+        producto['nombre'],
+        producto['codigo'],
+        producto['descripcion'],
+      ]);
     }).toList();
     final sinFoto = _productos
         .where((p) => (p['foto_path']?.toString() ?? '').isEmpty)

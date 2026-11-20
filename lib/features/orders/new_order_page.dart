@@ -13,6 +13,7 @@ import '../../core/offline_queries.dart';
 import '../../core/pending_orders.dart';
 import '../../core/app_theme.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
+import '../../core/text_search.dart';
 
 class NewOrderPage extends StatefulWidget {
   const NewOrderPage({super.key, this.clienteId, this.client});
@@ -32,6 +33,9 @@ class _NewOrderPageState extends State<NewOrderPage> {
   List<Map<String, dynamic>> _clientes = [];
   bool _usarClienteInicial = true;
   Map<String, dynamic>? _clienteSeleccionado;
+
+  /// Pedido que se arma sin cliente: se elige o se crea al final.
+  bool _sinCliente = false;
   List<Map<String, dynamic>> _ultimosPedidos = [];
   String _tipoOperacion = 'pedido';
   bool _cargandoSaldoCliente = false;
@@ -306,18 +310,42 @@ class _NewOrderPageState extends State<NewOrderPage> {
       );
     }
 
-    if (_clienteSeleccionado != null) {
-      final cliente = _clienteSeleccionado!;
+    if (_clienteSeleccionado != null || _sinCliente) {
+      final cliente = _clienteSeleccionado;
 
       return Padding(
         padding: const EdgeInsets.all(20),
         child: ListView(
           children: [
-            const Text(
-              'Cliente seleccionado',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              cliente == null ? 'Pedido sin cliente' : 'Cliente seleccionado',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
+            if (cliente == null)
+              Card(
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: AppColors.dorado,
+                    foregroundColor: AppColors.negro,
+                    child: Icon(Icons.person_search),
+                  ),
+                  title: const Text(
+                    'Cliente al final',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Cargá los productos; al tocar VER PEDIDO elegís un '
+                    'cliente o creás uno nuevo.',
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Elegir el cliente ahora',
+                    onPressed: () => setState(() => _sinCliente = false),
+                    icon: const Icon(Icons.swap_horiz),
+                  ),
+                ),
+              )
+            else
             Card(
               child: ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.storefront)),
@@ -561,7 +589,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => OrderProductsPage(
-                      cliente: _clienteSeleccionado!,
+                      cliente: _clienteSeleccionado,
                       fechaEntrega: _fechaEntrega,
                       tipoOperacion: _tipoOperacion,
                     ),
@@ -576,20 +604,12 @@ class _NewOrderPageState extends State<NewOrderPage> {
       );
     }
 
-    final texto = _busqueda.toLowerCase();
-
     final clientesFiltrados = _clientes.where((cliente) {
-      final comercio =
-          cliente['nombre_comercio']?.toString().toLowerCase() ?? '';
-
-      final propietario =
-          cliente['propietario']?.toString().toLowerCase() ?? '';
-
-      final direccion = cliente['direccion']?.toString().toLowerCase() ?? '';
-
-      return comercio.contains(texto) ||
-          propietario.contains(texto) ||
-          direccion.contains(texto);
+      return coincideBusqueda(_busqueda, [
+        cliente['nombre_comercio'],
+        cliente['propietario'],
+        cliente['direccion'],
+      ]);
     }).toList();
 
     return Column(
@@ -691,6 +711,43 @@ class _NewOrderPageState extends State<NewOrderPage> {
                     Icon(Icons.chevron_right, color: Tonos.of(context).infoTitulo),
                   ],
                 ),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: OutlinedButton.icon(
+            key: const Key('pedido-sin-cliente'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              side: const BorderSide(color: AppColors.dorado, width: 2),
+              foregroundColor: Tonos.of(context).oscuro
+                  ? AppColors.dorado
+                  : AppColors.doradoOscuro,
+              alignment: Alignment.centerLeft,
+            ),
+            onPressed: () => setState(() {
+              _sinCliente = true;
+              _clienteSeleccionado = null;
+              _ultimosPedidos = [];
+              _deudaCliente = 0;
+              _pedidosPendientesCliente = 0;
+              _cargandoSaldoCliente = false;
+            }),
+            icon: const Icon(Icons.shopping_basket_outlined),
+            label: const Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'ARMAR PEDIDO SIN CLIENTE\n',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  TextSpan(
+                    text: 'El cliente lo elegís o lo creás al final',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
               ),
             ),
           ),

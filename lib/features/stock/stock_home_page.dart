@@ -7,6 +7,7 @@ import '../../core/network_status.dart';
 import 'stock_data.dart';
 import 'stock_form_page.dart';
 import 'vehicle_load_page.dart';
+import '../../core/text_search.dart';
 
 enum _Filter { controlled, onDemand, differences, all }
 
@@ -233,10 +234,9 @@ class _StockHomePageState extends State<StockHomePage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) {
-          final text = search.text.trim().toLowerCase();
           final options = _items
               .where((i) => i.id != item.id && i.parentId == null)
-              .where((i) => text.isEmpty || i.name.toLowerCase().contains(text))
+              .where((i) => coincideBusqueda(search.text, [i.name, i.code]))
               .take(40)
               .toList();
           return AlertDialog(
@@ -313,9 +313,8 @@ class _StockHomePageState extends State<StockHomePage> {
   }
 
   List<StockItem> get _visible {
-    final text = _search.text.trim().toLowerCase();
     return _items.where((i) {
-      if (text.isNotEmpty && !i.name.toLowerCase().contains(text) && !i.code.toLowerCase().contains(text)) {
+      if (!coincideBusqueda(_search.text, [i.name, i.code])) {
         return false;
       }
       return switch (_filter) {

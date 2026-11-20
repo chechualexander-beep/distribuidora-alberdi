@@ -13,6 +13,7 @@ import 'invoice_request.dart';
 import 'invoice_snapshot_pdf.dart';
 import '../../core/app_theme.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
+import '../../core/text_search.dart';
 
 class InvoiceDetailPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -300,12 +301,10 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             final productosFiltrados = _productosDisponibles.where((producto) {
-              final nombre = producto['nombre']?.toString().toLowerCase() ?? '';
-              final codigo = producto['codigo']?.toString().toLowerCase() ?? '';
-
-              final texto = busqueda.toLowerCase().trim();
-
-              return nombre.contains(texto) || codigo.contains(texto);
+              return coincideBusqueda(busqueda, [
+                producto['nombre'],
+                producto['codigo'],
+              ]);
             }).toList();
 
             return AlertDialog(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/desktop_table.dart';
+import '../../core/text_search.dart';
 
 class InvoicingDesktopTable extends StatefulWidget {
   const InvoicingDesktopTable({
@@ -45,9 +46,10 @@ class _InvoicingDesktopTableState extends State<InvoicingDesktopTable> {
     final selected = sellers.contains(_seller) ? _seller : null;
     final filtered = widget.orders.where((p) {
       final c = p['clientes'] as Map<String, dynamic>?;
-      final text = '${c?['nombre_comercio'] ?? ''} ${c?['direccion'] ?? ''}'
-          .toLowerCase();
-      return text.contains(_search.toLowerCase()) &&
+      return coincideBusqueda(_search, [
+            c?['nombre_comercio'],
+            c?['direccion'],
+          ]) &&
           (selected == null || selected == _sellerName(p));
     }).toList();
     return Padding(

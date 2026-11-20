@@ -4,6 +4,7 @@ import '../../core/desktop_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
+import '../../core/text_search.dart';
 
 class CorrectOperationPage extends StatefulWidget {
   final Map<String, dynamic> pedido;
@@ -243,15 +244,10 @@ class _CorrectOperationPageState extends State<CorrectOperationPage> {
           return StatefulBuilder(
             builder: (context, setModalState) {
               final filtrados = productosDisponibles.where((producto) {
-                final texto = busqueda.toLowerCase();
-
-                final nombre =
-                    producto['nombre']?.toString().toLowerCase() ?? '';
-
-                final codigo =
-                    producto['codigo_original']?.toString().toLowerCase() ?? '';
-
-                return nombre.contains(texto) || codigo.contains(texto);
+                return coincideBusqueda(busqueda, [
+                  producto['nombre'],
+                  producto['codigo_original'],
+                ]);
               }).toList();
 
               return SafeArea(

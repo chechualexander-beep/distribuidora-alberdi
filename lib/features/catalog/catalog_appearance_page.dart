@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/desktop_records.dart';
+import '../../core/text_search.dart';
 
 /// Paletas del catálogo web (las mismas del sitio: catalogo/src/vitrina.css).
 const catalogThemes = <String, ({String label, Color color})>{
@@ -341,10 +342,7 @@ class _NoveltyDialogState extends State<NoveltyDialog> {
     final query = _normalize(_search.text);
     final matches = widget.products
         .where(
-          (p) =>
-              query.isEmpty ||
-              _normalize(p['nombre']?.toString()).contains(query) ||
-              _normalize(p['categoria']?.toString()).contains(query),
+          (p) => coincideBusqueda(query, [p['nombre'], p['categoria']]),
         )
         .take(60)
         .toList();

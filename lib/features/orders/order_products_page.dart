@@ -11,9 +11,21 @@ import '../../core/offline_queries.dart';
 import '../../core/pending_orders.dart';
 import '../stock/stock_data.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
+import '../../core/text_search.dart';
+import 'order_client_picker.dart';
+import '../products/product_price_card.dart';
+
+/// Lo que se manda al resumen del pedido (para pruebas).
+typedef OrderDraft = ({
+  Map<String, dynamic> cliente,
+  Map<String, int> cantidades,
+  Map<String, double> precios,
+  Map<String, String> listas,
+});
 
 class OrderProductsPage extends StatefulWidget {
-  final Map<String, dynamic> cliente;
+  /// Null: pedido armado sin cliente; se elige o se crea al final.
+  final Map<String, dynamic>? cliente;
   final DateTime? fechaEntrega;
   final String tipoOperacion;
 
@@ -25,9 +37,15 @@ class OrderProductsPage extends StatefulWidget {
   final String? tipoPrecioInicial;
   final SupabaseClient? client;
 
+  /// Para pruebas: productos ya cargados, elección de cliente y resumen.
+  final List<Map<String, dynamic>>? productosIniciales;
+  final Future<Map<String, dynamic>?> Function(BuildContext context)?
+  elegirCliente;
+  final void Function(OrderDraft pedido)? abrirResumen;
+
   const OrderProductsPage({
     super.key,
-    required this.cliente,
+    this.cliente,
     this.fechaEntrega,
     required this.tipoOperacion,
     this.cantidadesIniciales,
@@ -37,6 +55,9 @@ class OrderProductsPage extends StatefulWidget {
     this.observacionInicial,
     this.tipoPrecioInicial,
     this.client,
+    this.productosIniciales,
+    this.elegirCliente,
+    this.abrirResumen,
   });
 
   @override
@@ -53,6 +74,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   String _tipoPrecio = 'normal';
   late DateTime? _fechaEntrega = widget.fechaEntrega;
   SupabaseClient get _client => widget.client ?? Supabase.instance.client;
+  late Map<String, dynamic>? _cliente = widget.cliente;
 
   final Map<String, int> _cantidades = {};
 
@@ -72,7 +94,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
 
     final tipoHabitual =
         widget.tipoPrecioInicial ??
-        widget.cliente['tipo_precio_habitual']?.toString();
+        _cliente?['tipo_precio_habitual']?.toString();
 
     if (tipoHabitual == 'normal' ||
         tipoHabitual == 'promo' ||
@@ -91,10 +113,15 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
       _tiposPrecioFijados.addAll(widget.tiposPrecioIniciales!);
     }
 
-    _cargarProductos();
+    if (widget.productosIniciales != null) {
+      _productos = List<Map<String, dynamic>>.from(widget.productosIniciales!);
+      _cargando = false;
+    } else {
+      _cargarProductos();
+    }
     if (widget.tipoOperacion == 'venta_directa' && widget.pedidoId == null) {
       _cargarVehiculo();
-      _cargarUltimaCompra();
+      if (_cliente != null) _cargarUltimaCompra();
     }
   }
 
@@ -107,7 +134,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   }
 
   Future<void> _cargarUltimaCompra() async {
-    final clienteId = widget.cliente['id']?.toString();
+    final clienteId = _cliente?['id']?.toString();
     if (clienteId == null || PendingOrders.instance.isPendingClient(clienteId)) return;
     try {
       final ultimo = await _client
@@ -172,10 +199,13 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     }
   }
 
-  double _precioActual(Map<String, dynamic> producto) {
+  double _precioActual(Map<String, dynamic> producto) =>
+      _precioDeLista(producto, _tipoPrecio);
+
+  double _precioDeLista(Map<String, dynamic> producto, String lista) {
     dynamic valor;
 
-    switch (_tipoPrecio) {
+    switch (lista) {
       case 'promo':
         valor = producto['precio_promo'];
         break;
@@ -256,6 +286,14 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
 
   String _formatearPrecio(double valor) => formatoPesos(valor);
 
+  /// Imagen con el precio que se ve en la fila (el de su lista).
+  PriceCardData _tarjetaPrecio(Map<String, dynamic> producto) => PriceCardData(
+    nombre: producto['nombre']?.toString() ?? 'Producto',
+    detalle: producto['descripcion']?.toString(),
+    precio: _precioUsado(producto),
+    lista: _tiposPrecioFijados[producto['id'].toString()] ?? _tipoPrecio,
+  );
+
   Future<void> _elegirFechaEntrega() async {
     final fecha = await pickDeliveryDate(context, selected: _fechaEntrega);
     if (mounted && fecha != null) setState(() => _fechaEntrega = fecha);
@@ -316,11 +354,26 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
       return;
     }
 
+    if (_cliente == null) {
+      final asignado = await _asignarCliente();
+      if (!asignado || !mounted) return;
+    }
+    final cliente = _cliente!;
+    if (widget.abrirResumen != null) {
+      widget.abrirResumen!((
+        cliente: cliente,
+        cantidades: Map<String, int>.from(_cantidades),
+        precios: Map<String, double>.from(_preciosFijados),
+        listas: Map<String, String>.from(_tiposPrecioFijados),
+      ));
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => OrderSummaryPage(
           fechaEntrega: fechaEntrega,
-          cliente: widget.cliente,
+          cliente: cliente,
           tipoOperacion: widget.tipoOperacion,
           productos: _productos,
           cantidades: Map<String, int>.from(_cantidades),
@@ -335,8 +388,144 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     );
   }
 
+  /// Pedido armado sin cliente: lo elige o lo crea ahora. Si su lista
+  /// habitual es otra, ofrece pasar los productos a esa lista.
+  Future<bool> _asignarCliente() async {
+    final elegido = widget.elegirCliente != null
+        ? await widget.elegirCliente!(context)
+        : await pickOrderClient(context, client: widget.client);
+    if (elegido == null || !mounted) return false;
+
+    var deuda = 0.0;
+    final clienteId = elegido['id']?.toString();
+    if (widget.elegirCliente == null && clienteId != null) {
+      try {
+        final saldo = await consultarSaldoResumen(_client, clienteId);
+        deuda =
+            double.tryParse(saldo?['saldo_pendiente']?.toString() ?? '') ?? 0;
+      } catch (_) {}
+      if (!mounted) return false;
+    }
+
+    final habitual = elegido['tipo_precio_habitual']?.toString();
+    final otraLista =
+        {'normal', 'promo', 'interior'}.contains(habitual) &&
+        _cantidades.keys.any((id) => _tiposPrecioFijados[id] != habitual);
+    final lista = habitual ?? 'normal';
+
+    if (deuda > 0 || otraLista) {
+      final nombre = elegido['nombre_comercio']?.toString() ?? 'Cliente';
+      final pasar = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Text(nombre),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (deuda > 0) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: AppColors.naranja),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Tiene saldo pendiente: ${formatoPesos(deuda)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                if (otraLista) const SizedBox(height: 14),
+              ],
+              if (otraLista)
+                Text(
+                  'Su lista habitual es ${_nombreLista(lista)}. '
+                  '¿Pasar todos los productos del pedido a lista '
+                  '${_nombreLista(lista)}?',
+                ),
+            ],
+          ),
+          actions: otraLista
+              ? [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Mantener precios'),
+                  ),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colorLista(lista),
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text('Pasar a ${_nombreLista(lista)}'),
+                  ),
+                ]
+              : [
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Seguir'),
+                  ),
+                ],
+        ),
+      );
+      if (!mounted) return false;
+      if (pasar == true) _pasarALista(lista);
+    }
+
+    setState(() => _cliente = elegido);
+    return true;
+  }
+
+  void _pasarALista(String lista) {
+    setState(() {
+      _tipoPrecio = lista;
+      for (final id in _cantidades.keys) {
+        final producto = _productos.where((p) => p['id'].toString() == id);
+        if (producto.isEmpty) continue;
+        _preciosFijados[id] = _precioDeLista(producto.first, lista);
+        _tiposPrecioFijados[id] = lista;
+      }
+    });
+  }
+
+  Future<void> _confirmarSalida() async {
+    final salir = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Salir del pedido?'),
+        content: Text(
+          'Se pierden los $_totalUnidades productos cargados.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Seguir cargando'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.rojo),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
+    if (salir == true && mounted) Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: widget.cliente != null || _totalUnidades == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmarSalida();
+      },
+      child: _pantalla(context),
+    );
+  }
+
+  Widget _pantalla(BuildContext context) {
     return Scaffold(
       appBar: _barraLista(),
       body: Column(
@@ -433,24 +622,11 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
         ),
       );
     }
-    String normalizarTexto(String texto) {
-      return texto
-          .toLowerCase()
-          .replaceAll('á', 'a')
-          .replaceAll('é', 'e')
-          .replaceAll('í', 'i')
-          .replaceAll('ó', 'o')
-          .replaceAll('ú', 'u')
-          .replaceAll('ü', 'u')
-          .replaceAll('ñ', 'n');
-    }
+    final texto = sinAcentos(_busqueda);
 
-    final texto = normalizarTexto(_busqueda.trim());
 
     final productosFiltrados = _productos.where((producto) {
-      final nombre = normalizarTexto(producto['nombre']?.toString() ?? '');
 
-      final codigo = producto['codigo']?.toString().toLowerCase() ?? '';
 
       if (_modoVehiculo &&
           texto.isEmpty &&
@@ -459,7 +635,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
         return false;
       }
 
-      return nombre.contains(texto) || codigo.contains(texto);
+      return coincideBusqueda(texto, [producto['nombre'], producto['codigo']]);
     }).toList();
 
     if (_ultimaCompra.isNotEmpty || _modoVehiculo) {
@@ -581,6 +757,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                           ProductPhoto(
                             path: r['foto_path']?.toString(),
                             size: 30,
+                            tarjeta: _tarjetaPrecio(r),
                           ),
                           const SizedBox(width: 8),
                           desktopText(
@@ -678,6 +855,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                             ProductPhoto(
                               path: producto['foto_path']?.toString(),
                               size: 48,
+                              tarjeta: _tarjetaPrecio(producto),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -808,7 +986,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
   }
 
   PreferredSizeWidget _barraLista() {
-    final habitual = widget.cliente['tipo_precio_habitual']?.toString();
+    final habitual = _cliente?['tipo_precio_habitual']?.toString();
     final distintaHabitual =
         habitual != null &&
         {'normal', 'promo', 'interior'}.contains(habitual) &&
@@ -821,7 +999,9 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            widget.cliente['nombre_comercio']?.toString() ?? 'Sin nombre',
+            _cliente == null
+                ? 'CLIENTE AL FINAL'
+                : _cliente!['nombre_comercio']?.toString() ?? 'Sin nombre',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),

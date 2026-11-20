@@ -1,3 +1,5 @@
+import '../../core/text_search.dart';
+
 const diasVisita = <int, String>{
   1: 'Lunes',
   2: 'Martes',
@@ -13,21 +15,7 @@ int? diaVisitaCliente(Map<String, dynamic> cliente) =>
 
 String nombreDiaVisita(int? dia) => diasVisita[dia] ?? 'Sin asignar';
 
-String normalizarCliente(Object? valor) {
-  var texto = (valor?.toString() ?? '').trim().toLowerCase();
-  const reemplazos = {
-    'á': 'a',
-    'é': 'e',
-    'í': 'i',
-    'ó': 'o',
-    'ú': 'u',
-    'ü': 'u',
-  };
-  for (final entry in reemplazos.entries) {
-    texto = texto.replaceAll(entry.key, entry.value);
-  }
-  return texto.replaceAll(RegExp(r'\s+'), ' ');
-}
+String normalizarCliente(Object? valor) => sinAcentos(valor);
 
 // Conjuntos vacíos significan todos; texto vacío significa sin localidad/zona;
 // día 0 significa sin día asignado.
@@ -46,15 +34,17 @@ bool coincideCliente(
   if (dias.isNotEmpty && !dias.contains(diaVisitaCliente(cliente) ?? 0)) {
     return false;
   }
-  final campos = [
-    'nombre_comercio',
-    'propietario',
-    'direccion',
-    'telefono',
-    'localidad',
-    'zona',
-  ].map((campo) => normalizarCliente(cliente[campo])).join(' ');
-  return normalizarCliente(busqueda).split(' ').every(campos.contains);
+  return coincideBusqueda(
+    busqueda,
+    [
+      'nombre_comercio',
+      'propietario',
+      'direccion',
+      'telefono',
+      'localidad',
+      'zona',
+    ].map((campo) => cliente[campo]),
+  );
 }
 
 Map<String, String> opcionesClientes(

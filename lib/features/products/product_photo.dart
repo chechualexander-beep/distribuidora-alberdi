@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/network_status.dart';
 import 'package:image/image.dart' as img;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'product_price_card.dart';
 
 const productPhotoBucket = 'productos-fotos';
 
@@ -65,7 +66,18 @@ Uint8List prepareProductPhoto(Uint8List bytes) {
 class ProductPhoto extends StatelessWidget {
   final String? path;
   final double size;
-  const ProductPhoto({super.key, this.path, this.size = 64});
+
+  /// Si viene, al tocar la foto se arma la imagen con el precio para
+  /// compartir o guardar (también sin foto).
+  final PriceCardData? tarjeta;
+  const ProductPhoto({super.key, this.path, this.size = 64, this.tarjeta});
+
+  void _abrir(BuildContext context, String? url) => showDialog<void>(
+    context: context,
+    builder: (_) => tarjeta != null
+        ? ProductPriceCardViewer(data: tarjeta!, url: url)
+        : _ProductPhotoViewer(url: url!),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +92,21 @@ class ProductPhoto extends StatelessWidget {
         : Supabase.instance.client.storage
               .from(productPhotoBucket)
               .getPublicUrl(path!);
+    if (url == null && tarjeta != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Tooltip(
+          message: 'Imagen con precio',
+          child: Material(
+            color: const Color(0xffe1ebe4),
+            child: InkWell(
+              onTap: () => _abrir(context, null),
+              child: placeholder(),
+            ),
+          ),
+        ),
+      );
+    }
     // Ahorro de datos: la foto no se descarga; se ve solo si se toca.
     if (url != null && dataSaver.value) {
       return ClipRRect(
@@ -89,10 +116,7 @@ class ProductPhoto extends StatelessWidget {
           child: Material(
             color: const Color(0xffe1ebe4),
             child: InkWell(
-              onTap: () => showDialog<void>(
-                context: context,
-                builder: (_) => _ProductPhotoViewer(url: url),
-              ),
+              onTap: () => _abrir(context, url),
               child: SizedBox(
                 width: size,
                 height: size,
@@ -115,10 +139,7 @@ class ProductPhoto extends StatelessWidget {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: () => showDialog<void>(
-                    context: context,
-                    builder: (_) => _ProductPhotoViewer(url: url),
-                  ),
+                  onTap: () => _abrir(context, url),
                   child: Image.network(
                     url,
                     width: size,

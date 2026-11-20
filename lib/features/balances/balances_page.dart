@@ -6,6 +6,7 @@ import '../../core/payment_outbox.dart';
 import '../../core/payment_money.dart';
 import 'balance_repository.dart';
 import 'client_payment_dialog.dart';
+import '../../core/text_search.dart';
 
 class BalancesPage extends StatefulWidget {
   const BalancesPage({super.key, this.repository, this.paymentStore});
@@ -91,9 +92,7 @@ class _BalancesPageState extends State<BalancesPage> {
   Widget build(BuildContext context) {
     final visible = rows
         ?.where(
-          (r) => r['nombre_comercio'].toString().toLowerCase().contains(
-            search.toLowerCase(),
-          ),
+          (r) => coincideBusqueda(search, [r['nombre_comercio']]),
         )
         .toList();
     return Scaffold(

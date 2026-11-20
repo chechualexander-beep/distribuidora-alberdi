@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'invoice_detail_page.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
+import '../../core/text_search.dart';
 
 class InvoicedOrdersPage extends StatefulWidget {
   const InvoicedOrdersPage({super.key});
@@ -169,23 +170,20 @@ class _InvoicedOrdersPageState extends State<InvoicedOrdersPage> {
 
       final cliente = pedido['clientes'] as Map<String, dynamic>?;
 
-      final nombreCliente =
-          cliente?['nombre_comercio']?.toString().toLowerCase() ?? '';
-
-      final cumpleCliente =
-          _filtroCliente.isEmpty ||
-          nombreCliente.contains(_filtroCliente.toLowerCase());
+      final cumpleCliente = coincideBusqueda(_filtroCliente, [
+        cliente?['nombre_comercio'],
+      ]);
 
       final usuario = pedido['usuarios'] as Map<String, dynamic>?;
 
       final nombrePreventista = [
         usuario?['nombre']?.toString() ?? '',
         usuario?['apellido']?.toString() ?? '',
-      ].where((texto) => texto.isNotEmpty).join(' ').toLowerCase();
+      ].where((texto) => texto.isNotEmpty).join(' ');
 
-      final cumplePreventista =
-          _filtroPreventista.isEmpty ||
-          nombrePreventista.contains(_filtroPreventista.toLowerCase());
+      final cumplePreventista = coincideBusqueda(_filtroPreventista, [
+        nombrePreventista,
+      ]);
 
       return cumpleFecha && cumpleCliente && cumplePreventista;
     }).toList();

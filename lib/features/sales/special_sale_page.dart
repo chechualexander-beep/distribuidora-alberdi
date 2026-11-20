@@ -10,6 +10,7 @@ import '../orders/order_whatsapp_button.dart';
 import '../orders/payment_choice.dart';
 import '../stock/stock_data.dart';
 import 'special_sale_data.dart';
+import '../../core/text_search.dart';
 
 /// Venta especial del administrador: precio a mano, margen en vivo, stock del depósito o del
 /// vehículo, sin comisión; se cobra en el momento (o queda fiado al cliente). Base del mostrador.
@@ -78,21 +79,10 @@ class _SpecialSalePageState extends State<SpecialSalePage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  static String _normalize(String t) => t
-      .toLowerCase()
-      .replaceAll('á', 'a')
-      .replaceAll('é', 'e')
-      .replaceAll('í', 'i')
-      .replaceAll('ó', 'o')
-      .replaceAll('ú', 'u')
-      .replaceAll('ñ', 'n')
-      .trim();
-
   List<SaleProduct> get _matches {
-    final text = _normalize(_search.text);
-    if (text.isEmpty) return const [];
+    if (sinAcentos(_search.text).isEmpty) return const [];
     return (_products ?? const <SaleProduct>[])
-        .where((p) => _normalize(p.name).contains(text) || p.code.toLowerCase().contains(text))
+        .where((p) => coincideBusqueda(_search.text, [p.name, p.code]))
         .take(8)
         .toList();
   }
@@ -126,10 +116,9 @@ class _SpecialSalePageState extends State<SpecialSalePage> {
         final filter = TextEditingController();
         return StatefulBuilder(
           builder: (context, set) {
-            final text = _normalize(filter.text);
             final list = [
               SaleClient.finalConsumer,
-              ..._clients.where((c) => text.isEmpty || _normalize(c.name).contains(text)),
+              ..._clients.where((c) => coincideBusqueda(filter.text, [c.name])),
             ];
             return AlertDialog(
               title: const Text('¿A quién le vendés?'),

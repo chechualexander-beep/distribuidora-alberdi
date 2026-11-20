@@ -13,6 +13,7 @@ import 'product_summary.dart';
 import '../finance/finance_data.dart';
 import '../finance/finance_forms.dart' show isoDate;
 import 'package:distribuidora_alberdi/core/money_format.dart';
+import '../../core/text_search.dart';
 
 enum StockFormKind { count, load, unload, purchase, closeTrip }
 
@@ -345,12 +346,10 @@ class _StockFormPageState extends State<StockFormPage> {
   }
 
   List<StockItem> get _visible {
-    final text = _normalize(_search.text);
+    final text = sinAcentos(_search.text);
     final base = widget.items.where((item) {
       if (widget.onlyIds != null && !widget.onlyIds!.contains(item.id)) return false;
-      if (text.isNotEmpty &&
-          !_normalize(item.name).contains(text) &&
-          !item.code.toLowerCase().contains(text)) {
+      if (!coincideBusqueda(_search.text, [item.name, item.code])) {
         return false;
       }
       final filled = _hasText(item.id);
@@ -369,16 +368,6 @@ class _StockFormPageState extends State<StockFormPage> {
     // Cada suelto justo debajo de su cerrado; al contar, aparecen aunque sean "a pedido".
     return pairLooseWithClosed(base, widget.items, addLoose: _kind == StockFormKind.count);
   }
-
-  static String _normalize(String text) => text
-      .toLowerCase()
-      .replaceAll('á', 'a')
-      .replaceAll('é', 'e')
-      .replaceAll('í', 'i')
-      .replaceAll('ó', 'o')
-      .replaceAll('ú', 'u')
-      .replaceAll('ñ', 'n')
-      .trim();
 
   /// Productos con cantidad escrita. Null si alguna es inválida.
   List<Map<String, dynamic>>? _lines() {
