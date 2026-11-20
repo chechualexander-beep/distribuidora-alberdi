@@ -18,6 +18,7 @@ import '../catalog/general_catalog_page.dart';
 import '../../core/pending_orders_page.dart';
 import '../finance/finance_home_page.dart';
 import '../finance/finance_dashboard_page.dart';
+import '../sales/special_sale_page.dart';
 
 class DesktopHome extends StatefulWidget {
   const DesktopHome({
@@ -54,6 +55,7 @@ class _DesktopHomeState extends State<DesktopHome> {
     'Stock' when widget.isAdmin => const StockHomePage(),
     'Lo que llevamos' => const VehicleLoadPage(),
     'Saldos' when widget.isAdmin => const BalancesPage(),
+    'Venta especial' when widget.isAdmin => const SpecialSalePage(),
     'Plata del negocio' when widget.isAdmin => const FinanceHomePage(),
     'Tablero del mes' when widget.isAdmin => const FinanceDashboardPage(),
     'Catálogo general' when widget.canGeneralCatalog => GeneralCatalogPage(
@@ -172,6 +174,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                             style: TextStyle(fontSize: 11, letterSpacing: 1),
                           ),
                         ),
+                        link('Venta especial', Icons.point_of_sale),
                         link('Plata del negocio', Icons.savings_outlined),
                         link('Tablero del mes', Icons.insights),
                         link('Saldos', Icons.account_balance_wallet_outlined),
