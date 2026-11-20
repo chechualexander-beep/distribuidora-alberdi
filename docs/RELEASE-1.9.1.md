@@ -10,3 +10,8 @@ Rama: `gestion/etapa1`. Sin migraciones (solo la app).
   WhatsApp y PDF (boletas, lista de precios, liquidación de comisiones): `core/money_format.dart`
   reemplaza las ~20 funciones de precio repetidas. Los importes de cobros y de "Plata del negocio"
   muestran los puntos al escribir.
+- "¿Cómo quedó el pago?": TODO EFECTIVO (verde), TODO TRANSFERENCIA (azul) y MIXTO O DEJÓ SALDO a lo
+  ancho, uno abajo del otro.
+- "Registrar pago" (Saldos) reordenado: saldo actual grande, importe con puntos y "Todo el saldo",
+  medio de pago con dos botones (efectivo verde, transferencia azul), observación y cuánto queda
+  debiendo.

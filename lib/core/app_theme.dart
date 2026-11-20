@@ -165,6 +165,7 @@ class Tonos {
   /// Números de estado.
   Color get verde => oscuro ? const Color(0xFF81C784) : AppColors.verde;
   Color get rojo => oscuro ? const Color(0xFFEF8A8A) : AppColors.rojo;
+  Color get azul => oscuro ? const Color(0xFF64B5F6) : const Color(0xFF1565C0);
 
   /// Etiquetas: (fondo, texto).
   (Color, Color) get etiquetaVerde =>

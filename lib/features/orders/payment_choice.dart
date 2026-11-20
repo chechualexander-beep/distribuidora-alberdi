@@ -72,7 +72,13 @@ Future<PaymentChoice?> showPaymentChoice(BuildContext context, {required double 
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: const [ImporteInputFormatter()],
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          decoration: InputDecoration(labelText: label, prefixText: '\$', border: const OutlineInputBorder()),
+          decoration: InputDecoration(
+            labelText: label,
+            labelStyle: TextStyle(color: isCash ? t.verde : t.azul, fontWeight: FontWeight.w600),
+            prefixIcon: Icon(isCash ? Icons.payments_outlined : Icons.phone_android, color: isCash ? t.verde : t.azul),
+            prefixText: '\$',
+            border: const OutlineInputBorder(),
+          ),
           onChanged: (_) => set(() {
             if (isCash) {
               cashTouched = true;
@@ -99,33 +105,37 @@ Future<PaymentChoice?> showPaymentChoice(BuildContext context, {required double 
                   Text(formatoPesos(aCobrar), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   if (!mixed) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: () => Navigator.pop(context, const PaymentChoice(todo: 'Efectivo')),
-                            icon: const Icon(Icons.payments_outlined),
-                            label: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 10),
-                              child: Text('TODO EFECTIVO', textAlign: TextAlign.center),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: () => Navigator.pop(context, const PaymentChoice(todo: 'Transferencia')),
-                            icon: const Icon(Icons.phone_android),
-                            label: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 10),
-                              child: Text('TODO TRANSFERENCIA', textAlign: TextAlign.center),
-                            ),
-                          ),
-                        ),
-                      ],
+                    // A lo ancho, uno abajo del otro: efectivo en verde, transferencia en azul.
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: t.verde,
+                        side: BorderSide(color: t.verde, width: 1.5),
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () => Navigator.pop(context, const PaymentChoice(todo: 'Efectivo')),
+                      icon: const Icon(Icons.payments_outlined),
+                      label: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Text('TODO EFECTIVO'),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: t.azul,
+                        side: BorderSide(color: t.azul, width: 1.5),
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () => Navigator.pop(context, const PaymentChoice(todo: 'Transferencia')),
+                      icon: const Icon(Icons.phone_android),
+                      label: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Text('TODO TRANSFERENCIA'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(side: const BorderSide(width: 1.5)),
                       onPressed: () => set(() => mixed = true),
                       icon: const Icon(Icons.call_split),
                       label: const Padding(

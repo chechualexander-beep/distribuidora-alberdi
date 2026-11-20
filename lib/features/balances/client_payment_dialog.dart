@@ -8,6 +8,7 @@ import 'balance_repository.dart';
 import '../../core/network_status.dart';
 import '../../core/pending_orders.dart';
 import '../../core/money_format.dart';
+import '../../core/app_theme.dart';
 
 Future<void> showClientPayment(
   BuildContext context,
@@ -294,64 +295,130 @@ class _ClientPaymentDialogState extends State<ClientPaymentDialog> {
     Navigator.pop(context);
   }
 
+  /// Lo que queda debiendo con el importe escrito (null si no hay importe válido).
+  double? get _quedaDebiendo {
+    final b = balance;
+    final value = leerImporte(amount.text);
+    if (b == null || value == null || value <= 0) return null;
+    return b / 100 - value;
+  }
+
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Registrar pago de deudas'),
+  Widget build(BuildContext context) {
+    final t = Tonos.of(context);
+    final editable = available && !busy;
+    final rest = _quedaDebiendo;
+    return AlertDialog(
+    title: const Text('Registrar pago'),
     content: SizedBox(
-      width: 540,
+      width: 480,
       child: SingleChildScrollView(
         child: loading
             ? const CircularProgressIndicator()
             : Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(widget.clientName),
-                  if (balance != null)
-                    Text('Saldo actual: ${centsMoney(balance!)}'),
-                  const Text(
-                    'El importe se distribuirá automáticamente a las deudas más antiguas.',
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: t.oscuro ? Colors.white24 : AppColors.borde),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          balance == null ? widget.clientName : '${widget.clientName} · saldo actual',
+                          style: TextStyle(color: t.secundario),
+                        ),
+                        if (balance != null)
+                          Text(
+                            centsMoney(balance!),
+                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: t.rojo),
+                          ),
+                      ],
+                    ),
                   ),
-                  if (message != null)
+                  if (message != null) ...[
+                    const SizedBox(height: 10),
                     Text(message!, key: const ValueKey('payment-message')),
-                  if (request != null)
+                  ],
+                  if (request != null) ...[
+                    const SizedBox(height: 10),
                     Text('Solicitud guardada: ${request!.id}'),
-                  if (request != null)
                     Text(
                       'Pago guardado: ${paymentMoney(request!.payload['p_importe'])} · ${request!.payload['p_medio_pago']}',
                     ),
+                  ],
                   if (result == null && request == null) ...[
-                    TextField(
-                      controller: amount,
-                      enabled: available && !busy,
-                      decoration: const InputDecoration(
-                        labelText: 'Importe a cobrar',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: const [ImporteInputFormatter()],
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: amount,
+                            enabled: editable,
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            decoration: const InputDecoration(
+                              labelText: 'Importe que paga',
+                              prefixText: '\$ ',
+                              floatingLabelBehavior: FloatingLabelBehavior.always,
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: const [ImporteInputFormatter()],
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                        if (balance != null && balance! > 0) ...[
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                            onPressed: editable
+                                ? () => setState(() => amount.text = formatoNumero(balance! / 100))
+                                : null,
+                            child: const Text('Todo el saldo'),
+                          ),
+                        ],
+                      ],
                     ),
-                    DropdownButtonFormField<String>(
-                      initialValue: medium,
-                      decoration: const InputDecoration(
-                        labelText: 'Medio de pago',
-                      ),
-                      items: const ['Efectivo', 'Transferencia']
-                          .map(
-                            (s) => DropdownMenuItem(value: s, child: Text(s)),
-                          )
-                          .toList(),
-                      onChanged: available && !busy
-                          ? (s) => setState(() => medium = s!)
-                          : null,
+                    const SizedBox(height: 16),
+                    Text('Medio de pago', style: TextStyle(color: t.secundario)),
+                    const SizedBox(height: 6),
+                    SegmentedButton<String>(
+                      segments: [
+                        ButtonSegment(
+                          value: 'Efectivo',
+                          icon: Icon(Icons.payments_outlined, color: t.verde),
+                          label: Text('Efectivo', style: TextStyle(color: t.verde, fontWeight: FontWeight.w600)),
+                        ),
+                        ButtonSegment(
+                          value: 'Transferencia',
+                          icon: Icon(Icons.phone_android, color: t.azul),
+                          label: Text('Transferencia', style: TextStyle(color: t.azul, fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                      selected: {medium},
+                      onSelectionChanged: editable ? (v) => setState(() => medium = v.first) : null,
                     ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: observation,
-                      enabled: available && !busy,
+                      enabled: editable,
                       decoration: const InputDecoration(
-                        labelText: 'Observación opcional',
+                        labelText: 'Observación (opcional)',
+                        border: OutlineInputBorder(),
                       ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      [
+                        if (rest != null && rest > 0.005) 'Queda debiendo ${formatoPesos(rest)}.',
+                        if (rest != null && rest.abs() <= 0.005) 'Con este pago queda sin deuda.',
+                        if (rest != null && rest < -0.005) 'Es más que el saldo actual.',
+                        'El pago se aplica primero a las deudas más antiguas.',
+                      ].join(' '),
+                      style: TextStyle(fontSize: 13, color: rest != null && rest < -0.005 ? t.rojo : t.secundario),
                     ),
                   ],
                   if (result != null) ...[
@@ -388,4 +455,5 @@ class _ClientPaymentDialogState extends State<ClientPaymentDialog> {
         ),
     ],
   );
+  }
 }
