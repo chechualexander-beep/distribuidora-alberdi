@@ -19,6 +19,7 @@ import '../../core/pending_orders_page.dart';
 import '../finance/finance_home_page.dart';
 import '../finance/finance_dashboard_page.dart';
 import '../sales/special_sale_page.dart';
+import '../calculator/calculator_page.dart';
 
 class DesktopHome extends StatefulWidget {
   const DesktopHome({
@@ -62,6 +63,7 @@ class _DesktopHomeState extends State<DesktopHome> {
       isAdmin: widget.isAdmin,
     ),
     'Resumen comercial' => const CommercialSummaryPage(),
+    'Calculadora' => const CalculatorPage(),
     _ => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -156,6 +158,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                       link('Productos', Icons.inventory_2_outlined),
                       link('Pedidos', Icons.receipt_long_outlined),
                       link('Mis comisiones', Icons.payments_outlined),
+                      link('Calculadora', Icons.calculate_outlined),
                       if (!widget.isAdmin)
                         link('Lo que llevamos', Icons.local_shipping_outlined),
                       if (widget.canGeneralCatalog)

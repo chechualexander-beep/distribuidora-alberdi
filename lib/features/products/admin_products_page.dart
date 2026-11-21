@@ -13,6 +13,7 @@ import 'package:csv/csv.dart';
 import 'price_list_page.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
 import '../../core/text_search.dart';
+import '../calculator/calculator_page.dart';
 
 class AdminProductsPage extends StatefulWidget {
   const AdminProductsPage({super.key});
@@ -915,6 +916,25 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
                           labelText: 'Costo',
                           prefixText: '\$ ',
                           border: OutlineInputBorder(),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          icon: const Icon(Icons.calculate_outlined),
+                          label: const Text('Calculadora'),
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => CalculatorPage(
+                                costo: double.tryParse(
+                                  costoController.text.replaceAll(',', '.'),
+                                ),
+                                venta: double.tryParse(
+                                  precioNormalController.text.replaceAll(',', '.'),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),

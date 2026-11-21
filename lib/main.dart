@@ -38,6 +38,7 @@ import 'features/orders/finalization_request.dart';
 import 'features/finance/finance_home_page.dart';
 import 'features/finance/finance_dashboard_page.dart';
 import 'features/sales/special_sale_page.dart';
+import 'features/calculator/calculator_page.dart';
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 final _localAuthentication = LocalAuthentication();
@@ -662,6 +663,7 @@ class _HomePageState extends State<HomePage> {
                   else
                     HomeAction(Icons.local_shipping_outlined, 'Lo que llevamos', () => _abrir(const VehicleLoadPage())),
                   HomeAction(Icons.payments_outlined, 'Mis comisiones', () => _abrir(MyCommissionsPage())),
+                  HomeAction(Icons.calculate_outlined, 'Calculadora', () => _abrir(const CalculatorPage())),
                   if (_puedeCatalogoGeneral)
                     HomeAction(
                       Icons.storefront_outlined,

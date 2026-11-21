@@ -14,6 +14,8 @@ import 'package:distribuidora_alberdi/core/money_format.dart';
 import '../../core/text_search.dart';
 import 'order_client_picker.dart';
 import '../products/product_price_card.dart';
+import '../calculator/calculator_data.dart';
+import '../calculator/calculator_page.dart';
 
 /// Lo que se manda al resumen del pedido (para pruebas).
 typedef OrderDraft = ({
@@ -995,6 +997,30 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
       backgroundColor: colorLista(_tipoPrecio),
       foregroundColor: Colors.white,
       toolbarHeight: 64,
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: IconButton(
+            key: const Key('calculadora-bulto'),
+            tooltip: 'Calculadora por bulto',
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.dorado,
+              foregroundColor: AppColors.negro,
+            ),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CalculatorPage(
+                  soloBulto: true,
+                  productos: _productos.map(CalcProduct.fromMap).toList(),
+                  lista: _tipoPrecio,
+                  cargar: widget.productosIniciales == null,
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.calculate_outlined),
+          ),
+        ),
+      ],
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
