@@ -138,4 +138,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(texto(tester, 'kg-bulto'), '2,5');
   });
+
+  testWidgets('pestañas: se cambia entre Margen, Descuento y Por bulto', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(420, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const MaterialApp(home: CalculatorPage(cargar: false)));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('calc-margen')), findsOneWidget);
+    await tester.tap(find.text('Descuento'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('calc-descuento')), findsOneWidget);
+    await tester.tap(find.text('Por bulto'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('calc-precio-bulto')), findsOneWidget);
+  });
 }

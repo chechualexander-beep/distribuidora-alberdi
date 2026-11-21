@@ -81,13 +81,44 @@ class _CalculatorPageState extends State<CalculatorPage> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Calculadora'),
-          bottom: const TabBar(
-            indicatorColor: AppColors.dorado,
-            tabs: [
-              Tab(text: 'Margen'),
-              Tab(text: 'Descuento'),
-              Tab(text: 'Por bulto'),
-            ],
+          // Pestañas como botones redondeados: la elegida rellena en dorado con letra negra
+          // (como Depósito / Vehículo), las otras con borde dorado y letra blanca.
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(56),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: TabBar(
+                labelPadding: const EdgeInsets.symmetric(horizontal: 3),
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: AppColors.dorado,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                dividerColor: Colors.transparent,
+                splashBorderRadius: BorderRadius.circular(20),
+                labelColor: AppColors.negro,
+                unselectedLabelColor: Colors.white,
+                labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                tabs: [
+                  for (final nombre in const ['Margen', 'Descuento', 'Por bulto'])
+                    Tab(
+                      height: 38,
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.dorado, width: 1.5),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(nombre),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
         body: DesktopForm(
