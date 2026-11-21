@@ -436,6 +436,10 @@ class _StockFormPageState extends State<StockFormPage> {
         if (go != true || !mounted) return;
       }
     }
+    if (_kind == StockFormKind.closeTrip) {
+      final seguir = await _negativosDelDeposito();
+      if (!seguir || !mounted) return;
+    }
     final total = lines.fold<double>(
       0,
       (sum, l) => sum + stockNum(l['cantidad']) * stockNum(l['costo_unitario']),
@@ -502,6 +506,70 @@ class _StockFormPageState extends State<StockFormPage> {
     if (!mounted) return;
     await _showResult(outcome.result);
     if (mounted) Navigator.of(context).pop(true);
+  }
+
+  /// Al cerrar el viaje: lo que quedó en negativo en el vehículo (se vendió más de lo que figuraba
+  /// arriba) se puede descontar del depósito, en vez de ponerlo en 0 sin tocar el depósito.
+  /// Devuelve false si el usuario vuelve atrás o si falló.
+  Future<bool> _negativosDelDeposito() async {
+    final negativos = widget.items.where((i) => i.controlled && i.vehicle < 0).toList();
+    if (negativos.isEmpty) return true;
+    final descontar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded, color: AppColors.naranja, size: 40),
+        title: const Text('Quedó en negativo en el vehículo'),
+        content: SingleChildScrollView(
+          child: Text(
+            'Se vendió más de lo que figuraba arriba:\n'
+            '${negativos.map((i) => '• ${i.name}: ${formatQty(i.vehicle)}').join('\n')}\n\n'
+            'Si salió del depósito, descontalo de ahí. Si no, el vehículo queda en 0 y el '
+            'depósito no cambia.',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Volver')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Solo poner en 0'),
+          ),
+          FilledButton(
+            key: const Key('descontar-deposito'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Descontar del depósito'),
+          ),
+        ],
+      ),
+    );
+    if (descontar == null || !mounted) return false;
+    if (!descontar) return true;
+    const rpc = 'stock_vehiculo_faltante_del_deposito';
+    final args = <String, dynamic>{
+      'p_items': [
+        for (final i in negativos) {'producto_id': i.id, 'cantidad': -i.vehicle},
+      ],
+    };
+    setState(() => _saving = true);
+    try {
+      final runner = widget.runner;
+      if (runner != null) {
+        await runner(rpc, args);
+      } else {
+        await runStockOp(
+          _client,
+          rpc: rpc,
+          args: args,
+          description: 'Faltante del vehículo descontado del depósito',
+          total: 0,
+        );
+      }
+      return true;
+    } catch (error) {
+      _snack(stockErrorText(error));
+      return false;
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   /// La compra ya quedó en el stock: ahora el pago (si falla, la compra igual queda).

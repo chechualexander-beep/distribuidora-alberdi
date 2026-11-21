@@ -56,8 +56,8 @@ select (venta_especial(:'v1', now(), :'cli', 'deposito_alberdi',
                     jsonb_build_object('medio', 'Transferencia', 'importe', 1000)))->>'repetida')::boolean as rep \gset
 insert into r select 'repetida', :'rep';
 
--- 3) "Consumidor final": no se le fía; pagando todo, desde el vehículo (con viaje abierto, el vehículo
---    marca lo que falta).
+-- 3) "Consumidor final": no se le fía; pagando todo, desde el vehículo (lo que no alcanza arriba sale
+--    del depósito).
 do $$ begin perform venta_especial(gen_random_uuid(), now(), null, 'vehiculo',
   jsonb_build_array(jsonb_build_object('producto_id', current_setting('e.pa'), 'cantidad', 2, 'precio_unitario', 800)),
   jsonb_build_array(jsonb_build_object('medio', 'Efectivo', 'importe', 1000))); raise exception 'debió fallar';
@@ -69,7 +69,8 @@ select venta_especial(:'v2', now(), null, 'vehiculo',
 reset role;
 insert into r select 'consumidor_final', (:'r2'::jsonb->>'saldo_pendiente')::numeric = 0
   and (select cliente_id = consumidor_final_id() from pedidos where id = :'v2')
-  and (select cantidad from stock_actual where ubicacion_id = :'veh' and producto_id = :'pa') = -1;
+  and (select cantidad from stock_actual where ubicacion_id = :'veh' and producto_id = :'pa') = 0
+  and (select cantidad from stock_actual where ubicacion_id = :'dep' and producto_id = :'pa') = 6;
 set local role authenticated;
 
 -- 4) No se puede cobrar más que el total; el preventista no puede.

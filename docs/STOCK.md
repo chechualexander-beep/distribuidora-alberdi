@@ -20,8 +20,9 @@
 - **Entregas y ventas directas descuentan del vehículo** (`stock_base_finalizar_v2`).
   - **Sin viaje abierto** (ese día no se registró la carga): lo que falta arriba se toma solo del
     depósito, abriendo bolsas del depósito si hace falta (`20261121010000_entrega_sin_carga`).
-  - **Con viaje abierto** (se cargó el vehículo): no se toma del depósito; el vehículo marca que se
-    terminó y queda en negativo para revisar (precisión para la venta directa).
+  - **Con viaje abierto** (desde el 20/11/2026, `20261129010000`): también se toma del depósito lo
+    que no alcanza arriba. Si igual queda algo en negativo, al cerrar el viaje la app ofrece
+    "Descontar del depósito" (`stock_vehiculo_faltante_del_deposito`) o "Solo poner en 0".
 - **Un conteo vale para su momento** (`stock_actual.contado_at`): una entrega hecha antes del
   conteo pero enviada después no se descuenta otra vez.
 - Operaciones con **id elegido en el teléfono**: reenviar devuelve lo mismo (sirve sin señal) y

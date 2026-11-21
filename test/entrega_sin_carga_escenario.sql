@@ -43,7 +43,7 @@ insert into r select 'sin_carga',
   and (select cantidad from stock_actual where ubicacion_id=:'dep' and producto_id=:'pc')=1
   and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pc')=0;
 
--- 2) Con la carga registrada (viaje abierto): el vehículo marca que se terminó.
+-- 2) Con la carga registrada (viaje abierto): lo que no alcanza arriba sale del depósito.
 select stock_cargar_vehiculo(gen_random_uuid(), jsonb_build_array(jsonb_build_object('producto_id',:'pa','cantidad',2)), now()) is not null as l \gset
 select set_config('request.jwt.claim.sub', :'prev', true);
 select crear_pedido_sin_conexion(gen_random_uuid(), :'cli', 'normal', 'venta_directa', '', current_date,
@@ -53,11 +53,24 @@ select set_config('request.jwt.claim.sub', :'adm', true);
 select jsonb_agg(jsonb_build_object('detalle_id',id,'cantidad_entregada',cantidad)) as o2 from pedido_detalles where pedido_id=:'v2' \gset
 select finalizar_gestion_sin_conexion(gen_random_uuid(), :'v2', now(), 'pendiente', :'o2', '[]', 'sin_pago', 'sin_senal') is not null as x2 \gset
 insert into r select 'con_carga',
-  (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pa')=-1
-  and (select cantidad from stock_actual where ubicacion_id=:'dep' and producto_id=:'pa')=5;
+  (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pa')=0
+  and (select cantidad from stock_actual where ubicacion_id=:'dep' and producto_id=:'pa')=4;
+
+-- 3) Si igual quedó en negativo arriba (por ejemplo, de antes): se descuenta del depósito, a lo sumo
+--    lo que falta, y repetir la misma operación no mueve dos veces.
+reset role;
+update stock_actual set cantidad=-2 where ubicacion_id=:'veh' and producto_id=:'pa';
+set local role authenticated;
+select set_config('request.jwt.claim.sub', :'adm', true);
+select gen_random_uuid() as op \gset
+select stock_vehiculo_faltante_del_deposito(:'op', jsonb_build_array(jsonb_build_object('producto_id',:'pa','cantidad',5)), now())->>'movidos' as m1 \gset
+select stock_vehiculo_faltante_del_deposito(:'op', jsonb_build_array(jsonb_build_object('producto_id',:'pa','cantidad',5)), now())->>'movidos' as m2 \gset
+insert into r select 'faltante_del_deposito', :'m1'='1' and :'m2'='1'
+  and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pa')=0
+  and (select cantidad from stock_actual where ubicacion_id=:'dep' and producto_id=:'pa')=2;
 reset role;
 select coalesce(string_agg(paso, ', ') filter (where not ok), '') as fallas,
-  bool_and(ok) and count(*) = 2 as todo_ok from r \gset
+  bool_and(ok) and count(*) = 3 as todo_ok from r \gset
 \if :todo_ok \else \echo 'FALLA en:' :'fallas' \quit \endif
 rollback;
 \echo ESCENARIO_OK

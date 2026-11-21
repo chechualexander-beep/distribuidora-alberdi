@@ -86,7 +86,7 @@ select crear_pedido_sin_conexion(gen_random_uuid(), :'cli', 'normal', 'venta_dir
   jsonb_build_array(jsonb_build_object('producto_id',:'pa','cantidad',1,'precio_unitario',:qa,'subtotal',:qa,'tipo_precio','normal')),
   now()) as v3 \gset
 
--- 4) El administrador entrega: descuenta del vehículo; B queda en negativo sin trabar.
+-- 4) El administrador entrega: descuenta del vehículo; lo que falta de B sale del depósito (no queda en negativo).
 select set_config('request.jwt.claim.sub', :'adm', true);
 select gen_random_uuid() as s1 \gset
 select preparar_finalizacion_contexto(:'s1', :'v1') as x1 \gset
@@ -99,7 +99,8 @@ select jsonb_agg(jsonb_build_object('detalle_id',id,'cantidad_entregada',cantida
 select finalizar_gestion_pedido_contexto(:'s2', :'v2', (:'x2'::jsonb->>'fecha_fisica')::timestamptz, 'pendiente', :'o2', '[]',
   'sin_pago', (:'x2'::jsonb->>'regimen_id')::uuid, 2, null, null, null) is not null as f2 \gset
 insert into r select 'entrega', (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pa')=5
-  and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pb')=-2
+  and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pb')=0
+  and (select cantidad from stock_actual where ubicacion_id=:'dep' and producto_id=:'pb')=3
   and not exists(select 1 from stock_actual where producto_id=:'pc');
 
 -- 5) Entrega preparada ANTES de un conteo y enviada después: el conteo ya la incluye.
@@ -120,7 +121,7 @@ select stock_registrar_compra(gen_random_uuid(), 'vehiculo', jsonb_build_array(
 insert into r select 'compra', (:'r6'::jsonb->>'total')::numeric=350 and (:'r6'::jsonb->>'con_stock')::int=2
   and (:'r6'::jsonb->>'nuevos_con_stock')::int=1
   and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pc')=2
-  and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pb')=1
+  and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pb')=3
   and (select viaje_id from stock_operaciones where id=(:'r6'::jsonb->>'operacion_id')::uuid)=:'viaje'::uuid;
 
 -- 7) Bajar algo al depósito y fechas inválidas.
@@ -140,7 +141,7 @@ do $$ begin perform stock_cerrar_viaje(gen_random_uuid(), (select id from viajes
   jsonb_build_array(jsonb_build_object('producto_id',current_setting('e.pa'),'cantidad',3)), true, now()); raise exception 'debió fallar';
 exception when others then if sqlerrm not like 'Falta contar:%' then raise; end if; end $$;
 select stock_cerrar_viaje(gen_random_uuid(), :'viaje', jsonb_build_array(
-  jsonb_build_object('producto_id',:'pa','cantidad',3), jsonb_build_object('producto_id',:'pb','cantidad',0),
+  jsonb_build_object('producto_id',:'pa','cantidad',3), jsonb_build_object('producto_id',:'pb','cantidad',2),
   jsonb_build_object('producto_id',:'pc','cantidad',2)), true, now()) as r8 \gset
 insert into r select 'cierre', jsonb_array_length(:'r8'::jsonb->'diferencias')=1
   and (:'r8'::jsonb->'diferencias'->0->>'diferencia')::numeric=-1

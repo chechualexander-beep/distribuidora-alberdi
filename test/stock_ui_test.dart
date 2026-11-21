@@ -462,4 +462,36 @@ void main() {
     expect(find.byType(VehicleLoadPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('cerrar viaje: lo que quedó en negativo se descuenta del depósito', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final rpcs = <String>[];
+    Map<String, dynamic>? faltante;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StockFormPage(
+          kind: StockFormKind.closeTrip,
+          tripId: 'v1',
+          items: [item('a', vehicle: -1), item('b', vehicle: 3)],
+          runner: (fn, args) async {
+            rpcs.add(fn);
+            if (fn == 'stock_vehiculo_faltante_del_deposito') faltante = args;
+            return const StockOpOutcome({'movidos': 1, 'diferencias': [], 'ventas': 2, 'bajados': 1});
+          },
+        ),
+      ),
+    );
+    await tester.tap(find.text('CERRAR VIAJE'));
+    await tester.pumpAndSettle();
+    expect(find.text('Quedó en negativo en el vehículo'), findsOneWidget);
+    expect(find.textContaining('Producto a: -1'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('descontar-deposito')));
+    await tester.pumpAndSettle();
+    expect(rpcs, ['stock_vehiculo_faltante_del_deposito', 'stock_cerrar_viaje']);
+    expect(faltante!['p_items'], [
+      {'producto_id': 'a', 'cantidad': 1.0},
+    ]);
+    expect(find.textContaining('Viaje cerrado: todo coincide.'), findsOneWidget);
+  });
 }

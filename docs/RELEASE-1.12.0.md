@@ -1,6 +1,6 @@
 # Versión 1.12.0 — Calculadora
 
-Rama: `gestion/etapa1`. Sin migraciones.
+Rama: `gestion/etapa1`. Migración: `20261129010000_vehiculo_toma_del_deposito`.
 
 - **Calculadora** (`lib/features/calculator/`), sin publicidad y sin señal:
   - **Margen**: costo, margen (sobre la venta), recargo (sobre el costo), venta y ganancia. Se escribe en
@@ -17,3 +17,13 @@ Rama: `gestion/etapa1`. Sin migraciones.
   (solo "Por bulto"), y "Calculadora" en la edición de productos (abre con costo y precio normal).
 
 Prueba: `test/calculator_test.dart`.
+
+## El vehículo no queda en negativo por una venta
+
+- Al entregar o vender desde el vehículo (venta directa, reparto, venta especial "Vehículo"), lo que no
+  alcanza arriba se toma del depósito **también con el viaje abierto** (antes solo sin viaje). Caso real:
+  con el viaje abierto se vendió en el depósito 1 Chizito que no estaba arriba; el vehículo quedaba en -1,
+  al cerrar el viaje se ponía en 0 y el depósito nunca bajaba.
+- **Cerrar viaje**: si igual queda algo en negativo arriba, la app avisa ("Quedó en negativo en el
+  vehículo") y ofrece **Descontar del depósito** (`stock_vehiculo_faltante_del_deposito`, a lo sumo lo
+  que está en negativo, idempotente) o **Solo poner en 0** (como antes).
