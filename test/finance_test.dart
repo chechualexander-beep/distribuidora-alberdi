@@ -173,6 +173,34 @@ void main() {
     expect(find.textContaining('Pago anotado: \$4.500 en billetera virtual'), findsOneWidget);
   });
 
+  testWidgets('Anotar compra: con el teclado abierto se esconden las opciones', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StockFormPage(
+          kind: StockFormKind.purchase,
+          items: [
+            StockItem(id: 'a', name: 'Yerba', code: 'Y', category: 'x', photo: null, controlled: true,
+                deposit: 5, vehicle: 0, cost: 1500),
+          ],
+          runner: (fn, a) async => const StockOpOutcome({}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('¿Cómo pagaste?'), findsOneWidget);
+    tester.view.viewInsets = FakeViewPadding(bottom: 600 * tester.view.devicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pumpAndSettle();
+    expect(find.text('¿Cómo pagaste?'), findsNothing);
+    expect(find.text('Depósito · Efectivo · cerrá el teclado para ver las opciones'), findsOneWidget);
+    expect(find.text('Yerba'), findsOneWidget);
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
+    expect(find.text('¿Cómo pagaste?'), findsOneWidget);
+  });
+
   testWidgets('Tablero: ganancia, lo de la casa, cuánto vender y capital', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 2200));
     addTearDown(() => tester.binding.setSurfaceSize(null));

@@ -19,3 +19,11 @@ Rama: `gestion/etapa1`. Sin migraciones nuevas (producción también recibe la d
 
 Pruebas: `test/text_search_test.dart`, `test/order_without_client_test.dart`,
 `test/product_price_card_test.dart`.
+
+## 1.11.1
+
+- **Anotar compra / Contar / Descargar**: con el teclado abierto (escribiendo cantidad o costo) se
+  esconden las opciones de arriba y el botón CONFIRMAR, para que se vean los productos. Queda una línea
+  con lo elegido ("Vehículo · Efectivo · cerrá el teclado para ver las opciones"). Si se está escribiendo
+  el proveedor, las opciones siguen a la vista.
+- Producción recibe juntas la 1.10.0 (Venta especial, migración `20261128010000_venta_especial`) y la 1.11.

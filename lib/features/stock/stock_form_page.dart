@@ -55,6 +55,10 @@ class _StockFormPageState extends State<StockFormPage> {
   final _cost = <String, TextEditingController>{};
   final _search = TextEditingController();
   final _supplier = TextEditingController();
+
+  /// Con el teclado abierto (escribiendo cantidad o costo) se esconden las opciones de arriba
+  /// para que se vean los productos; salvo que se esté escribiendo el proveedor.
+  final _supplierFocus = FocusNode();
   late String _location =
       widget.initialLocation ??
       (widget.kind == StockFormKind.purchase && widget.tripId != null ? vehiculoCodigo : depositoCodigo);
@@ -91,6 +95,9 @@ class _StockFormPageState extends State<StockFormPage> {
   @override
   void initState() {
     super.initState();
+    _supplierFocus.addListener(() {
+      if (mounted) setState(() {});
+    });
     if (_kind == StockFormKind.closeTrip) {
       for (final item in widget.items) {
         if (item.controlled && item.vehicle != 0) {
@@ -111,6 +118,7 @@ class _StockFormPageState extends State<StockFormPage> {
     for (final c in [..._qty.values, ..._cost.values, _search, _supplier]) {
       c.dispose();
     }
+    _supplierFocus.dispose();
     super.dispose();
   }
 
@@ -625,20 +633,34 @@ class _StockFormPageState extends State<StockFormPage> {
     if (_kind == StockFormKind.load) return _buildLoad();
     final visible = _visible;
     final filled = widget.items.where((i) => _filled(i.id)).length;
+    final teclado =
+        MediaQuery.viewInsetsOf(context).bottom > 0 && !_supplierFocus.hasFocus;
     return Scaffold(
       appBar: AppBar(title: Text(_title)),
       body: DesktopForm(
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: EdgeInsets.fromLTRB(16, teclado ? 6 : 12, 16, 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(_help, style: const TextStyle(color: AppColors.gris)),
-                  const SizedBox(height: 8),
-                  ..._options(),
-                  const SizedBox(height: 8),
+                  if (teclado)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        _resumenOpciones,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppColors.gris),
+                      ),
+                    )
+                  else ...[
+                    Text(_help, style: const TextStyle(color: AppColors.gris)),
+                    const SizedBox(height: 8),
+                    ..._options(),
+                    const SizedBox(height: 8),
+                  ],
                   TextField(
                     controller: _search,
                     decoration: const InputDecoration(
@@ -649,6 +671,7 @@ class _StockFormPageState extends State<StockFormPage> {
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
+                  if (!teclado)
                   Wrap(
                     spacing: 8,
                     children: [
@@ -688,8 +711,25 @@ class _StockFormPageState extends State<StockFormPage> {
           ],
         ),
       ),
-      bottomNavigationBar: _confirmBar(filled),
+      bottomNavigationBar: teclado ? null : _confirmBar(filled),
     );
+  }
+
+  /// Una línea con lo elegido arriba, para cuando las opciones quedan escondidas por el teclado.
+  String get _resumenOpciones {
+    final lugar = _location == vehiculoCodigo ? 'Vehículo' : 'Depósito';
+    if (_kind != StockFormKind.purchase) {
+      return _kind == StockFormKind.count
+          ? '$lugar · cerrá el teclado para ver las opciones'
+          : 'Cerrá el teclado para ver las opciones';
+    }
+    final pago = switch (_payWith) {
+      efectivo => 'Efectivo',
+      billetera => 'Billetera',
+      'a_pagar' => 'A pagar',
+      _ => 'Sin anotar el pago',
+    };
+    return '$lugar · $pago · cerrá el teclado para ver las opciones';
   }
 
   Widget _confirmBar(int filled) => SafeArea(
@@ -999,6 +1039,7 @@ class _StockFormPageState extends State<StockFormPage> {
             const SizedBox(height: 8),
             TextField(
               controller: _supplier,
+              focusNode: _supplierFocus,
               decoration: const InputDecoration(
                 isDense: true,
                 labelText: 'Proveedor o comercio (opcional)',
