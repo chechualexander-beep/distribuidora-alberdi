@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:distribuidora_alberdi/core/app_config.dart';
@@ -539,6 +540,32 @@ void main() {
       {'producto_id': 'a', 'cantidad': 2.0},
     ]);
     expect(find.textContaining('1 producto quedó sin marcar'), findsOneWidget);
+  });
+
+  testWidgets('pasar mercadería: se abre enseguida y lee el stock de este momento', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final listo = Completer<List<StockItem>>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StockFormPage(
+          kind: StockFormKind.load,
+          items: [item('a', deposit: 1)],
+          reload: () => listo.future,
+          runner: (fn, args) async => const StockOpOutcome({'viaje_nuevo': true}),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Leyendo el stock de este momento…'), findsOneWidget);
+    expect(find.text('Producto a'), findsNothing, reason: 'no se muestra el stock viejo');
+    listo.complete([item('a', deposit: 6)]);
+    await tester.pumpAndSettle();
+    expect(find.text('Leyendo el stock de este momento…'), findsNothing);
+    expect(find.text('Producto a'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('cantidad-a')), '5');
+    await tester.pump();
+    expect(find.text('Hay 6'), findsOneWidget, reason: 'usa el stock recién leído');
   });
 
   testWidgets('pasar mercadería: ⇄ pasa de cargar a bajar', (tester) async {

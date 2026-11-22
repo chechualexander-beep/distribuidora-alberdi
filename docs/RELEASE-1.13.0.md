@@ -19,6 +19,10 @@ Rama: `gestion/etapa1`. Migración: `20261130010000_todo_con_stock`. Diseño com
     al entrar y con el botón de actualizar (con la hora del dato).
   - El borrador de la carga de otro día se descarta solo; "Empezar de nuevo" en Opciones.
 - **Anotar compra**: el lugar (Depósito o Vehículo) se elige siempre; no arranca en ninguno.
+- **Anotar compra y Contar**: tocar "Buscar producto" ya no abre y cierra el teclado solo (el
+  buscador perdía el foco cuando se escondían las opciones).
+- **Cargar y Bajar** se abren enseguida y leen el stock adentro ("Leyendo el stock de este
+  momento…"), sin el parpadeo de la pantalla de Stock.
 - **Cerrar viaje**: el rojo es solo por el vehículo en negativo; el depósito en negativo se avisa aparte.
 - **Informe de solo lectura** de movimientos de un producto: `C:\Alberdi\transferencias\informes\
   Informe-movimientos-producto.ps1` (`tool/informe_movimientos.sql`).

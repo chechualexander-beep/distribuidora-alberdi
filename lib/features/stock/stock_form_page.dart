@@ -73,6 +73,9 @@ class _StockFormPageState extends State<StockFormPage> {
   DateTime _dataAt = DateTime.now();
   bool _reloading = false;
 
+  /// Cargar o bajar: false mientras se lee el stock al abrir (la lista espera).
+  bool _fresh = true;
+
   /// Pedidos a entregar sin stock en el depósito (se ven, pero no se pueden subir).
   final _noStock = <String, double>{};
 
@@ -143,9 +146,14 @@ class _StockFormPageState extends State<StockFormPage> {
         _dataAt = DateTime.now();
       });
     } catch (error) {
-      _snack('No se pudo actualizar: ${stockErrorText(error)}');
+      if (mounted) _snack('No se pudo actualizar: ${stockErrorText(error)}');
     } finally {
-      if (mounted) setState(() => _reloading = false);
+      if (mounted) {
+        setState(() {
+          _reloading = false;
+          _fresh = true;
+        });
+      }
     }
   }
 
@@ -209,8 +217,16 @@ class _StockFormPageState extends State<StockFormPage> {
       }
       _onlyFilled = true;
     }
-    if (_kind == StockFormKind.load) {
-      _loadSellers();
+    if (_kind == StockFormKind.load) _loadSellers();
+    if (_isTransfer && widget.reload != null) {
+      // Se abre enseguida y lee el stock de este momento; el borrador se recupera después.
+      _fresh = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _reload();
+        if (mounted && _kind == StockFormKind.load) _restoreDraft();
+      });
+    } else if (_kind == StockFormKind.load) {
       _restoreDraft();
     }
   }
@@ -899,6 +915,8 @@ class _StockFormPageState extends State<StockFormPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Lo de arriba va en un solo bloque: así el buscador queda siempre en el mismo
+                  // lugar y no pierde el teclado cuando las opciones se esconden.
                   if (teclado)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 6),
@@ -909,13 +927,18 @@ class _StockFormPageState extends State<StockFormPage> {
                         style: const TextStyle(color: AppColors.gris),
                       ),
                     )
-                  else ...[
-                    Text(_help, style: const TextStyle(color: AppColors.gris)),
-                    const SizedBox(height: 8),
-                    ..._options(),
-                    const SizedBox(height: 8),
-                  ],
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(_help, style: const TextStyle(color: AppColors.gris)),
+                        const SizedBox(height: 8),
+                        ..._options(),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
                   TextField(
+                    key: const ValueKey('buscar-producto'),
                     controller: _search,
                     decoration: const InputDecoration(
                       isDense: true,
@@ -1071,7 +1094,18 @@ class _StockFormPageState extends State<StockFormPage> {
               ),
             const Divider(height: 1),
             Expanded(
-              child: visible.isEmpty
+              child: !_fresh
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 12),
+                          Text('Leyendo el stock de este momento…'),
+                        ],
+                      ),
+                    )
+                  : visible.isEmpty
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.all(24),

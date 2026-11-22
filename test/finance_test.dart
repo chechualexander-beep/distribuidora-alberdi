@@ -205,6 +205,40 @@ void main() {
     expect(find.text('¿Cómo pagaste?'), findsOneWidget);
   });
 
+  testWidgets('Anotar compra: el buscador no pierde el teclado al esconderse las opciones', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StockFormPage(
+          kind: StockFormKind.purchase,
+          items: [
+            StockItem(id: 'a', name: 'Yerba', code: 'Y', category: 'x', photo: null, controlled: true,
+                deposit: 5, vehicle: 0, cost: 1500),
+          ],
+          runner: (fn, a) async => const StockOpOutcome({}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final buscador = find.byKey(const ValueKey('buscar-producto'));
+    await tester.tap(buscador);
+    await tester.pump();
+    bool conFoco() => tester
+        .widget<EditableText>(find.descendant(of: buscador, matching: find.byType(EditableText)))
+        .focusNode
+        .hasFocus;
+    expect(conFoco(), isTrue);
+    tester.view.viewInsets = FakeViewPadding(bottom: 600 * tester.view.devicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pumpAndSettle();
+    expect(find.text('¿Cómo pagaste?'), findsNothing);
+    expect(conFoco(), isTrue, reason: 'el teclado no se cierra solo');
+    await tester.enterText(buscador, 'yer');
+    await tester.pump();
+    expect(find.text('Yerba'), findsOneWidget);
+  });
+
   testWidgets('Tablero: ganancia, lo de la casa, cuánto vender y capital', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 2200));
     addTearDown(() => tester.binding.setSurfaceSize(null));

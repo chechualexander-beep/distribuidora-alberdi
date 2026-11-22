@@ -77,11 +77,8 @@ class _StockHomePageState extends State<StockHomePage> {
   }
 
   Future<void> _open(StockFormKind kind, {Set<String>? only}) async {
-    // Cargar y bajar trabajan con el stock de este momento (no con el de cuando se entró a Stock).
-    if (kind == StockFormKind.load || kind == StockFormKind.unload) {
-      await _load();
-      if (!mounted || _error != null) return;
-    }
+    // Cargar y bajar leen el stock de este momento al abrirse (con [reload]), sin volver a
+    // dibujar esta pantalla antes.
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => StockFormPage(
