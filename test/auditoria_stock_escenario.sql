@@ -17,6 +17,8 @@ update productos set control_stock=true, se_compra_a_pedido=false, fracciona_de=
  where id in (:'pa',:'pb',:'pc');
 update productos set fracciona_de=null, unidades_por_origen=null where fracciona_de in (:'pa',:'pb',:'pc');
 update viajes_vehiculo set estado='cerrado', cerrado_at=clock_timestamp() where estado='abierto';
+-- Lo que haya arriba de pruebas anteriores no entra en este viaje (el cierre pide contar todo).
+update stock_actual set cantidad = 0 where ubicacion_id = :'veh' and cantidad <> 0;
 set session_replication_role = origin;
 create temp table r(paso text, ok boolean) on commit drop;
 grant all on r to authenticated;
