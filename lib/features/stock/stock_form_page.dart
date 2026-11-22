@@ -18,6 +18,7 @@ import 'package:distribuidora_alberdi/core/money_format.dart';
 import '../../core/text_search.dart';
 import '../../core/network_status.dart' show isUncertainRequestError;
 import 'stock_transfer_store.dart';
+import 'trip_settlement_page.dart';
 
 enum StockFormKind { count, load, unload, purchase, closeTrip }
 
@@ -964,7 +965,17 @@ class _StockFormPageState extends State<StockFormPage> {
     if (_kind == StockFormKind.purchase) await _registerPayment(total);
     if (!mounted) return;
     await _showResult(outcome.result);
-    if (mounted) Navigator.of(context).pop(true);
+    if (!mounted) return;
+    // Al cerrar el viaje (con señal), sigue la liquidación: la cuenta de cada producto y los motivos.
+    final tripId = widget.tripId;
+    if (_kind == StockFormKind.closeTrip && widget.runner == null && tripId != null && outcome.result != null) {
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => TripSettlementPage(tripId: tripId, client: widget.client)),
+        result: true,
+      );
+      return;
+    }
+    Navigator.of(context).pop(true);
   }
 
   /// Al cerrar el viaje: lo que quedó en negativo en el vehículo (se vendió más de lo que figuraba

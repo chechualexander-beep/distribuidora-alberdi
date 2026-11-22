@@ -7,6 +7,9 @@ import '../../core/network_status.dart';
 import 'stock_data.dart';
 import 'stock_form_page.dart';
 import 'vehicle_load_page.dart';
+import 'stock_audit_data.dart';
+import 'stock_audit_pages.dart';
+import 'trip_settlement_page.dart';
 import '../../core/text_search.dart';
 
 enum _Filter { controlled, onDemand, differences, all }
@@ -71,6 +74,10 @@ class _StockHomePageState extends State<StockHomePage> {
   VehicleStock _vehicle = const VehicleStock();
   Map<String, String> _sellerNames = const {};
   late _Filter _filter = widget.onlyNegatives ? _Filter.differences : _Filter.controlled;
+
+  /// "Stock a revisar" (null si no se pudo leer).
+  StockReview? _review;
+  bool _reviewOpen = true;
   final _search = TextEditingController();
 
   @override
@@ -93,6 +100,10 @@ class _StockHomePageState extends State<StockHomePage> {
     try {
       final items = await fetchStockItems(_client);
       final vehicle = await fetchVehicleStock(_client);
+      StockReview? review;
+      try {
+        review = await fetchStockReview(_client);
+      } catch (_) {}
       var names = _sellerNames;
       try {
         names = {
@@ -104,6 +115,7 @@ class _StockHomePageState extends State<StockHomePage> {
       setState(() {
         _items = items;
         _vehicle = vehicle;
+        _review = review;
         _sellerNames = names;
         if (!items.any((i) => i.controlled) && _filter == _Filter.controlled) _filter = _Filter.all;
         _loading = false;
@@ -137,9 +149,36 @@ class _StockHomePageState extends State<StockHomePage> {
     if (changed == true && mounted) await _load();
   }
 
+  Future<void> _history(StockItem item) => Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => ProductHistoryPage(item: item, client: widget.client)),
+  );
+
   Future<void> _productActions(StockItem item) async {
     if (widget.helper) {
-      await _open(StockFormKind.count, only: {item.id});
+      final action = await showModalBottomSheet<String>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+              ListTile(
+                leading: const Icon(Icons.fact_check_outlined),
+                title: const Text('Contar'),
+                onTap: () => Navigator.pop(context, 'contar'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.history),
+                title: const Text('Historial'),
+                onTap: () => Navigator.pop(context, 'historial'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted || action == null) return;
+      if (action == 'contar') await _open(StockFormKind.count, only: {item.id});
+      if (action == 'historial') await _history(item);
       return;
     }
     final action = await showModalBottomSheet<String>(
@@ -156,6 +195,12 @@ class _StockHomePageState extends State<StockHomePage> {
               leading: const Icon(Icons.fact_check_outlined),
               title: const Text('Contar'),
               onTap: () => Navigator.pop(context, 'contar'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.history),
+              title: const Text('Historial'),
+              subtitle: const Text('Cada movimiento: dónde, quién y cómo quedó'),
+              onTap: () => Navigator.pop(context, 'historial'),
             ),
             if (item.parentId != null)
               ListTile(
@@ -186,6 +231,8 @@ class _StockHomePageState extends State<StockHomePage> {
     if (!mounted || action == null) return;
     if (action == 'contar') {
       await _open(StockFormKind.count, only: {item.id});
+    } else if (action == 'historial') {
+      await _history(item);
     } else if (action == 'fraccionar') {
       await _fraction(item);
     } else if (action == 'configurar') {
@@ -423,6 +470,7 @@ class _StockHomePageState extends State<StockHomePage> {
         padding: const EdgeInsets.all(16),
         children: [
           _tripCard(),
+          if (_review != null && !_review!.isEmpty) ...[const SizedBox(height: 12), _reviewCard(_review!)],
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -448,6 +496,14 @@ class _StockHomePageState extends State<StockHomePage> {
                 icon: const Icon(Icons.fact_check_outlined),
                 label: const Text('Contar'),
                 onPressed: () => _open(StockFormKind.count),
+              ),
+              FilledButton.tonalIcon(
+                key: const Key('abrir-movimientos'),
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('Movimientos'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => DayMovementsPage(client: widget.client)),
+                ),
               ),
             ],
           ),
@@ -649,6 +705,106 @@ class _StockHomePageState extends State<StockHomePage> {
     );
   }
 
+  String _ago(DateTime? d) {
+    if (d == null) return '';
+    final days = DateTime.now().difference(d).inDays;
+    return switch (days) {
+      0 => 'desde hoy',
+      1 => 'desde ayer',
+      _ => 'hace $days días',
+    };
+  }
+
+  /// "Stock a revisar": lo que necesita atención (negativos, diferencias sin motivo, sin contar).
+  Widget _reviewCard(StockReview r) {
+    final oscuro = Tonos.of(context).oscuro;
+    final fondo = oscuro ? const Color(0xFF501313) : const Color(0xFFFCEBEB);
+    final texto = oscuro ? const Color(0xFFF7C1C1) : const Color(0xFF791F1F);
+    Widget line(String left, String right, {VoidCallback? onTap, bool bold = false}) => InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(left, style: TextStyle(color: texto, fontWeight: bold ? FontWeight.bold : null)),
+            ),
+            Text(right, style: TextStyle(color: texto, fontSize: 12.5)),
+            if (onTap != null) Icon(Icons.chevron_right, size: 18, color: texto),
+          ],
+        ),
+      ),
+    );
+    StockItem? itemOf(String id) => _items.where((i) => i.id == id).firstOrNull;
+    return Material(
+      key: const Key('stock-a-revisar'),
+      color: fondo,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 8, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _reviewOpen = !_reviewOpen),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: texto),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'A revisar · ${r.total}',
+                      style: TextStyle(color: texto, fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                  Icon(_reviewOpen ? Icons.expand_less : Icons.expand_more, color: texto),
+                ],
+              ),
+            ),
+            if (_reviewOpen) ...[
+              if (r.negatives.isNotEmpty) ...[
+                line('En negativo', '${r.negatives.length}', bold: true),
+                for (final n in r.negatives.take(8))
+                  line(
+                    '  ${n.name} · ${placeLabel(n.place).toLowerCase()} ${formatQty(n.qty)}',
+                    _ago(n.since),
+                    onTap: itemOf(n.productId) == null ? null : () => _history(itemOf(n.productId)!),
+                  ),
+              ],
+              if (r.withoutReason.isNotEmpty) ...[
+                line('Diferencias sin motivo', '${r.withoutReason.length}', bold: true),
+                for (final d in r.withoutReason.take(6))
+                  line(
+                    '  ${d.name} · ${d.difference > 0 ? '+' : ''}${formatQty(d.difference)}',
+                    d.closedAt == null ? '' : 'viaje ${d.closedAt!.day}/${d.closedAt!.month}',
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => TripSettlementPage(tripId: d.tripId, client: widget.client),
+                        ),
+                      );
+                      if (mounted) _load();
+                    },
+                  ),
+              ],
+              if (r.notCountedTotal > 0) ...[
+                line('Sin contar hace más de 30 días', '${r.notCountedTotal}', bold: true),
+                line(
+                  '  Contar ${r.notCounted.length > 10 ? 'los 10 más viejos' : 'estos ${r.notCounted.length}'} ahora',
+                  '',
+                  onTap: () => _open(
+                    StockFormKind.count,
+                    only: {for (final p in r.notCounted.take(10)) p.productId},
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _tripCard() {
     final open = _vehicle.tripOpen;
     final seller = _vehicle.sellerId == null ? null : _sellerNames[_vehicle.sellerId];
@@ -696,6 +852,17 @@ class _StockHomePageState extends State<StockHomePage> {
                     MaterialPageRoute(builder: (_) => VehicleLoadPage(client: widget.client)),
                   ),
                 ),
+                if (!widget.helper)
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.fact_check_outlined),
+                    label: const Text('Liquidaciones'),
+                    onPressed: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => TripListPage(client: widget.client)),
+                      );
+                      if (mounted) _load();
+                    },
+                  ),
                 if (open && !widget.helper)
                   OutlinedButton.icon(
                     icon: const Icon(Icons.person_outline),

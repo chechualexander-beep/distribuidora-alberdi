@@ -127,6 +127,14 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   subido sale de la lista; lo de otro día se descarta.
 - Prueba: `test/ayuda_deposito_escenario.sql`.
 
+## Auditoría a la vista (1.16.0, migración `20261203010000_auditoria_stock`)
+- `stock_liquidacion_viaje(viaje)`: por producto, con el libro de movimientos del vehículo entre la
+  primera carga y el cierre (tenía = saldo actual − lo movido desde el inicio). Motivos en
+  `stock_liquidacion_motivos` (`stock_liquidacion_motivos_guardar`); viajes con `stock_viajes_recientes`.
+- `stock_historial_producto`, `stock_a_revisar`, `stock_movimientos_dia`: solo lectura, para
+  administración y ayuda en el depósito (las diferencias sin motivo, solo administración).
+- Prueba: `test/auditoria_stock_escenario.sql`.
+
 ## Etapas
 1. Base de datos.
 2. Pantallas (1.6.0).
