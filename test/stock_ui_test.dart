@@ -592,6 +592,7 @@ void main() {
           kind: StockFormKind.load,
           items: [item('a', deposit: 1)],
           reload: () => listo.future,
+          store: MemoryStore(),
           runner: (fn, args) async => const StockOpOutcome({'viaje_nuevo': true}),
         ),
       ),
