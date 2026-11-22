@@ -169,6 +169,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Anotar una compra'), findsNothing);
     expect(find.text('Cerrar el viaje y la liquidación'), findsNothing);
+    // ("Cargar" quedó abierto de antes: "Contar" puede estar más abajo.)
+    await tester.scrollUntilVisible(find.text('Contar'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('Contar'), findsOneWidget);
   });
 }
