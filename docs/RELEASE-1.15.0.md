@@ -20,3 +20,12 @@
   vendido hoy, ventas, unidades, cobros y lo más vendido. Se actualiza al entregar o vender.
 
 Sin cambios en la base de datos.
+
+## Tanda 2: pantallas unidas
+- **Facturar**: "Para facturar" y "Realizadas" en la misma pantalla (antes, dos botones).
+- **Comisiones**: "Liquidar" e "Historial" en la misma pantalla (antes, Liquidaciones aparte).
+- **Productos** (administrador): "Lista" y "Precios y costos" en la misma pantalla (antes,
+  Administrar productos aparte). El preventista sigue viendo solo la lista.
+- **Resumen y estadísticas**: botón "Estadísticas" en el Resumen comercial (antes solo estaba dentro
+  de Mis comisiones), y flecha para volver en el teléfono.
+- Inicio y menú de Windows sin los botones repetidos.

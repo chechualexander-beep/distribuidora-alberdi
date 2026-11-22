@@ -5,6 +5,7 @@ import '../../core/argentina_date_utils.dart';
 import '../balances/balance_repository.dart';
 import '../balances/balances_page.dart';
 import 'widgets/commercial_summary_card.dart';
+import '../commissions/commission_statistics_page.dart';
 
 typedef CommercialPeriodReader =
     Future<Map<String, dynamic>> Function(DateTime start, DateTime end);
@@ -230,7 +231,23 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text('Resumen comercial', style: theme.textTheme.headlineSmall),
+        Row(
+          children: [
+            // Abierto desde el inicio del teléfono no tiene barra de arriba: flecha para volver.
+            if (Navigator.of(context).canPop()) const BackButton(),
+            Expanded(child: Text('Resumen comercial', style: theme.textTheme.headlineSmall)),
+            // Estadísticas (antes solo dentro de Mis comisiones): ventas por preventista,
+            // cliente y producto, y su evolución.
+            FilledButton.tonalIcon(
+              key: const Key('abrir-estadisticas'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CommissionStatisticsPage()),
+              ),
+              icon: const Icon(Icons.bar_chart),
+              label: const Text('Estadísticas'),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,

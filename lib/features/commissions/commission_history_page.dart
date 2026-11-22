@@ -7,7 +7,10 @@ import 'commission_history_detail_page.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
 
 class CommissionHistoryPage extends StatefulWidget {
-  const CommissionHistoryPage({super.key});
+  const CommissionHistoryPage({super.key, this.embedded = false});
+
+  /// Dentro de Comisiones (pestaña Historial): sin título propio.
+  final bool embedded;
 
   @override
   State<CommissionHistoryPage> createState() => _CommissionHistoryPageState();
@@ -111,6 +114,7 @@ class _CommissionHistoryPageState extends State<CommissionHistoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) return DesktopForm(child: _construirContenido());
     return Scaffold(
       appBar: AppBar(title: const Text('Historial de liquidaciones')),
       body: DesktopForm(child: _construirContenido()),

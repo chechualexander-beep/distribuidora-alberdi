@@ -22,13 +22,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'features/admin/commercial_summary_page.dart';
-import 'features/commissions/commission_history_page.dart';
 import 'features/commissions/commissions_page.dart';
 import 'features/home/home_summary.dart';
-import 'features/invoicing/invoiced_orders_page.dart';
 import 'features/invoicing/invoicing_page.dart';
 import 'features/orders/admin_orders_page.dart';
-import 'features/products/admin_products_page.dart';
 import 'features/balances/balances_page.dart';
 import 'features/catalog/general_catalog_page.dart';
 import 'core/offline_queries.dart';
@@ -792,7 +789,6 @@ class _HomePageState extends State<HomePage> {
           () => _abrir(const InvoicingPage()),
           badge: resumen?.toInvoice,
         ),
-        HomeAction(Icons.history, 'Facturas realizadas', () => _abrir(const InvoicedOrdersPage())),
       ],
     ),
     HomeSection(
@@ -804,7 +800,6 @@ class _HomePageState extends State<HomePage> {
         HomeAction(Icons.insights, 'Tablero del mes', () => _abrir(const FinanceDashboardPage())),
         HomeAction(Icons.account_balance_wallet_outlined, 'Saldos', () => _abrir(const BalancesPage())),
         HomeAction(Icons.payments_outlined, 'Comisiones', () => _abrir(const CommissionsPage())),
-        HomeAction(Icons.history_edu_outlined, 'Liquidaciones', () => _abrir(const CommissionHistoryPage())),
       ],
     ),
     HomeSection(
@@ -812,7 +807,6 @@ class _HomePageState extends State<HomePage> {
       area: HomeArea.herramientas,
       actions: [
         HomeAction(Icons.inventory_2_outlined, 'Productos', () => _abrir(const ProductsPage())),
-        HomeAction(Icons.edit_note, 'Administrar productos', () => _abrir(const AdminProductsPage())),
         HomeAction(Icons.calculate_outlined, 'Calculadora', () => _abrir(const CalculatorPage())),
         HomeAction(Icons.analytics_outlined, 'Resumen y estadísticas', () => _abrir(const CommercialSummaryPage())),
       ],

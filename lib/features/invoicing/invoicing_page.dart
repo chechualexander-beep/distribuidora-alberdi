@@ -7,6 +7,8 @@ import 'invoicing_desktop_table.dart';
 import '../../core/app_config.dart';
 import 'invoice_recovery_page.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
+import '../../core/page_switch.dart';
+import 'invoiced_orders_page.dart';
 
 class InvoicingPage extends StatefulWidget {
   const InvoicingPage({super.key, this.embedded = false});
@@ -17,6 +19,8 @@ class InvoicingPage extends StatefulWidget {
 }
 
 class _InvoicingPageState extends State<InvoicingPage> {
+  /// 0 Para facturar, 1 Realizadas.
+  int _vista = 0;
   bool _cargando = true;
   String? _error;
 
@@ -117,9 +121,23 @@ class _InvoicingPageState extends State<InvoicingPage> {
         ],
       );
     }
+    // Facturar: "Para facturar" y "Realizadas" en la misma pantalla.
+    final vistas = pageSwitch(
+      labels: const ['Para facturar', 'Realizadas'],
+      icons: const [Icons.request_quote_outlined, Icons.history],
+      selected: _vista,
+      onChanged: (v) => setState(() => _vista = v),
+    );
+    if (_vista == 1) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Facturar'), bottom: vistas),
+        body: const InvoicedOrdersPage(embedded: true),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Facturación'),
+        title: const Text('Facturar'),
+        bottom: vistas,
         actions: [
           if (appConfig.isTesting)
             IconButton(

@@ -6,15 +6,12 @@ import '../home/home_menu.dart';
 import '../home/home_summary.dart';
 import '../clients/clients_page.dart';
 import '../products/products_page.dart';
-import '../products/admin_products_page.dart';
 import '../orders/orders_page.dart';
 import '../orders/new_order_page.dart';
 import '../orders/admin_orders_page.dart';
 import '../invoicing/invoicing_page.dart';
-import '../invoicing/invoiced_orders_page.dart';
 import '../commissions/my_commissions_page.dart';
 import '../commissions/commissions_page.dart';
-import '../commissions/commission_history_page.dart';
 import '../admin/commercial_summary_page.dart';
 import '../stock/stock_home_page.dart';
 import '../stock/vehicle_load_page.dart';
@@ -78,10 +75,7 @@ class _DesktopHomeState extends State<DesktopHome> {
     'Mis comisiones' => const MyCommissionsPage(),
     'Reparto' => const AdminOrdersPage(),
     'Facturar' => const InvoicingPage(),
-    'Facturas realizadas' => const InvoicedOrdersPage(),
     'Comisiones' => const CommissionsPage(),
-    'Liquidaciones' => const CommissionHistoryPage(),
-    'Administrar productos' => const AdminProductsPage(),
     'Stock' when widget.isAdmin => const StockHomePage(),
     'En negativo' when widget.isAdmin => const StockHomePage(onlyNegatives: true),
     'Lo que llevamos' => const VehicleLoadPage(),
@@ -291,7 +285,6 @@ class _DesktopHomeState extends State<DesktopHome> {
                         ),
                         group('FACTURACIÓN', HomeArea.facturacion),
                         link('Facturar', Icons.request_quote_outlined, area: HomeArea.facturacion, badge: r?.toInvoice),
-                        link('Facturas realizadas', Icons.history, area: HomeArea.facturacion),
                         group('PLATA', HomeArea.plata),
                         link(
                           'Anotar gasto',
@@ -303,10 +296,8 @@ class _DesktopHomeState extends State<DesktopHome> {
                         link('Tablero del mes', Icons.insights, area: HomeArea.plata),
                         link('Saldos', Icons.account_balance_wallet_outlined, area: HomeArea.plata),
                         link('Comisiones', Icons.payments_outlined, area: HomeArea.plata),
-                        link('Liquidaciones', Icons.history_edu_outlined, area: HomeArea.plata),
                         group('HERRAMIENTAS', HomeArea.herramientas),
                         link('Productos', Icons.inventory_2_outlined, area: HomeArea.herramientas),
-                        link('Administrar productos', Icons.edit_note, area: HomeArea.herramientas),
                         link('Calculadora', Icons.calculate_outlined, area: HomeArea.herramientas),
                         link('Resumen y estadísticas', Icons.analytics_outlined, area: HomeArea.herramientas),
                       ] else ...[

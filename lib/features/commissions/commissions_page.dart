@@ -9,6 +9,8 @@ import 'settlement_review_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'commission_order_detail.dart';
 import 'commission_report_page.dart';
+import 'commission_history_page.dart';
+import '../../core/page_switch.dart';
 import '../../core/argentina_date_utils.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
 
@@ -20,6 +22,8 @@ class CommissionsPage extends StatefulWidget {
 }
 
 class _CommissionsPageState extends State<CommissionsPage> {
+  /// 0 Liquidar, 1 Historial.
+  int _vista = 0;
   bool _cargando = true;
   String? _error;
 
@@ -284,9 +288,23 @@ class _CommissionsPageState extends State<CommissionsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Comisiones: "Liquidar" y "Historial" en la misma pantalla.
+    final vistas = pageSwitch(
+      labels: const ['Liquidar', 'Historial'],
+      icons: const [Icons.payments_outlined, Icons.history],
+      selected: _vista,
+      onChanged: (v) => setState(() => _vista = v),
+    );
+    if (_vista == 1) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Comisiones'), bottom: vistas),
+        body: const CommissionHistoryPage(embedded: true),
+      );
+    }
     if (_cargando) {
       return Scaffold(
         appBar: AppBar(
+          bottom: vistas,
           actions: [
             IconButton(
               icon: const Icon(Icons.assignment_return_outlined),
@@ -299,7 +317,7 @@ class _CommissionsPageState extends State<CommissionsPage> {
               ),
             ),
           ],
-          title: const Text('Liquidación de comisiones'),
+          title: const Text('Comisiones'),
         ),
         body: DesktopForm(
           child: const Center(child: CircularProgressIndicator()),
@@ -309,7 +327,8 @@ class _CommissionsPageState extends State<CommissionsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Liquidación de comisiones'),
+        title: const Text('Comisiones'),
+        bottom: vistas,
         actions: [
           TextButton.icon(
             // Dorado: en la barra negra, el texto negro no se veía.

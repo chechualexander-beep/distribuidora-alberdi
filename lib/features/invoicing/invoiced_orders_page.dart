@@ -7,7 +7,10 @@ import 'package:distribuidora_alberdi/core/money_format.dart';
 import '../../core/text_search.dart';
 
 class InvoicedOrdersPage extends StatefulWidget {
-  const InvoicedOrdersPage({super.key});
+  const InvoicedOrdersPage({super.key, this.embedded = false});
+
+  /// Dentro de Facturar (pestaña Realizadas): sin título propio.
+  final bool embedded;
 
   @override
   State<InvoicedOrdersPage> createState() => _InvoicedOrdersPageState();
@@ -126,6 +129,7 @@ class _InvoicedOrdersPageState extends State<InvoicedOrdersPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) return _construirContenido();
     return Scaffold(
       appBar: AppBar(title: const Text('Facturas realizadas')),
       body: _construirContenido(),

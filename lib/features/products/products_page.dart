@@ -9,6 +9,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/offline_queries.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
 import '../../core/text_search.dart';
+import '../../core/page_switch.dart';
+import 'admin_products_page.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key});
@@ -18,6 +20,8 @@ class ProductsPage extends StatefulWidget {
 }
 
 class _ProductsPageState extends State<ProductsPage> {
+  /// Administrador: 0 Lista, 1 Precios y costos.
+  int _vista = 0;
   bool _cargando = true;
   String? _error;
 
@@ -96,9 +100,25 @@ class _ProductsPageState extends State<ProductsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Administrador: "Lista" y "Precios y costos" (editar) en la misma pantalla.
+    final vistas = _esAdministrador
+        ? pageSwitch(
+            labels: const ['Lista', 'Precios y costos'],
+            icons: const [Icons.inventory_2_outlined, Icons.edit_note],
+            selected: _vista,
+            onChanged: (v) => setState(() => _vista = v),
+          )
+        : null;
+    if (_esAdministrador && _vista == 1) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Productos'), bottom: vistas),
+        body: const AdminProductsPage(),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Productos'),
+        bottom: vistas,
         actions: [
           if (_esAdministrador)
             IconButton(
