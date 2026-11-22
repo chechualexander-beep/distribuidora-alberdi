@@ -70,6 +70,8 @@ void main() {
             {'rol': admin ? 'administrador' : 'preventista', 'activo': true},
           ]);
         case 'pedidos':
+          // Tarjeta "Venta del día" (lo finalizado hoy): acá no hay nada.
+          if (q.containsKey('fecha_finalizacion')) return jsonResponse(request, []);
           final row = {
             ...order,
             'fecha_entrega': date,

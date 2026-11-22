@@ -12,6 +12,30 @@ import 'finance_dashboard_page.dart';
 
 /// "Plata del negocio": cuánto hay, cuánto está apartado para los gastos fijos, qué se debe a
 /// proveedores y cuánto queda para mercadería. Solo administración.
+/// "Anotar gasto" directo desde el inicio (teléfono o Windows), sin pasar por Plata del negocio.
+Future<void> quickExpense(BuildContext context, {SupabaseClient? client, StockOpRunner? runner}) async {
+  final request = await showMovementForm(context, tipo: 'gasto');
+  if (request == null || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final outcome = await runFinOp(
+      client,
+      rpc: request.rpc,
+      args: request.args,
+      description: request.description,
+      total: request.total,
+      runner: runner,
+    );
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(outcome.savedOffline ? 'Sin señal: el gasto quedó guardado y se envía solo.' : 'Gasto anotado.'),
+      ),
+    );
+  } catch (error) {
+    messenger.showSnackBar(SnackBar(content: Text(stockErrorText(error))));
+  }
+}
+
 class FinanceHomePage extends StatefulWidget {
   const FinanceHomePage({super.key, this.client, this.runner, this.initial});
   final SupabaseClient? client;

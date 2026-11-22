@@ -21,7 +21,14 @@ import 'features/commissions/my_commissions_page.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-import 'features/admin/admin_page.dart';
+import 'features/admin/commercial_summary_page.dart';
+import 'features/commissions/commission_history_page.dart';
+import 'features/commissions/commissions_page.dart';
+import 'features/home/home_summary.dart';
+import 'features/invoicing/invoiced_orders_page.dart';
+import 'features/invoicing/invoicing_page.dart';
+import 'features/orders/admin_orders_page.dart';
+import 'features/products/admin_products_page.dart';
 import 'features/balances/balances_page.dart';
 import 'features/catalog/general_catalog_page.dart';
 import 'core/offline_queries.dart';
@@ -379,6 +386,12 @@ class _HomePageState extends State<HomePage> {
 
   /// Ayuda en el depósito (preventista habilitado): ve, cuenta, carga y baja.
   bool _puedeDeposito = false;
+
+  /// Números de la tarjeta "Hoy" (null mientras se leen).
+  HomeSummary? _resumen;
+
+  /// Administrador en el teléfono: 0 Inicio, 1 Pedidos, 2 Reparto, 3 Stock (barra de abajo).
+  int _tab = 0;
   String? _error;
 
   @override
@@ -472,6 +485,7 @@ class _HomePageState extends State<HomePage> {
       });
       _cargarPermisoCatalogoGeneral();
       if (rol != 'administrador') _cargarPermisoDeposito();
+      _cargarResumen();
       // Pedidos guardados sin señal: se envían solos (al iniciar, al volver la conexión, cada 2 min).
       PendingOrders.instance.start(
         Supabase.instance.client,
@@ -500,6 +514,16 @@ class _HomePageState extends State<HomePage> {
     } catch (_) {
       if (mounted) setState(() => _puedeCatalogoGeneral = false);
     }
+  }
+
+  Future<void> _cargarResumen() async {
+    final client = Supabase.instance.client;
+    final resumen = await fetchHomeSummary(
+      client,
+      admin: _rol == 'administrador',
+      userId: client.auth.currentUser?.id,
+    );
+    if (mounted) setState(() => _resumen = resumen);
   }
 
   Future<void> _cargarPermisoDeposito() async {
@@ -587,6 +611,51 @@ class _HomePageState extends State<HomePage> {
         onSignOut: _cerrarSesion,
       );
     }
+    final inicio = _inicio(esAdministrador);
+    if (!esAdministrador) return inicio;
+    // Administrador: barra de abajo con lo de todos los días (Inicio, Pedidos, Reparto, Stock).
+    final pagina = switch (_tab) {
+      1 => const OrdersPage(),
+      2 => const AdminOrdersPage(),
+      3 => const StockHomePage(),
+      _ => inicio,
+    };
+    return PopScope(
+      canPop: _tab == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _irA(0);
+      },
+      child: Scaffold(
+        body: KeyedSubtree(key: ValueKey('pestana-$_tab'), child: pagina),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: _irA,
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Inicio'),
+            NavigationDestination(
+              icon: Icon(Icons.receipt_long_outlined),
+              selectedIcon: Icon(Icons.receipt_long),
+              label: 'Pedidos',
+            ),
+            NavigationDestination(icon: Icon(Icons.route_outlined), selectedIcon: Icon(Icons.route), label: 'Reparto'),
+            NavigationDestination(
+              icon: Icon(Icons.warehouse_outlined),
+              selectedIcon: Icon(Icons.warehouse),
+              label: 'Stock',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _irA(int tab) {
+    setState(() => _tab = tab);
+    if (tab == 0) _cargarResumen();
+  }
+
+  Widget _inicio(bool esAdministrador) {
+    final resumen = _resumen;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.negro,
@@ -615,6 +684,10 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(3),
+          child: ColoredBox(color: AppColors.dorado, child: SizedBox(height: 3, width: double.infinity)),
+        ),
         actions: [
           const DataSaverButton(),
           IconButton(
@@ -625,104 +698,249 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 10,
-                runSpacing: 4,
-                children: [
-                  Text(
-                    'Hola, ${_nombre ?? 'Usuario'}',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Tonos.of(context).etiquetaGris.$1,
-                      borderRadius: BorderRadius.circular(6),
+      body: RefreshIndicator(
+        onRefresh: _cargarResumen,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      'Hola, ${_nombre ?? 'Usuario'}',
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                     ),
-                    child: Text(
-                      esAdministrador ? 'Administrador' : 'Preventista',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Tonos.of(context).etiquetaGris.$2,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Tonos.of(context).etiquetaGris.$1,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        esAdministrador
+                            ? 'Administrador'
+                            : _puedeDeposito
+                            ? 'Preventista · Depósito'
+                            : 'Preventista',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Tonos.of(context).etiquetaGris.$2,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              // Nuevo pedido debajo de lo de "sin señal": más cerca del pulgar.
-              const PendingOrdersCard(),
-              const OfflinePrepCard(),
-              const SizedBox(height: 10),
-              NewOrderButton(onTap: () => _abrir(const NewOrderPage())),
-              HomeSection(
-                title: 'TRABAJO DIARIO',
-                actions: [
-                  HomeAction(Icons.receipt_long_outlined, 'Pedidos', () => _abrir(const OrdersPage())),
-                  HomeAction(Icons.people_outline, 'Clientes', () => _abrir(const ClientsPage())),
-                  HomeAction(Icons.inventory_2_outlined, 'Productos', () => _abrir(const ProductsPage())),
-                  if (esAdministrador)
-                    HomeAction(Icons.warehouse_outlined, 'Stock y vehículo', () => _abrir(const StockHomePage()))
-                  else
-                    HomeAction(Icons.local_shipping_outlined, 'Lo que llevamos', () => _abrir(const VehicleLoadPage())),
-                  HomeAction(Icons.payments_outlined, 'Mis comisiones', () => _abrir(MyCommissionsPage())),
-                  HomeAction(Icons.calculate_outlined, 'Calculadora', () => _abrir(const CalculatorPage())),
-                  if (_puedeCatalogoGeneral)
-                    HomeAction(
-                      Icons.storefront_outlined,
-                      'Catálogo general',
-                      () => _abrir(GeneralCatalogPage(isAdmin: esAdministrador)),
-                    ),
-                ],
-              ),
-              if (!esAdministrador && _puedeDeposito)
-                HomeSection(
-                  title: 'DEPÓSITO',
-                  actions: [
-                    HomeAction(
-                      Icons.local_shipping_outlined,
-                      'Cargar vehículo',
-                      () => openTransfer(context, StockFormKind.load),
-                    ),
-                    HomeAction(
-                      Icons.warehouse_outlined,
-                      'Bajar al depósito',
-                      () => openTransfer(context, StockFormKind.unload),
-                    ),
-                    HomeAction(
-                      Icons.fact_check_outlined,
-                      'Contar y ver stock',
-                      () => _abrir(const StockHomePage(helper: true)),
-                    ),
                   ],
                 ),
-              if (esAdministrador)
-                HomeSection(
-                  title: 'ADMINISTRACIÓN',
-                  actions: [
-                    HomeAction(Icons.point_of_sale, 'Venta especial', () => _abrir(const SpecialSalePage())),
-                    HomeAction(Icons.savings_outlined, 'Plata del negocio', () => _abrir(const FinanceHomePage())),
-                    HomeAction(Icons.insights, 'Tablero del mes', () => _abrir(const FinanceDashboardPage())),
-                    HomeAction(Icons.account_balance_wallet_outlined, 'Saldos', () => _abrir(const BalancesPage())),
-                    HomeAction(Icons.admin_panel_settings_outlined, 'Administración', () => _abrir(const AdminPage())),
-                  ],
-                ),
-            ],
+                const SizedBox(height: 12),
+                if (esAdministrador)
+                  _tarjetaHoy(resumen)
+                else if (resumen?.weekOrders != null)
+                  _semana(resumen!),
+                // Nuevo pedido debajo de lo de "sin señal": más cerca del pulgar.
+                const PendingOrdersCard(),
+                const OfflinePrepCard(),
+                const SizedBox(height: 10),
+                NewOrderButton(onTap: () => _abrir(const NewOrderPage())),
+                if (esAdministrador) ..._seccionesAdministrador(resumen) else ..._seccionesPreventista(),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  void _abrir(Widget page) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+  List<Widget> _seccionesAdministrador(HomeSummary? resumen) => [
+    HomeSection(
+      title: 'VENTAS',
+      area: HomeArea.ventas,
+      actions: [
+        HomeAction(Icons.receipt_long_outlined, 'Pedidos', () => _irA(1)),
+        HomeAction(Icons.people_outline, 'Clientes', () => _abrir(const ClientsPage())),
+        HomeAction(Icons.point_of_sale, 'Venta especial', () => _abrir(const SpecialSalePage())),
+        if (_puedeCatalogoGeneral)
+          HomeAction(
+            Icons.storefront_outlined,
+            'Catálogo general',
+            () => _abrir(const GeneralCatalogPage(isAdmin: true)),
+          ),
+      ],
+    ),
+    HomeSection(
+      title: 'REPARTO Y STOCK',
+      area: HomeArea.reparto,
+      actions: [
+        HomeAction(Icons.route_outlined, 'Reparto', () => _irA(2), badge: resumen?.toDeliver),
+        HomeAction(Icons.local_shipping_outlined, 'Cargar / bajar', _cargarBajar),
+        HomeAction(Icons.warehouse_outlined, 'Stock', () => _irA(3)),
+        HomeAction(Icons.add_shopping_cart, 'Anotar compra', _anotarCompra),
+      ],
+    ),
+    HomeSection(
+      title: 'FACTURACIÓN',
+      area: HomeArea.facturacion,
+      actions: [
+        HomeAction(
+          Icons.request_quote_outlined,
+          'Facturar',
+          () => _abrir(const InvoicingPage()),
+          badge: resumen?.toInvoice,
+        ),
+        HomeAction(Icons.history, 'Facturas realizadas', () => _abrir(const InvoicedOrdersPage())),
+      ],
+    ),
+    HomeSection(
+      title: 'PLATA',
+      area: HomeArea.plata,
+      actions: [
+        HomeAction(Icons.receipt_outlined, 'Anotar gasto', _anotarGasto, highlight: true),
+        HomeAction(Icons.savings_outlined, 'Plata del negocio', () => _abrir(const FinanceHomePage())),
+        HomeAction(Icons.insights, 'Tablero del mes', () => _abrir(const FinanceDashboardPage())),
+        HomeAction(Icons.account_balance_wallet_outlined, 'Saldos', () => _abrir(const BalancesPage())),
+        HomeAction(Icons.payments_outlined, 'Comisiones', () => _abrir(const CommissionsPage())),
+        HomeAction(Icons.history_edu_outlined, 'Liquidaciones', () => _abrir(const CommissionHistoryPage())),
+      ],
+    ),
+    HomeSection(
+      title: 'HERRAMIENTAS',
+      area: HomeArea.herramientas,
+      actions: [
+        HomeAction(Icons.inventory_2_outlined, 'Productos', () => _abrir(const ProductsPage())),
+        HomeAction(Icons.edit_note, 'Administrar productos', () => _abrir(const AdminProductsPage())),
+        HomeAction(Icons.calculate_outlined, 'Calculadora', () => _abrir(const CalculatorPage())),
+        HomeAction(Icons.analytics_outlined, 'Resumen y estadísticas', () => _abrir(const CommercialSummaryPage())),
+      ],
+    ),
+  ];
+
+  List<Widget> _seccionesPreventista() => [
+    HomeSection(
+      title: 'VENTAS',
+      area: HomeArea.ventas,
+      actions: [
+        HomeAction(Icons.receipt_long_outlined, 'Mis pedidos', () => _abrir(const OrdersPage())),
+        HomeAction(Icons.people_outline, 'Clientes', () => _abrir(const ClientsPage())),
+        HomeAction(Icons.inventory_2_outlined, 'Productos', () => _abrir(const ProductsPage())),
+        HomeAction(Icons.local_shipping_outlined, 'Lo que llevamos', () => _abrir(const VehicleLoadPage())),
+      ],
+    ),
+    if (_puedeDeposito)
+      HomeSection(
+        title: 'DEPÓSITO',
+        area: HomeArea.reparto,
+        actions: [
+          HomeAction(
+            Icons.local_shipping_outlined,
+            'Cargar vehículo',
+            () => openTransfer(context, StockFormKind.load),
+          ),
+          HomeAction(
+            Icons.warehouse_outlined,
+            'Bajar al depósito',
+            () => openTransfer(context, StockFormKind.unload),
+          ),
+          HomeAction(
+            Icons.fact_check_outlined,
+            'Contar y ver stock',
+            () => _abrir(const StockHomePage(helper: true)),
+          ),
+        ],
+      ),
+    HomeSection(
+      title: 'MÍO',
+      area: HomeArea.plata,
+      actions: [
+        HomeAction(Icons.payments_outlined, 'Mis comisiones', () => _abrir(MyCommissionsPage())),
+        HomeAction(Icons.calculate_outlined, 'Calculadora', () => _abrir(const CalculatorPage())),
+        if (_puedeCatalogoGeneral)
+          HomeAction(
+            Icons.storefront_outlined,
+            'Catálogo general',
+            () => _abrir(const GeneralCatalogPage(isAdmin: false)),
+          ),
+      ],
+    ),
+  ];
+
+  /// "Hoy": para facturar, para entregar, el viaje y lo que está en negativo.
+  Widget _tarjetaHoy(HomeSummary? r) {
+    String n(int? v) => v == null ? '–' : '$v';
+    final desde = r?.tripSince;
+    final viaje = r?.tripOpen;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: TodayCard(
+        title: 'Hoy, ${_hoyTexto(DateTime.now())}',
+        note: r == null
+            ? 'Leyendo…'
+            : r.cached
+            ? 'Sin señal: datos guardados ${describeSavedAt(r.at)}.'
+            : null,
+        items: [
+          TodayItem(HomeArea.facturacion, n(r?.toInvoice), 'para facturar', () => _abrir(const InvoicingPage())),
+          TodayItem(HomeArea.reparto, n(r?.toDeliver), 'para entregar', () => _irA(2)),
+          TodayItem(
+            HomeArea.reparto,
+            viaje == null
+                ? 'Viaje'
+                : viaje
+                ? 'Viaje abierto'
+                : 'Sin viaje abierto',
+            viaje == true && desde != null ? 'desde ${describeSavedAt(desde)}' : '',
+            () => _irA(3),
+            icon: Icons.local_shipping_outlined,
+          ),
+          TodayItem(
+            HomeArea.herramientas,
+            n(r?.negatives),
+            'en negativo',
+            () => _abrir(const StockHomePage(onlyNegatives: true)),
+            alert: (r?.negatives ?? 0) > 0,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _semana(HomeSummary r) {
+    final colors = AreaColors.of(context, HomeArea.ventas);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(color: colors.fondo, borderRadius: BorderRadius.circular(12)),
+      child: Text(
+        'Esta semana: ${r.weekOrders} ${r.weekOrders == 1 ? 'pedido' : 'pedidos'}'
+        '${r.cached ? ' (sin señal)' : ''}',
+        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.texto),
+      ),
+    );
+  }
+
+  static String _hoyTexto(DateTime d) {
+    const dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+    return '${dias[d.weekday - 1]} ${d.day}';
+  }
+
+  Future<void> _cargarBajar() async {
+    await openTransfer(context, StockFormKind.load);
+    if (mounted) _cargarResumen();
+  }
+
+  Future<void> _anotarCompra() async {
+    await openPurchase(context);
+    if (mounted) _cargarResumen();
+  }
+
+  Future<void> _anotarGasto() => quickExpense(context);
+
+  Future<void> _abrir(Widget page) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    if (mounted) _cargarResumen();
   }
 }

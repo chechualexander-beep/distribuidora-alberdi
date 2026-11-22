@@ -11,8 +11,8 @@ import 'manage_order_page.dart';
 import 'order_detail_page.dart';
 import 'pending_finalizations_page.dart';
 import '../stock/product_summary.dart';
-import '../stock/stock_data.dart';
-import '../stock/stock_form_page.dart';
+import '../stock/stock_home_page.dart' show openPurchase;
+import 'day_sales.dart';
 import 'package:distribuidora_alberdi/core/money_format.dart';
 import '../../core/text_search.dart';
 
@@ -51,6 +51,10 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   String _busquedaReparto = '';
   final TextEditingController _buscador = TextEditingController();
   final Set<String> _expandidos = {};
+
+  /// Tarjeta "Venta del día": lo entregado (preventa) o vendido (venta directa) hoy.
+  DaySales? _ventaDia;
+  String? _ventaDiaError;
 
   @override
   void initState() {
@@ -134,6 +138,31 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     onChanged: (valor) => setState(() => _busquedaReparto = valor),
   );
 
+  Widget _tarjetaVentaDia() => DaySalesCard(
+    key: ValueKey('venta-dia-$_mostrarVentaDirecta'),
+    direct: _mostrarVentaDirecta,
+    sales: _ventaDia,
+    error: _ventaDiaError,
+    pendingCount: _mostrarVentaDirecta ? 0 : _cantidadPedidos,
+    pendingTotal: _mostrarVentaDirecta ? 0 : _ventaTotal,
+  );
+
+  Future<void> _cargarVentaDia() async {
+    final directa = _mostrarVentaDirecta;
+    setState(() {
+      _ventaDia = null;
+      _ventaDiaError = null;
+    });
+    try {
+      final venta = await fetchDaySales(_client, direct: directa);
+      if (!mounted || directa != _mostrarVentaDirecta) return;
+      setState(() => _ventaDia = venta);
+    } catch (_) {
+      if (!mounted || directa != _mostrarVentaDirecta) return;
+      setState(() => _ventaDiaError = 'No se pudo leer la venta del día.');
+    }
+  }
+
   Widget _encabezadoCompacto() {
     final fechaTexto =
         '${_nombreDia(_fechaSeleccionada)} '
@@ -142,6 +171,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (!_sinProgramar) ...[_tarjetaVentaDia(), const SizedBox(height: 10)],
         if (_sinProgramar)
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
@@ -194,6 +224,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
       _cargando = true;
       _error = null;
     });
+    if (!_sinProgramar) _cargarVentaDia();
 
     try {
       var consulta = _client
@@ -455,28 +486,7 @@ productos (
   }
 
   /// Compra hecha durante el reparto: el lugar (depósito o vehículo) se elige al anotarla.
-  Future<void> _anotarCompra() async {
-    try {
-      final items = await fetchStockItems(_client);
-      final vehiculo = await fetchVehicleStock(_client);
-      if (!mounted) return;
-      await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => StockFormPage(
-            kind: StockFormKind.purchase,
-            items: items,
-            tripId: vehiculo.tripId,
-            client: widget.client,
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo abrir la compra: ${stockErrorText(error)}')),
-      );
-    }
-  }
+  Future<void> _anotarCompra() => openPurchase(context, client: widget.client);
 
   void _recalcularResumenSeleccionados() {
     final Map<String, Map<String, dynamic>> productosAgrupados = {};
@@ -553,7 +563,7 @@ productos (
         title: const Text('Gestión de reparto'),
         actions: [
           IconButton(
-            tooltip: 'Anotar compra (entra al vehículo)',
+            tooltip: 'Anotar compra',
             icon: const Icon(Icons.add_shopping_cart),
             onPressed: _anotarCompra,
           ),
@@ -683,6 +693,17 @@ productos (
     if (useDesktopLayout(context)) {
       return Column(
         children: [
+          if (!_sinProgramar)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: _tarjetaVentaDia(),
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Wrap(

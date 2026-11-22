@@ -26,12 +26,38 @@ Future<bool?> openTransfer(BuildContext context, StockFormKind kind, {SupabaseCl
   );
 }
 
+/// Abre Anotar compra directo (lee el stock y el viaje antes). El lugar se elige en la pantalla.
+Future<void> openPurchase(BuildContext context, {SupabaseClient? client}) async {
+  final db = client ?? Supabase.instance.client;
+  final messenger = ScaffoldMessenger.of(context);
+  final navigator = Navigator.of(context);
+  try {
+    final items = await fetchStockItems(db);
+    final vehicle = await fetchVehicleStock(db);
+    await navigator.push<bool>(
+      MaterialPageRoute(
+        builder: (_) => StockFormPage(
+          kind: StockFormKind.purchase,
+          items: items,
+          tripId: vehicle.tripId,
+          client: client,
+        ),
+      ),
+    );
+  } catch (error) {
+    messenger.showSnackBar(SnackBar(content: Text('No se pudo abrir la compra: ${stockErrorText(error)}')));
+  }
+}
+
 /// Stock del administrador: depósito y vehículo, viaje, conteos, compras. Con [helper] (ayuda en
 /// el depósito): ver, contar, cargar y bajar; sin compras, cierre del viaje ni cambios de producto.
 class StockHomePage extends StatefulWidget {
-  const StockHomePage({super.key, this.client, this.helper = false});
+  const StockHomePage({super.key, this.client, this.helper = false, this.onlyNegatives = false});
   final SupabaseClient? client;
   final bool helper;
+
+  /// Abrir con el filtro "En negativo" (desde la tarjeta Hoy del inicio).
+  final bool onlyNegatives;
 
   @override
   State<StockHomePage> createState() => _StockHomePageState();
@@ -44,7 +70,7 @@ class _StockHomePageState extends State<StockHomePage> {
   List<StockItem> _items = const [];
   VehicleStock _vehicle = const VehicleStock();
   Map<String, String> _sellerNames = const {};
-  _Filter _filter = _Filter.controlled;
+  late _Filter _filter = widget.onlyNegatives ? _Filter.differences : _Filter.controlled;
   final _search = TextEditingController();
 
   @override

@@ -66,6 +66,8 @@ void main() {
             {'saldo_pendiente': 200, 'cantidad_pedidos_con_saldo': 1},
           ]);
         case 'pedidos':
+          // Tarjeta "Venta del día" (lo finalizado hoy): acá no hay nada.
+          if (params.containsKey('fecha_finalizacion')) return jsonResponse(request, []);
           if (params['cliente_id'] == null) {
             return jsonResponse(
               request,
