@@ -114,7 +114,7 @@ class _StockFormPageState extends State<StockFormPage> {
   /// Lo máximo que se puede pasar: lo que figura en el lugar de origen (al cargar un suelto,
   /// también las bolsas cerradas del depósito que se pueden abrir).
   double _maxFor(StockItem item) {
-    if (_kind == StockFormKind.unload) return item.vehicle > 0 ? item.vehicle : 0;
+    if (_kind == StockFormKind.unload) return item.vehicle > 0 ? item.vehicle : 0.0;
     var max = item.deposit > 0 ? item.deposit : 0.0;
     final parent = item.parentId == null ? null : _items.where((i) => i.id == item.parentId).firstOrNull;
     final units = item.unitsPerParent ?? 0;
@@ -526,7 +526,6 @@ class _StockFormPageState extends State<StockFormPage> {
     } catch (error) {
       _snack(stockErrorText(error));
     }
-  }
   }
 
   List<StockItem> get _visible {
