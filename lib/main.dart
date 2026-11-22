@@ -32,6 +32,8 @@ import 'package:path/path.dart' as p;
 import 'core/pending_orders.dart';
 import 'core/pending_orders_page.dart';
 import 'features/home/home_menu.dart';
+import 'features/stock/stock_data.dart' show canUseDeposit;
+import 'features/stock/stock_form_page.dart' show StockFormKind;
 import 'features/stock/stock_home_page.dart';
 import 'features/stock/vehicle_load_page.dart';
 import 'features/orders/finalization_request.dart';
@@ -374,6 +376,9 @@ class _HomePageState extends State<HomePage> {
   String? _nombre;
   String? _rol;
   bool _puedeCatalogoGeneral = false;
+
+  /// Ayuda en el depósito (preventista habilitado): ve, cuenta, carga y baja.
+  bool _puedeDeposito = false;
   String? _error;
 
   @override
@@ -466,6 +471,7 @@ class _HomePageState extends State<HomePage> {
         _cargandoPerfil = false;
       });
       _cargarPermisoCatalogoGeneral();
+      if (rol != 'administrador') _cargarPermisoDeposito();
       // Pedidos guardados sin señal: se envían solos (al iniciar, al volver la conexión, cada 2 min).
       PendingOrders.instance.start(
         Supabase.instance.client,
@@ -494,6 +500,11 @@ class _HomePageState extends State<HomePage> {
     } catch (_) {
       if (mounted) setState(() => _puedeCatalogoGeneral = false);
     }
+  }
+
+  Future<void> _cargarPermisoDeposito() async {
+    final puede = await canUseDeposit(Supabase.instance.client);
+    if (mounted) setState(() => _puedeDeposito = puede);
   }
 
   /// Envía una gestión de reparto hecha sin señal (la solicitud está en la cola del teléfono).
@@ -672,6 +683,27 @@ class _HomePageState extends State<HomePage> {
                     ),
                 ],
               ),
+              if (!esAdministrador && _puedeDeposito)
+                HomeSection(
+                  title: 'DEPÓSITO',
+                  actions: [
+                    HomeAction(
+                      Icons.local_shipping_outlined,
+                      'Cargar vehículo',
+                      () => openTransfer(context, StockFormKind.load),
+                    ),
+                    HomeAction(
+                      Icons.warehouse_outlined,
+                      'Bajar al depósito',
+                      () => openTransfer(context, StockFormKind.unload),
+                    ),
+                    HomeAction(
+                      Icons.fact_check_outlined,
+                      'Contar y ver stock',
+                      () => _abrir(const StockHomePage(helper: true)),
+                    ),
+                  ],
+                ),
               if (esAdministrador)
                 HomeSection(
                   title: 'ADMINISTRACIÓN',

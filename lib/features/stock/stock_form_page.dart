@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -14,6 +16,8 @@ import '../finance/finance_data.dart';
 import '../finance/finance_forms.dart' show isoDate;
 import 'package:distribuidora_alberdi/core/money_format.dart';
 import '../../core/text_search.dart';
+import '../../core/network_status.dart' show isUncertainRequestError;
+import 'stock_transfer_store.dart';
 
 enum StockFormKind { count, load, unload, purchase, closeTrip }
 
@@ -30,6 +34,7 @@ class StockFormPage extends StatefulWidget {
     this.runner,
     this.initialLocation,
     this.reload,
+    this.store,
   });
 
   final StockFormKind kind;
@@ -48,6 +53,9 @@ class StockFormPage extends StatefulWidget {
 
   /// Vuelve a leer el stock (cargar y bajar trabajan siempre con el stock de este momento).
   final Future<List<StockItem>> Function()? reload;
+
+  /// Lista compartida de cargar/bajar. Sin esto, en la app se usa la de la base (con [reload]).
+  final TransferStore? store;
 
 
   @override
@@ -111,6 +119,23 @@ class _StockFormPageState extends State<StockFormPage> {
 
   late StockFormKind _kind = widget.kind;
 
+  /// Cargar y bajar: la lista vive en la base y la ven todos (teléfonos y PC), en vivo.
+  late final TransferStore? _store =
+      widget.store ?? (widget.reload != null && _isTransfer ? RpcTransferStore(_client) : null);
+  TransferList _server = const TransferList();
+
+  /// Productos cambiados acá que todavía no llegaron a la base (sin señal se reintenta).
+  final _pending = <String>{};
+  final _markedBy = <String, String>{};
+  List<String> _others = const [];
+  bool _offline = false;
+  String? _syncError;
+  bool _firstPull = true;
+  Timer? _ticker;
+  Timer? _pushSoon;
+  Future<void>? _inFlight;
+  String get _direction => _kind == StockFormKind.unload ? 'bajar' : 'cargar';
+
   /// Cargar o bajar: pasar mercadería de un lugar al otro.
   bool get _isTransfer => _kind == StockFormKind.load || _kind == StockFormKind.unload;
 
@@ -157,8 +182,39 @@ class _StockFormPageState extends State<StockFormPage> {
     }
   }
 
-  /// Borra lo escrito, lo marcado y lo propuesto (y el borrador guardado).
-  void _startOver() {
+  /// Borra lo escrito, lo marcado y lo propuesto. Con la lista compartida, pregunta antes: se
+  /// borra para todos.
+  Future<void> _startOver() async {
+    final store = _store;
+    if (store == null) {
+      _resetLocal();
+      _clearDraft();
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Empezar de nuevo?'),
+        content: const Text('Se borra la lista para todos los que la están usando.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Volver')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sí, borrar')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await _inFlight;
+    _pending.clear();
+    _resetLocal();
+    try {
+      final list = await store.clear(_direction);
+      if (mounted) _applyServer(list);
+    } catch (error) {
+      _snack(stockErrorText(error));
+    }
+  }
+
+  void _resetLocal() {
     setState(() {
       for (final c in _qty.values) {
         c.clear();
@@ -169,12 +225,29 @@ class _StockFormPageState extends State<StockFormPage> {
       _noStock.clear();
       _onlyFilled = false;
       _onlyPending = false;
+      _markedBy.clear();
     });
-    _clearDraft();
   }
 
   /// ⇄ Cargar ↔ Bajar. Si hay algo escrito, pregunta antes (se borra).
   Future<void> _swapDirection() async {
+    if (_store != null) {
+      // La lista de cada sentido queda guardada en la base: no se pierde nada.
+      await _sync();
+      if (!mounted) return;
+      _pending.clear();
+      _resetLocal();
+      setState(() {
+        _kind = _kind == StockFormKind.load ? StockFormKind.unload : StockFormKind.load;
+        _optionsOpen = true;
+        _server = const TransferList();
+        _others = const [];
+        _firstPull = true;
+      });
+      if (_kind == StockFormKind.load && _sellers.isEmpty) _loadSellers();
+      await _sync();
+      return;
+    }
     final dirty = _qty.values.any((c) => c.text.trim().isNotEmpty) || _loaded.isNotEmpty;
     if (dirty) {
       final ok = await showDialog<bool>(
@@ -190,7 +263,8 @@ class _StockFormPageState extends State<StockFormPage> {
       );
       if (ok != true || !mounted) return;
     }
-    _startOver();
+    _resetLocal();
+    _clearDraft();
     setState(() {
       _kind = _kind == StockFormKind.load ? StockFormKind.unload : StockFormKind.load;
       _optionsOpen = true;
@@ -218,13 +292,20 @@ class _StockFormPageState extends State<StockFormPage> {
       _onlyFilled = true;
     }
     if (_kind == StockFormKind.load) _loadSellers();
-    if (_isTransfer && widget.reload != null) {
-      // Se abre enseguida y lee el stock de este momento; el borrador se recupera después.
-      _fresh = false;
+    if (_isTransfer && (widget.reload != null || _store != null)) {
+      // Se abre enseguida y lee el stock de este momento; después, la lista compartida (o el
+      // borrador del teléfono).
+      _fresh = widget.reload == null;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         await _reload();
-        if (mounted && _kind == StockFormKind.load) _restoreDraft();
+        if (!mounted) return;
+        if (_store != null) {
+          await _sync();
+          _ticker = Timer.periodic(const Duration(seconds: 3), (_) => _sync());
+        } else if (_kind == StockFormKind.load) {
+          _restoreDraft();
+        }
       });
     } else if (_kind == StockFormKind.load) {
       _restoreDraft();
@@ -233,6 +314,8 @@ class _StockFormPageState extends State<StockFormPage> {
 
   @override
   void dispose() {
+    _ticker?.cancel();
+    _pushSoon?.cancel();
     _closeProposeSnack();
     for (final c in [..._qty.values, ..._cost.values, _search, _supplier]) {
       c.dispose();
@@ -286,6 +369,10 @@ class _StockFormPageState extends State<StockFormPage> {
   }
 
   Future<void> _saveDraft() async {
+    if (_store != null) {
+      _markDirty();
+      return;
+    }
     if (_kind != StockFormKind.load) return;
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -307,6 +394,165 @@ class _StockFormPageState extends State<StockFormPage> {
         );
       }
     } catch (_) {}
+  }
+
+  /// Lo que hay en esta pantalla para un producto, como renglón de la lista compartida.
+  TransferLine _localLine(String id) {
+    final proposed = parseQty(_proposed[id] ?? '');
+    final short = _noStock[id];
+    return TransferLine(
+      productId: id,
+      quantity: parseQty(_qty[id]?.text ?? ''),
+      wanted: proposed == null && short == null ? null : (proposed ?? 0) + (short ?? 0),
+      marked: _loaded.contains(id),
+    );
+  }
+
+  Set<String> get _localIds => {
+    for (final e in _qty.entries)
+      if (e.value.text.trim().isNotEmpty) e.key,
+    ..._loaded,
+    ..._proposed.keys,
+    ..._noStock.keys,
+  };
+
+  /// Anota lo que cambió acá respecto de la base y lo manda enseguida.
+  void _markDirty() {
+    for (final id in {..._localIds, ..._server.lines.keys}) {
+      if (!_localLine(id).sameAs(_server.lines[id])) _pending.add(id);
+    }
+    if (_pending.isEmpty) return;
+    _pushSoon?.cancel();
+    _pushSoon = Timer(const Duration(milliseconds: 400), _sync);
+  }
+
+  /// Manda lo cambiado acá y trae lo de los demás. Sin señal queda pendiente y se reintenta.
+  Future<void> _sync() {
+    final running = _inFlight;
+    if (running != null) return running;
+    final future = _syncOnce().whenComplete(() => _inFlight = null);
+    _inFlight = future;
+    return future;
+  }
+
+  Future<void> _syncOnce() async {
+    final store = _store;
+    if (store == null || !mounted || _saving) return;
+    final direction = _direction;
+    try {
+      final TransferList list;
+      if (_pending.isNotEmpty) {
+        final sent = {for (final id in _pending) id: _localLine(id)};
+        list = await store.put(direction, sent.values.toList());
+        // Lo que se volvió a cambiar mientras se mandaba sigue pendiente.
+        _pending.removeWhere((id) => _localLine(id).sameAs(sent[id]));
+      } else {
+        list = await store.fetch(direction);
+      }
+      if (!mounted || direction != _direction) return;
+      final someoneMoved = _server.lines.length > list.lines.length;
+      _applyServer(list);
+      if (_offline || _syncError != null) {
+        setState(() {
+          _offline = false;
+          _syncError = null;
+        });
+      }
+      // Si alguien subió o bajó algo, el stock cambió: se vuelve a leer.
+      if (someoneMoved) _reload();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _offline = isUncertainRequestError(error);
+        _syncError = _offline ? null : stockErrorText(error);
+      });
+    }
+  }
+
+  /// Pone en pantalla la lista de la base (menos lo que se está cambiando acá).
+  void _applyServer(TransferList list) {
+    final first = _firstPull;
+    _firstPull = false;
+    String two(int n) => n.toString().padLeft(2, '0');
+    setState(() {
+      _server = list;
+      _others = list.others;
+      for (final id in {..._localIds, ...list.lines.keys}) {
+        if (_pending.contains(id)) continue;
+        final line = list.lines[id];
+        final c = _controller(id);
+        final quantity = line?.quantity;
+        final current = parseQty(c.text);
+        if (quantity == null ? c.text.trim().isNotEmpty : (current == null || (current - quantity).abs() > 0.0001)) {
+          c.text = quantity == null ? '' : formatQty(quantity);
+        }
+        if (line?.marked ?? false) {
+          _loaded.add(id);
+          final at = line!.markedAt;
+          if (line.markedBy != null) {
+            _markedBy[id] = at == null ? line.markedBy! : '${line.markedBy} ${two(at.hour)}:${two(at.minute)}';
+          }
+        } else {
+          _loaded.remove(id);
+          _markedBy.remove(id);
+        }
+        final wanted = line?.wanted;
+        if (wanted == null) {
+          _proposed.remove(id);
+          _noStock.remove(id);
+        } else {
+          final item = _items.where((i) => i.id == id).firstOrNull;
+          final max = item == null ? 0.0 : _maxFor(item);
+          if (max <= 0) {
+            _proposed.remove(id);
+            _noStock[id] = wanted;
+          } else {
+            _proposed[id] = formatQty(wanted < max ? wanted : max);
+            if (wanted > max) {
+              _noStock[id] = wanted - max;
+            } else {
+              _noStock.remove(id);
+            }
+          }
+        }
+        if (line != null) _kept.add(id);
+      }
+      if (first && list.lines.isNotEmpty) {
+        _onlyFilled = true;
+        _optionsOpen = false;
+      }
+    });
+  }
+
+  /// Arriba de la lista: con quién se comparte, o si no hay señal.
+  Widget _liveBar() {
+    final t = Tonos.of(context);
+    final (color, text) = _syncError != null
+        ? (t.rojo, 'No se pudo usar la lista compartida: $_syncError')
+        : _offline
+        ? (AppColors.naranja, 'Sin señal: lo que marques se manda solo al volver la conexión.')
+        : (
+            t.verde,
+            _others.isEmpty
+                ? 'En vivo: quien abra esta lista ve lo mismo.'
+                : 'En vivo · también: ${_others.join(', ')}',
+          );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+      child: Row(
+        children: [
+          Icon(Icons.circle, size: 10, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              key: const Key('lista-en-vivo'),
+              style: TextStyle(fontSize: 12, color: t.secundario),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _clearDraft() async {
@@ -598,6 +844,13 @@ class _StockFormPageState extends State<StockFormPage> {
       _items.where((i) => i.id == id).map((i) => i.name).firstOrNull ?? 'Producto';
 
   Future<void> _confirm() async {
+    if (_store != null && _isTransfer) {
+      // Antes de subir: se manda lo de acá y se trae lo último (si otro ya lo subió, no va dos veces).
+      _pushSoon?.cancel();
+      await _sync();
+      await _sync();
+      if (!mounted) return;
+    }
     final lines = _lines();
     if (lines == null) {
       _snack(_zeroAllowed
@@ -694,7 +947,13 @@ class _StockFormPageState extends State<StockFormPage> {
     if (!mounted) return;
     // Sin la ruedita girando detrás del resultado.
     setState(() => _saving = false);
-    if (_kind == StockFormKind.load) await _clearDraft();
+    if (_kind == StockFormKind.load && _store == null) await _clearDraft();
+    if (_store != null) {
+      // Lo subido ya salió de la lista en la base; lo demás queda para seguir.
+      _ticker?.cancel();
+      _pushSoon?.cancel();
+      _pending.clear();
+    }
     if (_isTransfer) {
       final left = _items.where((i) => _filled(i.id) && !_loaded.contains(i.id)).length;
       _leftNote = left == 0
@@ -1044,12 +1303,43 @@ class _StockFormPageState extends State<StockFormPage> {
     final visible = _visible;
     final status = _loadStatus();
     final filled = _items.where((i) => _filled(i.id)).length;
-    return Scaffold(
+    return PopScope(
+      canPop: _store == null || _pending.isEmpty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _sync();
+        if (!mounted) return;
+        final navigator = Navigator.of(context);
+        if (_pending.isEmpty) {
+          navigator.pop();
+          return;
+        }
+        final leave = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Hay cambios sin mandar'),
+            content: const Text(
+              'No hay señal y lo último que escribiste o marcaste todavía no llegó a la lista. '
+              'Si salís, se pierde.',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Quedarme')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Salir igual')),
+            ],
+          ),
+        );
+        if (leave == true && mounted) {
+          _pending.clear();
+          navigator.pop();
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(title: Text(_title)),
       body: DesktopForm(
         child: Column(
           children: [
             _directionBar(),
+            if (_store != null) _liveBar(),
             _loadBar(),
             if (_optionsOpen)
               ConstrainedBox(
@@ -1125,6 +1415,7 @@ class _StockFormPageState extends State<StockFormPage> {
         ),
       ),
       bottomNavigationBar: _confirmBar(filled),
+      ),
     );
   }
 
@@ -1367,6 +1658,11 @@ class _StockFormPageState extends State<StockFormPage> {
                           Text(
                             'Pedidos: $original',
                             style: TextStyle(fontSize: 12, color: zebra ? t.cebraTexto : t.secundario),
+                          ),
+                        if (loaded && _markedBy[item.id] != null)
+                          Text(
+                            '✓ ${_markedBy[item.id]}',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textColor),
                           ),
                       ],
                     ),

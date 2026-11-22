@@ -8,6 +8,7 @@ import 'package:distribuidora_alberdi/features/stock/product_summary.dart';
 import 'package:distribuidora_alberdi/features/stock/stock_data.dart';
 import 'package:distribuidora_alberdi/features/stock/stock_form_page.dart';
 import 'package:distribuidora_alberdi/features/stock/stock_home_page.dart';
+import 'package:distribuidora_alberdi/features/stock/stock_transfer_store.dart';
 import 'package:distribuidora_alberdi/features/stock/vehicle_load_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +27,45 @@ StockItem item(String id, {bool controlled = true, double deposit = 10, double v
   deposit: deposit,
   vehicle: vehicle,
 );
+
+/// La lista compartida en memoria: hace de "la base" (y de los otros teléfonos).
+class MemoryStore implements TransferStore {
+  final lines = <String, Map<String, TransferLine>>{'cargar': {}, 'bajar': {}};
+  List<String> others = const [];
+  final puts = <List<TransferLine>>[];
+
+  TransferList _list(String d) =>
+      TransferList(version: '${lines[d]!.length}', lines: Map.of(lines[d]!), others: others);
+
+  @override
+  Future<TransferList> fetch(String direction) async => _list(direction);
+
+  @override
+  Future<TransferList> put(String direction, List<TransferLine> changed) async {
+    puts.add(changed);
+    for (final l in changed) {
+      if (l.isEmpty) {
+        lines[direction]!.remove(l.productId);
+      } else {
+        lines[direction]![l.productId] = TransferLine(
+          productId: l.productId,
+          quantity: l.quantity,
+          wanted: l.wanted,
+          marked: l.marked,
+          markedBy: l.marked ? 'Cristian' : null,
+          markedAt: l.marked ? DateTime(2026, 11, 22, 10, 45) : null,
+        );
+      }
+    }
+    return _list(direction);
+  }
+
+  @override
+  Future<TransferList> clear(String direction) async {
+    lines[direction]!.clear();
+    return _list(direction);
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -566,6 +606,63 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('cantidad-a')), '5');
     await tester.pump();
     expect(find.text('Hay 6'), findsOneWidget, reason: 'usa el stock recién leído');
+  });
+
+  testWidgets('lista compartida: se ve lo de los demás, con quién marcó, y se sube solo lo marcado',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = MemoryStore()
+      ..others = ['Gabriela']
+      ..lines['cargar']!.addAll({
+        'a': TransferLine(
+          productId: 'a',
+          quantity: 3,
+          wanted: 3,
+          marked: true,
+          markedBy: 'Gabriela',
+          markedAt: DateTime(2026, 11, 22, 10, 42),
+        ),
+        'b': const TransferLine(productId: 'b', quantity: 2, wanted: 2),
+      });
+    Map<String, dynamic>? enviado;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StockFormPage(
+          kind: StockFormKind.load,
+          items: [item('a'), item('b'), item('c')],
+          store: store,
+          runner: (fn, args) async {
+            enviado = args;
+            return const StockOpOutcome({'viaje_nuevo': false, 'movidos': 1, 'a_pedido': 0});
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('En vivo · también: Gabriela'), findsOneWidget);
+    expect(find.text('✓ Gabriela 10:42'), findsOneWidget, reason: 'lo marcó Gabriela desde su teléfono');
+    expect(find.text('1 de 2 cargados'), findsOneWidget);
+
+    // Acá se marca "b": llega a la lista compartida.
+    await tester.tap(find.text('Producto b'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(store.lines['cargar']!['b']!.marked, isTrue);
+    expect(store.lines['cargar']!['b']!.quantity, 2);
+
+    // Gabriela desmarca "a" en su teléfono: a los pocos segundos se ve acá.
+    store.lines['cargar']!['a'] = const TransferLine(productId: 'a', quantity: 3, wanted: 3);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+    expect(find.text('✓ Gabriela 10:42'), findsNothing);
+    expect(find.text('1 de 2 cargados'), findsOneWidget);
+
+    await tester.tap(find.text('SUBIR 1 PRODUCTO · 2 U.'));
+    await tester.pumpAndSettle();
+    expect(enviado!['p_items'], [
+      {'producto_id': 'b', 'cantidad': 2.0},
+    ]);
   });
 
   testWidgets('pasar mercadería: ⇄ pasa de cargar a bajar', (tester) async {

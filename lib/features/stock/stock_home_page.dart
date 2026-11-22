@@ -11,10 +11,27 @@ import '../../core/text_search.dart';
 
 enum _Filter { controlled, onDemand, differences, all }
 
-/// Stock del administrador: depósito y vehículo, viaje, conteos, compras.
+/// Abre Cargar vehículo o Bajar al depósito directo: lee el stock al abrirse.
+Future<bool?> openTransfer(BuildContext context, StockFormKind kind, {SupabaseClient? client}) {
+  final db = client ?? Supabase.instance.client;
+  return Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (_) => StockFormPage(
+        kind: kind,
+        items: const [],
+        client: client,
+        reload: () => fetchStockItems(db),
+      ),
+    ),
+  );
+}
+
+/// Stock del administrador: depósito y vehículo, viaje, conteos, compras. Con [helper] (ayuda en
+/// el depósito): ver, contar, cargar y bajar; sin compras, cierre del viaje ni cambios de producto.
 class StockHomePage extends StatefulWidget {
-  const StockHomePage({super.key, this.client});
+  const StockHomePage({super.key, this.client, this.helper = false});
   final SupabaseClient? client;
+  final bool helper;
 
   @override
   State<StockHomePage> createState() => _StockHomePageState();
@@ -95,6 +112,10 @@ class _StockHomePageState extends State<StockHomePage> {
   }
 
   Future<void> _productActions(StockItem item) async {
+    if (widget.helper) {
+      await _open(StockFormKind.count, only: {item.id});
+      return;
+    }
     final action = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
@@ -337,8 +358,16 @@ class _StockHomePageState extends State<StockHomePage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Stock'),
-      actions: [IconButton(tooltip: 'Actualizar', onPressed: _load, icon: const Icon(Icons.refresh))],
+      title: Text(widget.helper ? 'Depósito' : 'Stock'),
+      actions: [
+        if (!widget.helper)
+          IconButton(
+            tooltip: 'Ayuda en el depósito',
+            onPressed: _helpers,
+            icon: const Icon(Icons.group_outlined),
+          ),
+        IconButton(tooltip: 'Actualizar', onPressed: _load, icon: const Icon(Icons.refresh)),
+      ],
     ),
     body: _loading
         ? const Center(child: CircularProgressIndicator())
@@ -383,11 +412,12 @@ class _StockHomePageState extends State<StockHomePage> {
                 label: const Text('Bajar al depósito'),
                 onPressed: () => _open(StockFormKind.unload),
               ),
-              FilledButton.tonalIcon(
-                icon: const Icon(Icons.add_shopping_cart),
-                label: const Text('Anotar compra'),
-                onPressed: () => _open(StockFormKind.purchase),
-              ),
+              if (!widget.helper)
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.add_shopping_cart),
+                  label: const Text('Anotar compra'),
+                  onPressed: () => _open(StockFormKind.purchase),
+                ),
               FilledButton.tonalIcon(
                 icon: const Icon(Icons.fact_check_outlined),
                 label: const Text('Contar'),
@@ -531,6 +561,65 @@ class _StockHomePageState extends State<StockHomePage> {
     }
   }
 
+  /// Quiénes ayudan en el depósito: ven el stock (sin costos), cuentan, cargan y bajan.
+  Future<void> _helpers() async {
+    List<StockRow> sellers;
+    try {
+      sellers = await fetchSellers(_client);
+    } catch (error) {
+      _snack(stockErrorText(error));
+      return;
+    }
+    if (!mounted) return;
+    final busy = <String>{};
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Ayuda en el depósito'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Ven el stock sin costos, cuentan (se aplica directo), cargan y bajan el vehículo. '
+                  'No anotan compras, no cierran el viaje ni cambian productos. Todo queda con su nombre.',
+                  style: TextStyle(color: AppColors.gris),
+                ),
+                const SizedBox(height: 8),
+                if (sellers.isEmpty) const Text('No hay preventistas activos.'),
+                for (final s in sellers)
+                  SwitchListTile(
+                    key: ValueKey('ayuda-${s['id']}'),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('${s['nombre'] ?? ''} ${s['apellido'] ?? ''}'.trim()),
+                    value: s['puede_deposito'] == true,
+                    onChanged: busy.contains(s['id'].toString())
+                        ? null
+                        : (value) async {
+                            final id = s['id'].toString();
+                            setLocal(() => busy.add(id));
+                            try {
+                              await setDepositHelper(_client, id, value);
+                              s['puede_deposito'] = value;
+                            } catch (error) {
+                              _snack(stockErrorText(error));
+                            } finally {
+                              if (context.mounted) setLocal(() => busy.remove(id));
+                            }
+                          },
+                  ),
+              ],
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Listo'))],
+        ),
+      ),
+    );
+  }
+
   Widget _tripCard() {
     final open = _vehicle.tripOpen;
     final seller = _vehicle.sellerId == null ? null : _sellerNames[_vehicle.sellerId];
@@ -578,13 +667,13 @@ class _StockHomePageState extends State<StockHomePage> {
                     MaterialPageRoute(builder: (_) => VehicleLoadPage(client: widget.client)),
                   ),
                 ),
-                if (open)
+                if (open && !widget.helper)
                   OutlinedButton.icon(
                     icon: const Icon(Icons.person_outline),
                     label: Text(seller == null || seller.isEmpty ? 'Elegir preventista' : 'Cambiar preventista'),
                     onPressed: _changeSeller,
                   ),
-                if (open)
+                if (open && !widget.helper)
                   FilledButton.icon(
                     icon: const Icon(Icons.flag_outlined),
                     label: const Text('Cerrar viaje'),

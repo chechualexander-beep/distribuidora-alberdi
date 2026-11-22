@@ -116,6 +116,17 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
   en 0) y no se puede pasar a "a pedido". "Fraccionar" activa el suelto si hacía falta.
 - Prueba: `test/fraccionados_escenario.sql`.
 
+## Ayuda en el depósito y lista compartida (1.14.0, migración `20261201010000_ayuda_deposito`)
+- `usuarios.puede_deposito` (lo prende el administrador desde Stock → ícono de personas,
+  `habilitar_deposito`). Con el permiso, un preventista ve el stock sin costos, cuenta (directo),
+  carga y baja el vehículo (`stock_exigir_deposito`). Compras, cierre del viaje, "a pedido",
+  fraccionados y costos siguen siendo solo del administrador.
+- Cargar/Bajar en preparación viven en `stock_traspaso_lineas` (una lista por vehículo y sentido):
+  `stock_traspaso_lista`, `stock_traspaso_poner`, `stock_traspaso_vaciar`. La app manda cada cambio
+  y vuelve a leer cada 3 segundos; muestra quién marcó y quién más está en la lista. Al subir, lo
+  subido sale de la lista; lo de otro día se descarta.
+- Prueba: `test/ayuda_deposito_escenario.sql`.
+
 ## Etapas
 1. Base de datos.
 2. Pantallas (1.6.0).

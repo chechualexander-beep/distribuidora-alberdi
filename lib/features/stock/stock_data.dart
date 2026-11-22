@@ -237,8 +237,18 @@ String looseSummary(StockItem closed, StockItem loose) {
       '${formatQty(closed.total * units + loose.total)} × ${loose.name}';
 }
 
-/// Productos de los pedidos facturados que todavía hay que entregar (para proponer la carga).
+/// Productos de los pedidos facturados que todavía hay que entregar (para proponer la carga), de
+/// todos los preventistas. Quien no tiene permiso de depósito ve solo lo que le dejan ver.
 Future<Map<String, double>> fetchPendingDeliveries(SupabaseClient client) async {
+  try {
+    final List<dynamic> rows = await client.rpc('stock_pedidos_a_entregar', params: const {}, get: true);
+    return {
+      for (final r in rows)
+        if (stockNum((r as Map)['cantidad']) > 0) r['producto_id'].toString(): stockNum(r['cantidad']),
+    };
+  } on PostgrestException catch (_) {
+    // Sin el permiso: como antes.
+  }
   final rows = await client
       .from('pedido_detalles')
       .select('producto_id,cantidad,cantidad_facturada,pedidos!inner(resultado_entrega,facturado,tipo_operacion,estado)')
@@ -275,6 +285,12 @@ Future<Map<String, double>> fetchCommitted(SupabaseClient client) async {
 
 /// Lo que se cargó la última vez en el vehículo.
 Future<Map<String, double>> fetchLastLoad(SupabaseClient client) async {
+  try {
+    final List<dynamic> rows = await client.rpc('stock_ultima_carga', params: const {}, get: true);
+    return {for (final r in rows) (r as Map)['producto_id'].toString(): stockNum(r['cantidad'])};
+  } on PostgrestException catch (_) {
+    // Sin el permiso: como antes.
+  }
   final last = await client
       .from('stock_operaciones')
       .select('id')
@@ -292,15 +308,36 @@ Future<Map<String, double>> fetchLastLoad(SupabaseClient client) async {
   };
 }
 
-/// Preventistas activos (para elegir con quién sale el viaje).
-Future<List<StockRow>> fetchSellers(SupabaseClient client) async => List<StockRow>.from(
-  await client
-      .from('usuarios')
-      .select('id,nombre,apellido')
-      .eq('rol', 'preventista')
-      .eq('activo', true)
-      .order('nombre'),
-);
+/// Preventistas activos (para elegir con quién sale el viaje), con su permiso de depósito.
+Future<List<StockRow>> fetchSellers(SupabaseClient client) async {
+  try {
+    final List<dynamic> rows = await client.rpc('stock_preventistas', params: const {}, get: true);
+    return [for (final r in rows) Map<String, dynamic>.from(r as Map)];
+  } on PostgrestException catch (_) {
+    // Sin la función nueva: como antes.
+  }
+  return List<StockRow>.from(
+    await client
+        .from('usuarios')
+        .select('id,nombre,apellido')
+        .eq('rol', 'preventista')
+        .eq('activo', true)
+        .order('nombre'),
+  );
+}
+
+/// Ayuda en el depósito: el administrador se lo da o se lo saca a un preventista.
+Future<void> setDepositHelper(SupabaseClient client, String userId, bool enabled) =>
+    client.rpc('habilitar_deposito', params: {'p_usuario': userId, 'p_habilitado': enabled});
+
+/// Si el usuario de esta sesión puede ver el stock, contar, cargar y bajar.
+Future<bool> canUseDeposit(SupabaseClient client) async {
+  try {
+    return await client.rpc('puede_deposito') == true;
+  } catch (_) {
+    return false;
+  }
+}
 
 /// Resultado de una operación: [result] del servidor, o null si quedó guardada sin señal.
 class StockOpOutcome {
