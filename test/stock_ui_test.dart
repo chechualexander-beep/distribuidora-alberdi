@@ -333,6 +333,9 @@ void main() {
   });
 
   testWidgets('cargar vehículo: colores, marcar en flúor y confirmar', (tester) async {
+    // Con la barra Desde → Hacia arriba, la lista necesita una pantalla de teléfono.
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     String? rpc;
     await tester.pumpWidget(
       MaterialApp(
@@ -373,6 +376,9 @@ void main() {
   });
 
   testWidgets('cargar vehículo en Windows (modo oscuro): sin filas blancas, flúor oscuro', (tester) async {
+    // Con la barra Desde → Hacia arriba, la lista necesita una pantalla de teléfono.
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData(brightness: Brightness.dark),
@@ -397,6 +403,9 @@ void main() {
   });
 
   testWidgets('cargar vehículo: borrar la cantidad no saca la fila; 0 no se carga', (tester) async {
+    // Con la barra Desde → Hacia arriba, la lista necesita una pantalla de teléfono.
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     Map<String, dynamic>? enviado;
     await tester.pumpWidget(
       MaterialApp(
