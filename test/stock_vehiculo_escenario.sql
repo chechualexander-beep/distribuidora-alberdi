@@ -154,7 +154,8 @@ do $$ begin perform stock_viaje_preventista((select id from viajes_vehiculo orde
   raise exception 'debió fallar';
 exception when others then if sqlerrm <> 'El viaje ya está cerrado' then raise; end if; end $$;
 
--- 9) Sin viaje abierto la venta directa no queda en ningún viaje; "a pedido" deja de mover stock.
+-- 9) Sin viaje abierto la venta directa no queda en ningún viaje; "a pedido" es solo una etiqueta
+--    para las compras: el producto sigue llevando stock.
 select set_config('request.jwt.claim.sub', :'prev', true);
 select crear_pedido_sin_conexion(gen_random_uuid(), :'cli', 'normal', 'venta_directa', '', current_date,
   jsonb_build_array(jsonb_build_object('producto_id',:'pa','cantidad',1,'precio_unitario',:qa,'subtotal',:qa,'tipo_precio','normal')),
@@ -163,7 +164,7 @@ select stock_vehiculo_disponible()->>'viaje' is null as sinviaje \gset
 select set_config('request.jwt.claim.sub', :'adm', true);
 do $$ begin perform stock_marcar_a_pedido(current_setting('e.pa')::uuid); end $$;
 insert into r select 'fin', (select viaje_id from pedidos where id=:'v4') is null and :'sinviaje'
-  and not (select control_stock from productos where id=:'pa')
+  and (select control_stock and se_compra_a_pedido from productos where id=:'pa')
   and (select count(*) from stock_estado())>0;
 reset role;
 select coalesce(string_agg(paso, ', ') filter (where not ok), '') as fallas,

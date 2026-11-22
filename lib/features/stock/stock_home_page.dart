@@ -77,6 +77,11 @@ class _StockHomePageState extends State<StockHomePage> {
   }
 
   Future<void> _open(StockFormKind kind, {Set<String>? only}) async {
+    // Cargar y bajar trabajan con el stock de este momento (no con el de cuando se entró a Stock).
+    if (kind == StockFormKind.load || kind == StockFormKind.unload) {
+      await _load();
+      if (!mounted || _error != null) return;
+    }
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => StockFormPage(
@@ -85,6 +90,7 @@ class _StockHomePageState extends State<StockHomePage> {
           tripId: _vehicle.tripId,
           onlyIds: only,
           client: widget.client,
+          reload: () => fetchStockItems(_client),
         ),
       ),
     );
@@ -100,11 +106,11 @@ class _StockHomePageState extends State<StockHomePage> {
           children: [
             ListTile(
               title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(item.controlled ? 'Con stock' : 'A pedido (no lleva stock)'),
+              subtitle: Text(item.onDemand ? 'Se compra a pedido' : 'Se tiene en el depósito'),
             ),
             ListTile(
               leading: const Icon(Icons.fact_check_outlined),
-              title: Text(item.controlled ? 'Contar' : 'Contar y pasar a "con stock"'),
+              title: const Text('Contar'),
               onTap: () => Navigator.pop(context, 'contar'),
             ),
             if (item.parentId != null)
@@ -119,14 +125,16 @@ class _StockHomePageState extends State<StockHomePage> {
               title: Text(item.parentId == null ? 'Sale de otro producto (fraccionado)' : 'Cambiar de qué producto sale'),
               onTap: () => Navigator.pop(context, 'configurar'),
             ),
-            if (item.controlled &&
-                !_items.any((p) => p.id == item.parentId && p.controlled))
-              ListTile(
-                leading: const Icon(Icons.shopping_basket_outlined),
-                title: const Text('Pasar a "a pedido"'),
-                subtitle: const Text('Deja de llevar stock (se compra cuando hay pedido).'),
-                onTap: () => Navigator.pop(context, 'a_pedido'),
+            ListTile(
+              leading: const Icon(Icons.shopping_basket_outlined),
+              title: Text(item.onDemand ? 'Quitar "se compra a pedido"' : 'Marcar "se compra a pedido"'),
+              subtitle: Text(
+                item.onDemand
+                    ? 'Vuelve a ser un producto que se tiene en el depósito.'
+                    : 'Sigue llevando stock; es para la lista de compras y para que su 0 no sea alarma.',
               ),
+              onTap: () => Navigator.pop(context, 'a_pedido'),
+            ),
           ],
         ),
       ),
@@ -140,7 +148,10 @@ class _StockHomePageState extends State<StockHomePage> {
       await _configureFraction(item);
     } else if (action == 'a_pedido') {
       try {
-        await _client.rpc('stock_marcar_a_pedido', params: {'p_producto_id': item.id});
+        await _client.rpc(
+          'stock_marcar_a_pedido',
+          params: {'p_producto_id': item.id, 'p_valor': !item.onDemand},
+        );
         await _load();
       } catch (error) {
         if (mounted) {
@@ -318,8 +329,8 @@ class _StockHomePageState extends State<StockHomePage> {
         return false;
       }
       return switch (_filter) {
-        _Filter.controlled => i.controlled,
-        _Filter.onDemand => !i.controlled,
+        _Filter.controlled => i.controlled && !i.onDemand,
+        _Filter.onDemand => i.onDemand || !i.controlled,
         _Filter.differences => i.negative,
         _Filter.all => true,
       };
@@ -353,7 +364,7 @@ class _StockHomePageState extends State<StockHomePage> {
       _items,
       addLoose: _filter == _Filter.controlled || _filter == _Filter.all,
     );
-    final controlled = _items.where((i) => i.controlled).length;
+    final controlled = _items.where((i) => i.controlled && !i.onDemand).length;
     final negatives = _items.where((i) => i.negative).length;
     return DesktopForm(
       child: ListView(
@@ -392,7 +403,7 @@ class _StockHomePageState extends State<StockHomePage> {
             controlled == 0
                 ? 'Todavía ningún producto lleva stock: contá los primeros para empezar '
                       '(los demás quedan "a pedido").'
-                : '$controlled productos con stock · ${_items.length - controlled} a pedido',
+                : '$controlled se tienen en el depósito · ${_items.length - controlled} se compran a pedido',
             style: const TextStyle(color: AppColors.gris),
           ),
           const SizedBox(height: 8),
@@ -402,8 +413,8 @@ class _StockHomePageState extends State<StockHomePage> {
               for (final f in _Filter.values)
                 ChoiceChip(
                   label: Text(switch (f) {
-                    _Filter.controlled => 'Con stock',
-                    _Filter.onDemand => 'A pedido',
+                    _Filter.controlled => 'Se tienen',
+                    _Filter.onDemand => 'Se compran a pedido',
                     _Filter.differences => 'En negativo ($negatives)',
                     _Filter.all => 'Todos',
                   }),
@@ -440,7 +451,7 @@ class _StockHomePageState extends State<StockHomePage> {
                     : null,
                 title: Text(item.name),
                 subtitle: Text(
-                  '${item.controlled ? item.category : '${item.category} · a pedido'}'
+                  '${item.onDemand || !item.controlled ? '${item.category} · se compra a pedido' : item.category}'
                   '${item.parentId == null ? '' : '\nSuelto de ${_name(item.parentId)} (1 → ${formatQty(item.unitsPerParent ?? 0)})'}'
                   '${[for (final c in _items) if (c.parentId == item.id) '\n${looseSummary(item, c)}'].join()}',
                 ),

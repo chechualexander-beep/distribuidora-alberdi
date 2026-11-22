@@ -92,7 +92,8 @@ Future<VehicleStock> fetchVehicleStock(SupabaseClient client) async {
   return VehicleStock.fromJson(Map<String, dynamic>.from(result as Map));
 }
 
-/// Una fila por producto activo: con stock / a pedido, depósito y vehículo.
+/// Una fila por producto activo: depósito y vehículo. Todos llevan stock; "a pedido" es solo una
+/// etiqueta para las compras ([onDemand]).
 class StockItem {
   StockItem({
     required this.id,
@@ -106,6 +107,7 @@ class StockItem {
     this.parentId,
     this.unitsPerParent,
     this.cost = 0,
+    this.onDemand = false,
   });
 
   final String id;
@@ -123,6 +125,10 @@ class StockItem {
 
   /// Costo actual del producto (para precargar la compra); 0 si no se sabe.
   final double cost;
+
+  /// "Se compra a pedido": no se tiene en el depósito, se compra cuando hay pedidos.
+  final bool onDemand;
+
 
   /// Lo que hay entre depósito y vehículo.
   double get total => deposit + vehicle;
@@ -142,6 +148,7 @@ class StockItem {
     parentId: parentId,
     unitsPerParent: unitsPerParent,
     cost: cost,
+    onDemand: onDemand,
   );
 
   /// Solo el depósito (para ver si alcanza al cargar el vehículo).
@@ -190,6 +197,7 @@ Future<List<StockItem>> fetchStockItems(SupabaseClient client) async {
             ? null
             : stockNum(state[p['id'].toString()]?['unidades_por_origen']),
         cost: costs[p['id'].toString()] ?? 0,
+        onDemand: state[p['id'].toString()]?['se_compra_a_pedido'] == true,
       ),
   ];
 }

@@ -29,6 +29,7 @@ class StockFormPage extends StatefulWidget {
     this.client,
     this.runner,
     this.initialLocation,
+    this.reload,
   });
 
   final StockFormKind kind;
@@ -42,8 +43,12 @@ class StockFormPage extends StatefulWidget {
   /// Solo para pruebas.
   final StockOpRunner? runner;
 
-  /// Depósito o vehículo al abrir (compra desde el reparto: vehículo).
+  /// Depósito o vehículo al abrir. En la compra, sin esto hay que elegirlo (no arranca en uno).
   final String? initialLocation;
+
+  /// Vuelve a leer el stock (cargar y bajar trabajan siempre con el stock de este momento).
+  final Future<List<StockItem>> Function()? reload;
+
 
   @override
   State<StockFormPage> createState() => _StockFormPageState();
@@ -59,9 +64,20 @@ class _StockFormPageState extends State<StockFormPage> {
   /// Con el teclado abierto (escribiendo cantidad o costo) se esconden las opciones de arriba
   /// para que se vean los productos; salvo que se esté escribiendo el proveedor.
   final _supplierFocus = FocusNode();
+  // En la compra el lugar se elige siempre ('' = todavía no se eligió).
   late String _location =
-      widget.initialLocation ??
-      (widget.kind == StockFormKind.purchase && widget.tripId != null ? vehiculoCodigo : depositoCodigo);
+      widget.initialLocation ?? (widget.kind == StockFormKind.purchase ? '' : depositoCodigo);
+
+  /// Productos con su stock; cargar y bajar lo vuelven a leer con el botón de actualizar.
+  late List<StockItem> _items = widget.items;
+  DateTime _dataAt = DateTime.now();
+  bool _reloading = false;
+
+  /// Pedidos a entregar sin stock en el depósito (se ven, pero no se pueden subir).
+  final _noStock = <String, double>{};
+
+  /// Para el resultado: lo propuesto que quedó sin marcar (no se pasó).
+  String? _leftNote;
   bool _onlyFilled = false;
   bool _allProducts = false;
   bool _unloadAll = false;
@@ -90,7 +106,94 @@ class _StockFormPageState extends State<StockFormPage> {
   bool _optionsOpen = true;
   String get _draftKey => appConfig.localPreferenceKey('carga_vehiculo_borrador');
 
-  StockFormKind get _kind => widget.kind;
+  late StockFormKind _kind = widget.kind;
+
+  /// Cargar o bajar: pasar mercadería de un lugar al otro.
+  bool get _isTransfer => _kind == StockFormKind.load || _kind == StockFormKind.unload;
+
+  /// Lo máximo que se puede pasar: lo que figura en el lugar de origen (al cargar un suelto,
+  /// también las bolsas cerradas del depósito que se pueden abrir).
+  double _maxFor(StockItem item) {
+    if (_kind == StockFormKind.unload) return item.vehicle > 0 ? item.vehicle : 0;
+    var max = item.deposit > 0 ? item.deposit : 0.0;
+    final parent = item.parentId == null ? null : _items.where((i) => i.id == item.parentId).firstOrNull;
+    final units = item.unitsPerParent ?? 0;
+    if (parent != null && parent.controlled && units > 0 && parent.deposit > 0) {
+      max += parent.deposit.floorToDouble() * units;
+    }
+    return max;
+  }
+
+  /// Lo marcado en flúor con su cantidad: es lo único que se pasa al confirmar.
+  List<StockItem> get _marked =>
+      _items.where((i) => _loaded.contains(i.id) && _filled(i.id)).toList();
+
+  double get _markedUnits =>
+      _marked.fold<double>(0, (s, i) => s + (parseQty(_qty[i.id]?.text ?? '') ?? 0));
+
+  Future<void> _reload() async {
+    final reload = widget.reload;
+    if (reload == null || _reloading) return;
+    setState(() => _reloading = true);
+    try {
+      final items = await reload();
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _dataAt = DateTime.now();
+      });
+    } catch (error) {
+      _snack('No se pudo actualizar: ${stockErrorText(error)}');
+    } finally {
+      if (mounted) setState(() => _reloading = false);
+    }
+  }
+
+  /// Borra lo escrito, lo marcado y lo propuesto (y el borrador guardado).
+  void _startOver() {
+    setState(() {
+      for (final c in _qty.values) {
+        c.clear();
+      }
+      _loaded.clear();
+      _proposed.clear();
+      _kept.clear();
+      _noStock.clear();
+      _onlyFilled = false;
+      _onlyPending = false;
+    });
+    _clearDraft();
+  }
+
+  /// ⇄ Cargar ↔ Bajar. Si hay algo escrito, pregunta antes (se borra).
+  Future<void> _swapDirection() async {
+    final dirty = _qty.values.any((c) => c.text.trim().isNotEmpty) || _loaded.isNotEmpty;
+    if (dirty) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(_kind == StockFormKind.load ? '¿Pasar a bajar al depósito?' : '¿Pasar a cargar el vehículo?'),
+          content: const Text('Se borra lo que escribiste y marcaste.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Volver')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sí, dar vuelta')),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    _startOver();
+    setState(() {
+      _kind = _kind == StockFormKind.load ? StockFormKind.unload : StockFormKind.load;
+      _optionsOpen = true;
+    });
+    if (_kind == StockFormKind.load && _sellers.isEmpty) _loadSellers();
+  }
+
+  static String _today() {
+    final d = DateTime.now();
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
 
   @override
   void initState() {
@@ -99,7 +202,7 @@ class _StockFormPageState extends State<StockFormPage> {
       if (mounted) setState(() {});
     });
     if (_kind == StockFormKind.closeTrip) {
-      for (final item in widget.items) {
+      for (final item in _items) {
         if (item.controlled && item.vehicle != 0) {
           _controller(item.id).text = formatQty(item.vehicle < 0 ? 0 : item.vehicle);
         }
@@ -135,10 +238,15 @@ class _StockFormPageState extends State<StockFormPage> {
       final raw = prefs.getString(_draftKey);
       if (raw == null) return;
       final data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      // Un borrador de otro día no sirve: se descarta solo.
+      if (data['fecha'] != _today()) {
+        await prefs.remove(_draftKey);
+        return;
+      }
       final quantities = Map<String, dynamic>.from(data['cantidades'] as Map? ?? const {});
       final loaded = List<String>.from(data['cargados'] as List? ?? const []);
       final proposed = Map<String, dynamic>.from(data['propuestas'] as Map? ?? const {});
-      bool known(String id) => widget.items.any((i) => i.id == id);
+      bool known(String id) => _items.any((i) => i.id == id);
       if (!mounted) return;
       setState(() {
         for (final e in proposed.entries) {
@@ -174,7 +282,12 @@ class _StockFormPageState extends State<StockFormPage> {
       } else {
         await prefs.setString(
           _draftKey,
-          jsonEncode({'cantidades': quantities, 'cargados': _loaded.toList(), 'propuestas': _proposed}),
+          jsonEncode({
+            'fecha': _today(),
+            'cantidades': quantities,
+            'cargados': _loaded.toList(),
+            'propuestas': _proposed,
+          }),
         );
       }
     } catch (_) {}
@@ -188,6 +301,15 @@ class _StockFormPageState extends State<StockFormPage> {
   }
 
   void _toggleLoaded(String id) {
+    if (!_loaded.contains(id) && _isTransfer) {
+      final item = _items.where((i) => i.id == id).firstOrNull;
+      final q = parseQty(_qty[id]?.text ?? '') ?? 0;
+      if (item != null && q > _maxFor(item)) {
+        final where = _kind == StockFormKind.unload ? 'en el vehículo' : 'en el depósito';
+        _snack('Solo hay ${formatQty(_maxFor(item))} $where: corregí la cantidad para poder marcarlo.');
+        return;
+      }
+    }
     setState(() {
       if (!_loaded.remove(id)) _loaded.add(id);
     });
@@ -200,7 +322,7 @@ class _StockFormPageState extends State<StockFormPage> {
   bool _filled(String id) {
     final text = _qty[id]?.text.trim() ?? '';
     if (text.isEmpty) return false;
-    return !(_kind == StockFormKind.load && parseQty(text) == 0);
+    return !(_isTransfer && parseQty(text) == 0);
   }
 
   /// Al tocar la cantidad queda toda seleccionada: se escribe la nueva sin borrar antes.
@@ -211,7 +333,7 @@ class _StockFormPageState extends State<StockFormPage> {
 
   /// Si se dejó vacía, vuelve la cantidad del pedido.
   void _restoreIfEmpty(String id) {
-    if (_kind != StockFormKind.load || _hasText(id)) return;
+    if (!_isTransfer || _hasText(id)) return;
     final original = _proposed[id];
     if (original == null || !mounted) return;
     setState(() => _controller(id).text = original);
@@ -228,7 +350,7 @@ class _StockFormPageState extends State<StockFormPage> {
   /// Lo que falta subir, para mandar por WhatsApp a quien ayuda a cargar.
   String _pendingText() {
     final lines = [
-      for (final item in pairLooseWithClosed(widget.items, widget.items))
+      for (final item in pairLooseWithClosed(_items, _items))
         if (_filled(item.id) && !_loaded.contains(item.id)) '• ${_qty[item.id]!.text.trim()} × ${item.name}',
     ];
     return lines.isEmpty
@@ -263,13 +385,12 @@ class _StockFormPageState extends State<StockFormPage> {
 
   String get _help => switch (_kind) {
     StockFormKind.count =>
-      'Escribí lo que contaste. Los productos "a pedido" que cuentes pasan a "con stock".',
+      'Escribí lo que contaste.',
     StockFormKind.load =>
-      'Lo que subís al vehículo sale del depósito. Los productos "a pedido" no se descuentan.',
-    StockFormKind.unload => 'Lo que bajás del vehículo vuelve al depósito.',
+      'Se sube solo lo marcado en flúor, y no más de lo que hay en el depósito.',
+    StockFormKind.unload => 'Se baja solo lo marcado en flúor, y no más de lo que hay arriba.',
     StockFormKind.purchase =>
-      'Lo comprado entra al stock (un producto "a pedido" pasa a llevar stock). '
-          'El costo viene cargado: cambialo solo si pagaste otro precio.',
+      'Elegí dónde entra lo comprado. El costo viene cargado: cambialo solo si pagaste otro precio.',
     StockFormKind.closeTrip =>
       'Contá lo que sobró en el vehículo y corregí lo que no coincida. '
           'La app compara con lo que debería quedar.',
@@ -280,13 +401,13 @@ class _StockFormPageState extends State<StockFormPage> {
   void _fill(Map<String, double> values) {
     setState(() {
       for (final entry in values.entries) {
-        if (!widget.items.any((i) => i.id == entry.key)) continue;
+        if (!_items.any((i) => i.id == entry.key)) continue;
         _controller(entry.key).text = formatQty(entry.value);
         _kept.add(entry.key);
-        if (_kind == StockFormKind.load) _proposed[entry.key] = formatQty(entry.value);
+        if (_isTransfer) _proposed[entry.key] = formatQty(entry.value);
       }
       _onlyFilled = true;
-      if (_kind == StockFormKind.load) _optionsOpen = false;
+      if (_isTransfer) _optionsOpen = false;
     });
     _saveDraft();
   }
@@ -299,7 +420,11 @@ class _StockFormPageState extends State<StockFormPage> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(empty)));
         return;
       }
-      _fill(values);
+      if (_isTransfer) {
+        _replaceProposals(values);
+      } else {
+        _fill(values);
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(stockErrorText(error))));
@@ -316,8 +441,46 @@ class _StockFormPageState extends State<StockFormPage> {
     snack?.close();
   }
 
-  /// "Pedidos a entregar": solo lo que falta subir (lo demás ya está arriba del vehículo).
-  Future<void> _proposeForDeliveries() async {
+  /// Pone la propuesta nueva en lugar de la anterior: saca lo propuesto antes que nadie tocó (lo
+  /// escrito a mano y lo ya marcado se respeta) y no propone más de lo que hay en el origen.
+  /// Lo que no alcanza queda a la vista ("No hay en el depósito"), sin cantidad.
+  Map<String, double> _replaceProposals(Map<String, double> wanted) {
+    setState(() {
+      for (final e in _proposed.entries.toList()) {
+        final c = _qty[e.key];
+        if (c != null && c.text.trim() == e.value && !_loaded.contains(e.key)) {
+          c.clear();
+          _kept.remove(e.key);
+        }
+        _proposed.remove(e.key);
+      }
+      _noStock.clear();
+    });
+    final fill = <String, double>{};
+    for (final e in wanted.entries) {
+      final item = _items.where((i) => i.id == e.key).firstOrNull;
+      if (item == null || e.value <= 0) continue;
+      final max = _maxFor(item);
+      if (max <= 0) {
+        _noStock[e.key] = e.value;
+        _kept.add(e.key);
+        continue;
+      }
+      fill[e.key] = e.value < max ? e.value : max;
+      if (e.value > max) _noStock[e.key] = e.value - max;
+    }
+    if (fill.isNotEmpty) {
+      _fill(fill);
+    } else {
+      setState(() => _onlyFilled = true);
+      _saveDraft();
+    }
+    return fill;
+  }
+
+  /// "Pedidos a entregar": lo que falta subir (lo demás ya está arriba del vehículo), sin pasar de
+  /// lo que hay en el depósito. Con [everything], todo lo de los pedidos.
+  Future<void> _proposeForDeliveries({bool everything = false}) async {
     try {
       final all = await fetchPendingDeliveries(_client);
       if (!mounted) return;
@@ -325,19 +488,31 @@ class _StockFormPageState extends State<StockFormPage> {
         _snack('No hay pedidos facturados para entregar.');
         return;
       }
-      final missing = stillToLoad(all, widget.items);
-      final partial = missing.length != all.length || missing.entries.any((e) => e.value < (all[e.key] ?? 0));
-      if (missing.isNotEmpty) _fill(missing);
-      if (!partial) return;
+      final missing = everything ? all : stillToLoad(all, _items);
+      final fill = _replaceProposals(missing);
+      final upAlready = missing.length != all.length || missing.entries.any((e) => e.value < (all[e.key] ?? 0));
+      final message = [
+        if (fill.isEmpty && _noStock.isEmpty)
+          'Ya está todo arriba del vehículo para los pedidos a entregar.'
+        else if (upAlready)
+          'Propuesto lo que falta subir: lo demás ya está en el vehículo.'
+        else
+          'Propuesto lo de los pedidos a entregar.',
+        if (_noStock.isNotEmpty)
+          'No alcanza en el depósito: ${_noStock.length} ${_noStock.length == 1 ? 'producto' : 'productos'}.',
+      ].join(' ');
       _closeProposeSnack();
       final snack = ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 10),
           showCloseIcon: true,
-          content: Text(missing.isEmpty
-              ? 'Ya está todo arriba del vehículo para los pedidos a entregar.'
-              : 'Propuesto solo lo que falta subir: lo demás ya está en el vehículo.'),
-          action: SnackBarAction(label: 'PROPONER TODO', onPressed: () => _fill(all)),
+          content: Text(message),
+          action: upAlready && !everything
+              ? SnackBarAction(
+                  label: 'PROPONER TODO',
+                  onPressed: () => _proposeForDeliveries(everything: true),
+                )
+              : null,
         ),
       );
       _proposeSnack = snack;
@@ -352,10 +527,11 @@ class _StockFormPageState extends State<StockFormPage> {
       _snack(stockErrorText(error));
     }
   }
+  }
 
   List<StockItem> get _visible {
     final text = sinAcentos(_search.text);
-    final base = widget.items.where((item) {
+    final base = _items.where((item) {
       if (widget.onlyIds != null && !widget.onlyIds!.contains(item.id)) return false;
       if (!coincideBusqueda(_search.text, [item.name, item.code])) {
         return false;
@@ -367,25 +543,27 @@ class _StockFormPageState extends State<StockFormPage> {
           (!kept || _loaded.contains(item.id) || (filled && !_filled(item.id)))) {
         return false;
       }
-      if (_kind == StockFormKind.count && !_allProducts && !item.controlled && !filled &&
+      if (_kind == StockFormKind.count && !_allProducts && (item.onDemand || !item.controlled) && !filled &&
           text.isEmpty && widget.onlyIds == null) {
         return false;
       }
       return true;
     }).toList();
     // Cada suelto justo debajo de su cerrado; al contar, aparecen aunque sean "a pedido".
-    return pairLooseWithClosed(base, widget.items, addLoose: _kind == StockFormKind.count);
+    return pairLooseWithClosed(base, _items, addLoose: _kind == StockFormKind.count);
   }
 
   /// Productos con cantidad escrita. Null si alguna es inválida.
   List<Map<String, dynamic>>? _lines() {
     final lines = <Map<String, dynamic>>[];
-    for (final item in widget.items) {
+    for (final item in _items) {
       final text = _qty[item.id]?.text ?? '';
       if (text.trim().isEmpty) continue;
       final q = parseQty(text);
       if (q == null) return null;
-      if (q == 0 && _kind == StockFormKind.load) continue;
+      if (q == 0 && _isTransfer) continue;
+      // Cargar y bajar: pasa solo lo marcado en flúor.
+      if (_isTransfer && !_loaded.contains(item.id)) continue;
       if (!_zeroAllowed && q == 0) return null;
       final line = <String, dynamic>{'producto_id': item.id, 'cantidad': q};
       if (_kind == StockFormKind.purchase) {
@@ -402,7 +580,7 @@ class _StockFormPageState extends State<StockFormPage> {
   }
 
   String _name(String id) =>
-      widget.items.where((i) => i.id == id).map((i) => i.name).firstOrNull ?? 'Producto';
+      _items.where((i) => i.id == id).map((i) => i.name).firstOrNull ?? 'Producto';
 
   Future<void> _confirm() async {
     final lines = _lines();
@@ -412,28 +590,28 @@ class _StockFormPageState extends State<StockFormPage> {
           : 'Revisá las cantidades: tienen que ser mayores que 0.');
       return;
     }
+    if (_kind == StockFormKind.purchase && _location.isEmpty) {
+      _snack('Elegí dónde entra la compra: Depósito o Vehículo.');
+      return;
+    }
+    if (lines.isEmpty && _isTransfer) {
+      _snack(_kind == StockFormKind.load
+          ? 'Marcá en flúor lo que vas subiendo: solo eso se carga.'
+          : 'Marcá en flúor lo que vas bajando: solo eso se baja.');
+      return;
+    }
     if (lines.isEmpty && !(_kind == StockFormKind.closeTrip)) {
       _snack('Escribí la cantidad de al menos un producto.');
       return;
     }
-    if (_kind == StockFormKind.load) {
-      final missing = lines.where((l) => !_loaded.contains(l['producto_id'])).length;
-      if (missing > 0) {
-        final go = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Faltan marcar'),
-            content: Text(
-              'Quedan $missing ${missing == 1 ? 'producto' : 'productos'} sin marcar. '
-              '¿Confirmar la carga igual?',
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Volver')),
-              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirmar')),
-            ],
-          ),
-        );
-        if (go != true || !mounted) return;
+    if (_isTransfer) {
+      for (final l in lines) {
+        final item = _items.where((i) => i.id == l['producto_id']).firstOrNull;
+        if (item != null && stockNum(l['cantidad']) > _maxFor(item)) {
+          _snack('${item.name}: solo hay ${formatQty(_maxFor(item))} '
+              '${_kind == StockFormKind.unload ? 'en el vehículo' : 'en el depósito'}.');
+          return;
+        }
       }
     }
     if (_kind == StockFormKind.closeTrip) {
@@ -502,6 +680,13 @@ class _StockFormPageState extends State<StockFormPage> {
     // Sin la ruedita girando detrás del resultado.
     setState(() => _saving = false);
     if (_kind == StockFormKind.load) await _clearDraft();
+    if (_isTransfer) {
+      final left = _items.where((i) => _filled(i.id) && !_loaded.contains(i.id)).length;
+      _leftNote = left == 0
+          ? null
+          : '$left ${left == 1 ? 'producto quedó' : 'productos quedaron'} sin marcar: no se '
+                '${_kind == StockFormKind.load ? 'cargaron' : 'bajaron'}.';
+    }
     if (_kind == StockFormKind.purchase) await _registerPayment(total);
     if (!mounted) return;
     await _showResult(outcome.result);
@@ -512,7 +697,7 @@ class _StockFormPageState extends State<StockFormPage> {
   /// arriba) se puede descontar del depósito, en vez de ponerlo en 0 sin tocar el depósito.
   /// Devuelve false si el usuario vuelve atrás o si falló.
   Future<bool> _negativosDelDeposito() async {
-    final negativos = widget.items.where((i) => i.controlled && i.vehicle < 0).toList();
+    final negativos = _items.where((i) => i.controlled && i.vehicle < 0).toList();
     if (negativos.isEmpty) return true;
     final descontar = await showDialog<bool>(
       context: context,
@@ -646,8 +831,10 @@ class _StockFormPageState extends State<StockFormPage> {
               : 'Vehículo cargado (se sumó al viaje abierto).');
           final sinDescontar = stockNum(result['a_pedido']).round();
           if (sinDescontar > 0) lines.add('$sinDescontar productos "a pedido" no se descontaron del depósito.');
+          if (_leftNote != null) lines.add(_leftNote!);
         case StockFormKind.unload:
           lines.add('Listo: ${result['movidos']} productos volvieron al depósito.');
+          if (_leftNote != null) lines.add(_leftNote!);
         case StockFormKind.purchase:
           lines.add('Compra anotada.');
           if (stockNum(result['total']) > 0) {
@@ -698,9 +885,9 @@ class _StockFormPageState extends State<StockFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_kind == StockFormKind.load) return _buildLoad();
+    if (_isTransfer) return _buildLoad();
     final visible = _visible;
-    final filled = widget.items.where((i) => _filled(i.id)).length;
+    final filled = _items.where((i) => _filled(i.id)).length;
     final teclado =
         MediaQuery.viewInsetsOf(context).bottom > 0 && !_supplierFocus.hasFocus;
     return Scaffold(
@@ -750,7 +937,7 @@ class _StockFormPageState extends State<StockFormPage> {
                       ),
                       if (_kind == StockFormKind.count && widget.onlyIds == null)
                         FilterChip(
-                          label: const Text('Incluir "a pedido"'),
+                          label: const Text('Incluir los que se compran a pedido'),
                           selected: _allProducts,
                           onSelected: (v) => setState(() => _allProducts = v),
                         ),
@@ -785,7 +972,11 @@ class _StockFormPageState extends State<StockFormPage> {
 
   /// Una línea con lo elegido arriba, para cuando las opciones quedan escondidas por el teclado.
   String get _resumenOpciones {
-    final lugar = _location == vehiculoCodigo ? 'Vehículo' : 'Depósito';
+    final lugar = _location == vehiculoCodigo
+        ? 'Vehículo'
+        : _location.isEmpty
+        ? 'Sin elegir el lugar'
+        : 'Depósito';
     if (_kind != StockFormKind.purchase) {
       return _kind == StockFormKind.count
           ? '$lugar · cerrá el teclado para ver las opciones'
@@ -813,6 +1004,11 @@ class _StockFormPageState extends State<StockFormPage> {
           child: Text(
             _kind == StockFormKind.closeTrip
                 ? 'CERRAR VIAJE'
+                : _isTransfer
+                ? (_marked.isEmpty
+                      ? 'MARCÁ LO QUE ${_kind == StockFormKind.load ? 'SUBÍS' : 'BAJÁS'}'
+                      : '${_kind == StockFormKind.load ? 'SUBIR' : 'BAJAR'} ${_marked.length} '
+                            '${_marked.length == 1 ? 'PRODUCTO' : 'PRODUCTOS'} · ${formatQty(_markedUnits)} U.')
                 : 'CONFIRMAR ($filled ${filled == 1 ? 'producto' : 'productos'})',
           ),
         ),
@@ -825,12 +1021,13 @@ class _StockFormPageState extends State<StockFormPage> {
   Widget _buildLoad() {
     final visible = _visible;
     final status = _loadStatus();
-    final filled = widget.items.where((i) => _filled(i.id)).length;
+    final filled = _items.where((i) => _filled(i.id)).length;
     return Scaffold(
       appBar: AppBar(title: Text(_title)),
       body: DesktopForm(
         child: Column(
           children: [
+            _directionBar(),
             _loadBar(),
             if (_optionsOpen)
               ConstrainedBox(
@@ -864,7 +1061,7 @@ class _StockFormPageState extends State<StockFormPage> {
                               _onlyFilled = v;
                               _kept
                                 ..clear()
-                                ..addAll(widget.items.where((i) => _hasText(i.id)).map((i) => i.id));
+                                ..addAll(_items.where((i) => _hasText(i.id)).map((i) => i.id));
                             }),
                           ),
                         ],
@@ -898,21 +1095,93 @@ class _StockFormPageState extends State<StockFormPage> {
     );
   }
 
+  /// Desde → Hacia, con ⇄ para dar vuelta (cargar ↔ bajar), y la hora del stock con el botón de
+  /// actualizar: se trabaja siempre con el stock de este momento.
+  Widget _directionBar() {
+    final load = _kind == StockFormKind.load;
+    final t = Tonos.of(context);
+    Widget place(String label, String name) => Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.dorado, width: 1.5),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: TextStyle(fontSize: 11, color: t.secundario)),
+            Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+    String two(int n) => n.toString().padLeft(2, '0');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 6),
+      child: Row(
+        children: [
+          place('Desde', load ? 'Depósito' : 'Vehículo'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: IconButton(
+              key: const Key('dar-vuelta'),
+              tooltip: load ? 'Pasar a bajar al depósito' : 'Pasar a cargar el vehículo',
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.dorado,
+                foregroundColor: AppColors.negro,
+              ),
+              onPressed: _saving ? null : _swapDirection,
+              icon: const Icon(Icons.swap_horiz),
+            ),
+          ),
+          place('Hacia', load ? 'Vehículo' : 'Depósito'),
+          if (widget.reload != null)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Actualizar el stock',
+                  onPressed: _reloading ? null : _reload,
+                  icon: _reloading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                ),
+                Text(
+                  '${two(_dataAt.hour)}:${two(_dataAt.minute)}',
+                  style: TextStyle(fontSize: 11, color: t.secundario),
+                ),
+              ],
+            )
+          else
+            const SizedBox(width: 8),
+        ],
+      ),
+    );
+  }
+
   /// Si alcanza lo del depósito para lo que se va a cargar (abriendo cajas si hace falta).
   Map<String, SummaryRow> _loadStatus() {
     final lines = <SummaryLine>[];
-    for (final item in widget.items) {
+    for (final item in _items) {
       final q = parseQty(_qty[item.id]?.text ?? '');
       if (q != null && q > 0) lines.add(SummaryLine(item.id, item.name, q));
     }
     if (lines.isEmpty) return const {};
-    final deposit = {for (final i in widget.items) i.id: i.depositOnly()};
-    return {for (final r in evaluateSummary(lines, deposit)) r.line.productId!: r};
+    final origin = {
+      for (final i in _items) i.id: _kind == StockFormKind.unload ? i.vehicleOnly() : i.depositOnly(),
+    };
+    return {for (final r in evaluateSummary(lines, origin)) r.line.productId!: r};
   }
 
   /// Barra fija: "3 de 9 cargados", "Falta cargar", compartir y "Opciones".
   Widget _loadBar() {
-    final filled = widget.items.where((i) => _filled(i.id)).toList();
+    final filled = _items.where((i) => _filled(i.id)).toList();
     final done = filled.where((i) => _loaded.contains(i.id)).length;
     final complete = filled.isNotEmpty && done == filled.length;
     final t = Tonos.of(context);
@@ -930,7 +1199,9 @@ class _StockFormPageState extends State<StockFormPage> {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    filled.isEmpty ? 'Escribí qué cargar' : '$done de ${filled.length} cargados',
+                    filled.isEmpty
+                        ? (_kind == StockFormKind.load ? 'Escribí qué cargar' : 'Escribí qué bajar')
+                        : '$done de ${filled.length} ${_kind == StockFormKind.load ? 'cargados' : 'bajados'}',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: complete ? t.verde : null,
@@ -953,7 +1224,7 @@ class _StockFormPageState extends State<StockFormPage> {
             const SizedBox(width: 6),
             FilterChip(
               visualDensity: VisualDensity.compact,
-              label: const Text('Falta cargar'),
+              label: Text(_kind == StockFormKind.load ? 'Falta cargar' : 'Falta bajar'),
               selected: _onlyPending,
               onSelected: (v) => setState(() => _onlyPending = v),
             ),
@@ -979,7 +1250,7 @@ class _StockFormPageState extends State<StockFormPage> {
   Widget _loadRow(StockItem item, int index, SummaryRow? st) {
     final closed = item.parentId == null
         ? null
-        : widget.items.where((i) => i.id == item.parentId).firstOrNull;
+        : _items.where((i) => i.id == item.parentId).firstOrNull;
     final loaded = _loaded.contains(item.id);
     final filled = _filled(item.id);
     final zebra = !loaded && index.isOdd;
@@ -1000,10 +1271,15 @@ class _StockFormPageState extends State<StockFormPage> {
     final skipped = _hasText(item.id) && !filled;
     final original = _proposed[item.id];
     final changed = original != null && _qty[item.id]!.text.trim() != original;
+    final sinStock = _noStock[item.id];
     final info = skipped
-        ? 'No se carga'
+        ? (_kind == StockFormKind.load ? 'No se carga' : 'No se baja')
+        : sinStock != null && !filled
+        ? 'No hay en el depósito · pedidos ${formatQty(sinStock)}'
         : !item.controlled
         ? 'A pedido'
+        : _kind == StockFormKind.unload
+        ? 'Arriba ${formatQty(item.vehicle)}'
         : [
             'Depósito ${formatQty(item.deposit)}',
             if (closed != null && closed.controlled) '${closed.name}: ${formatQty(closed.deposit)}',
@@ -1044,7 +1320,16 @@ class _StockFormPageState extends State<StockFormPage> {
                         if (badge != null && st != null)
                           summaryBadge(badge, st.state)
                         else
-                          Text(info, style: TextStyle(fontSize: 12, color: zebra ? t.cebraTexto : t.secundario)),
+                          Text(
+                            info,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: sinStock != null && !filled ? FontWeight.w600 : null,
+                              color: sinStock != null && !filled
+                                  ? t.rojo
+                                  : (zebra ? t.cebraTexto : t.secundario),
+                            ),
+                          ),
                         if (changed)
                           Text(
                             'Pedidos: $original',
@@ -1100,8 +1385,12 @@ class _StockFormPageState extends State<StockFormPage> {
               ButtonSegment(value: depositoCodigo, label: Text('Depósito'), icon: Icon(Icons.warehouse_outlined)),
               ButtonSegment(value: vehiculoCodigo, label: Text('Vehículo'), icon: Icon(Icons.local_shipping_outlined)),
             ],
-            selected: {_location},
-            onSelectionChanged: (v) => setState(() => _location = v.first),
+            // En la compra no arranca en ninguno: el lugar se elige siempre.
+            emptySelectionAllowed: _location.isEmpty,
+            selected: _location.isEmpty ? const <String>{} : {_location},
+            onSelectionChanged: (v) {
+              if (v.isNotEmpty) setState(() => _location = v.first);
+            },
           ),
           if (_kind == StockFormKind.purchase) ...[
             const SizedBox(height: 8),
@@ -1185,6 +1474,11 @@ class _StockFormPageState extends State<StockFormPage> {
                 label: const Text('Repetir la última carga'),
                 onPressed: () => _propose(fetchLastLoad, 'Todavía no hay cargas anteriores.'),
               ),
+              TextButton.icon(
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Empezar de nuevo'),
+                onPressed: _startOver,
+              ),
             ],
           ),
         ];
@@ -1193,10 +1487,18 @@ class _StockFormPageState extends State<StockFormPage> {
           OutlinedButton.icon(
             icon: const Icon(Icons.select_all),
             label: const Text('Todo lo del vehículo'),
-            onPressed: () => _fill({
-              for (final i in widget.items)
+            onPressed: () => _replaceProposals({
+              for (final i in _items)
                 if (i.controlled && i.vehicle > 0) i.id: i.vehicle,
             }),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.restart_alt),
+              label: const Text('Empezar de nuevo'),
+              onPressed: _startOver,
+            ),
           ),
         ];
       case StockFormKind.closeTrip:
@@ -1215,8 +1517,8 @@ class _StockFormPageState extends State<StockFormPage> {
   Widget _row(StockItem item) {
     final closed = item.parentId == null
         ? null
-        : widget.items.where((i) => i.id == item.parentId).firstOrNull;
-    final hasLoose = widget.items.any((i) => i.parentId == item.id);
+        : _items.where((i) => i.id == item.parentId).firstOrNull;
+    final hasLoose = _items.any((i) => i.parentId == item.id);
     final info = [
       if (closed != null) 'Sueltos de ${closed.name}',
       if (hasLoose) 'Cerrados',
@@ -1246,10 +1548,16 @@ class _StockFormPageState extends State<StockFormPage> {
                   Text(
                     _kind == StockFormKind.closeTrip && item.controlled
                         ? 'Debería quedar ${formatQty(item.vehicle)}'
+                              '${item.deposit < 0 ? ' · depósito en ${formatQty(item.deposit)}' : ''}'
                         : info,
                     style: TextStyle(
                       fontSize: 13,
-                      color: item.negative ? AppColors.rojo : AppColors.gris,
+                      // Al cerrar el viaje, el rojo es por el vehículo; el depósito se avisa aparte.
+                      color: (_kind == StockFormKind.closeTrip ? item.vehicle < 0 : item.negative)
+                          ? AppColors.rojo
+                          : (_kind == StockFormKind.closeTrip && item.deposit < 0
+                                ? AppColors.naranja
+                                : AppColors.gris),
                     ),
                   ),
                 ],

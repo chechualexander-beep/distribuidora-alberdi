@@ -59,12 +59,11 @@ insert into r select 'sin_origen', (select cantidad from stock_actual where ubic
   and (select cantidad from stock_actual s join ubicaciones_stock u on u.id=s.ubicacion_id
    where u.codigo='deposito_alberdi' and s.producto_id=:'pb')=-3
   and (select cantidad from stock_actual where ubicacion_id=:'veh' and producto_id=:'pa')=0;
--- 4) Un suelto que se vincula a un cerrado con stock pasa a llevar stock solo (en 0) y no se
---    puede dejar "a pedido".
+-- 4) Un suelto que se vincula a un cerrado con stock pasa a llevar stock solo (en 0); marcarlo
+--    "a pedido" solo le pone la etiqueta: sigue llevando stock.
 do $$ begin perform stock_configurar_fraccion(current_setting('e.pc')::uuid, current_setting('e.pa')::uuid, 3); end $$;
-insert into r select 'suelto_automatico', (select control_stock from productos where id=:'pc');
-do $$ begin perform stock_marcar_a_pedido(current_setting('e.pc')::uuid); raise exception 'debió fallar';
-exception when others then if sqlerrm not like 'Este producto sale de otro%' then raise; end if; end $$;
+do $$ begin perform stock_marcar_a_pedido(current_setting('e.pc')::uuid); end $$;
+insert into r select 'suelto_automatico', (select control_stock and se_compra_a_pedido from productos where id=:'pc');
 reset role;
 select coalesce(string_agg(paso, ', ') filter (where not ok), '') as fallas,
   bool_and(ok) and count(*) = 4 as todo_ok from r \gset

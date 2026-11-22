@@ -454,7 +454,7 @@ productos (
     if (actualizado == true && mounted) await _cargarPedidos();
   }
 
-  /// Compra hecha durante el reparto (por defecto entra al vehículo).
+  /// Compra hecha durante el reparto: el lugar (depósito o vehículo) se elige al anotarla.
   Future<void> _anotarCompra() async {
     try {
       final items = await fetchStockItems(_client);
@@ -466,7 +466,6 @@ productos (
             kind: StockFormKind.purchase,
             items: items,
             tripId: vehiculo.tripId,
-            initialLocation: vehiculoCodigo,
             client: widget.client,
           ),
         ),

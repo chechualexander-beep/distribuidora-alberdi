@@ -160,6 +160,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Depósito'));
+    await tester.pump();
     await tester.tap(find.text('Billetera'));
     await tester.pump();
     await tester.enterText(find.widgetWithText(TextField, 'Cantidad'), '3');
@@ -189,6 +191,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Depósito'));
+    await tester.pump();
     expect(find.text('¿Cómo pagaste?'), findsOneWidget);
     tester.view.viewInsets = FakeViewPadding(bottom: 600 * tester.view.devicePixelRatio);
     addTearDown(tester.view.resetViewInsets);

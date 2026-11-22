@@ -116,7 +116,7 @@ List<SummaryRow> evaluateSummary(List<SummaryLine> lines, Map<String, StockItem>
     final buyParent = parentName != null && units > 0;
     rows.add(SummaryRow(
       line: line,
-      state: item.controlled || open > 0 ? SummaryState.missing : SummaryState.onDemand,
+      state: (!item.controlled || item.onDemand) && open == 0 ? SummaryState.onDemand : SummaryState.missing,
       have: item.controlled ? have : null,
       missing: left,
       openParents: open,

@@ -365,7 +365,7 @@ void main() {
       find.ancestor(of: find.text('Producto a'), matching: find.byType(Material)).first,
     );
     expect(fila.color, const Color(0xFFFFF176));
-    await tester.tap(find.text('CONFIRMAR (1 producto)'));
+    await tester.tap(find.text('SUBIR 1 PRODUCTO · 3 U.'));
     await tester.pumpAndSettle();
     expect(find.text('Faltan marcar'), findsNothing);
     expect(rpc, 'stock_cargar_vehiculo');
@@ -427,7 +427,7 @@ void main() {
     expect(find.text('0 de 1 cargados'), findsOneWidget);
     await tester.tap(find.text('Producto b'));
     await tester.pump();
-    await tester.tap(find.text('CONFIRMAR (1 producto)'));
+    await tester.tap(find.text('SUBIR 1 PRODUCTO · 2 U.'));
     await tester.pumpAndSettle();
     expect(enviado!['p_items'], [
       {'producto_id': 'b', 'cantidad': 2.0},
@@ -493,5 +493,67 @@ void main() {
       {'producto_id': 'a', 'cantidad': 1.0},
     ]);
     expect(find.textContaining('Viaje cerrado: todo coincide.'), findsOneWidget);
+  });
+
+  testWidgets('pasar mercadería: pasa solo lo marcado y no más de lo que hay', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    Map<String, dynamic>? enviado;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StockFormPage(
+          kind: StockFormKind.load,
+          items: [item('a', deposit: 2), item('b')],
+          runner: (fn, args) async {
+            enviado = args;
+            return const StockOpOutcome({'viaje_nuevo': false, 'movidos': 1});
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('MARCÁ LO QUE SUBÍS'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('cantidad-a')), '5');
+    await tester.pump();
+    await tester.tap(find.text('Producto a'));
+    await tester.pump();
+    expect(find.textContaining('Solo hay 2 en el depósito'), findsOneWidget);
+    expect(find.text('0 de 1 cargados'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('cantidad-a')), '2');
+    await tester.enterText(find.byKey(const ValueKey('cantidad-b')), '3');
+    await tester.pump();
+    await tester.tap(find.text('Producto a'));
+    await tester.pump();
+    await tester.tap(find.text('SUBIR 1 PRODUCTO · 2 U.'));
+    await tester.pumpAndSettle();
+    expect(enviado!['p_items'], [
+      {'producto_id': 'a', 'cantidad': 2.0},
+    ]);
+    expect(find.textContaining('1 producto quedó sin marcar'), findsOneWidget);
+  });
+
+  testWidgets('pasar mercadería: ⇄ pasa de cargar a bajar', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StockFormPage(
+          kind: StockFormKind.load,
+          items: [item('a')],
+          runner: (fn, args) async => const StockOpOutcome({'movidos': 1}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Cargar vehículo'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('dar-vuelta')));
+    await tester.pumpAndSettle();
+    expect(find.text('Bajar al depósito'), findsOneWidget);
+    expect(find.text('MARCÁ LO QUE BAJÁS'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('cantidad-a')), '9');
+    await tester.pump();
+    await tester.tap(find.text('Producto a'));
+    await tester.pump();
+    expect(find.textContaining('Solo hay 4 en el vehículo'), findsOneWidget);
   });
 }
