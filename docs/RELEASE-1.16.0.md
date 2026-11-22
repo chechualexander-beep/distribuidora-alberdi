@@ -18,5 +18,10 @@ Incluye la 1.15.0 (inicio nuevo, pantallas unidas, Comisiones) y además:
 - Gabriela (ayuda en el depósito) ve el Historial, los Movimientos y Stock a revisar (sin las
   diferencias de liquidación); la liquidación y sus motivos son solo del administrador.
 
-Migración: `20261203010000_auditoria_stock`. Prueba: `test/auditoria_stock_escenario.sql`,
+- **Instructivo de Stock**: botón (i) arriba en Stock, con cómo cargar, anotar compras, vender con el
+  viaje abierto, bajar, cerrar el viaje, contar y qué hacer cuando algo no cuadra (con lo que hay que
+  evitar). El preventista con ayuda en el depósito ve solo lo suyo.
+- "A revisar" muestra las diferencias sin motivo de los viajes de los últimos 30 días.
+
+Migraciones: `20261203010000_auditoria_stock`, `20261203020000_revisar_ultimos_30_dias`. Prueba: `test/auditoria_stock_escenario.sql`,
 `test/stock_audit_test.dart`.

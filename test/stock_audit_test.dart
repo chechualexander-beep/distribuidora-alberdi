@@ -2,6 +2,7 @@ import 'package:distribuidora_alberdi/core/app_config.dart';
 import 'package:distribuidora_alberdi/features/stock/stock_audit_data.dart';
 import 'package:distribuidora_alberdi/features/stock/stock_audit_pages.dart';
 import 'package:distribuidora_alberdi/features/stock/stock_data.dart';
+import 'package:distribuidora_alberdi/features/stock/stock_guide_page.dart';
 import 'package:distribuidora_alberdi/features/stock/trip_settlement_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -155,5 +156,19 @@ void main() {
     expect(r.negatives.single.place, 'deposito_alberdi');
     expect(r.withoutReason.single.tripId, 'v1');
     expect(r.notCounted.single.countedAt, isNull);
+  });
+
+  testWidgets('instructivo: el preventista no ve lo que es solo del administrador', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: StockGuidePage()));
+    expect(find.text('Anotar una compra'), findsOneWidget);
+    await tester.tap(find.text('Cargar el vehículo'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('marcala en flúor'), findsOneWidget);
+    expect(find.textContaining('Evitá: Subir sin marcar'), findsOneWidget);
+    await tester.pumpWidget(const MaterialApp(home: StockGuidePage(admin: false)));
+    await tester.pumpAndSettle();
+    expect(find.text('Anotar una compra'), findsNothing);
+    expect(find.text('Cerrar el viaje y la liquidación'), findsNothing);
+    expect(find.text('Contar'), findsOneWidget);
   });
 }

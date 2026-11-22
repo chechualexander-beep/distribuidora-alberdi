@@ -10,6 +10,7 @@ import 'vehicle_load_page.dart';
 import 'stock_audit_data.dart';
 import 'stock_audit_pages.dart';
 import 'trip_settlement_page.dart';
+import 'stock_guide_page.dart';
 import '../../core/text_search.dart';
 
 enum _Filter { controlled, onDemand, differences, all }
@@ -433,6 +434,14 @@ class _StockHomePageState extends State<StockHomePage> {
     appBar: AppBar(
       title: Text(widget.helper ? 'Contar y ver stock' : 'Stock'),
       actions: [
+        IconButton(
+          key: const Key('instructivo-stock'),
+          tooltip: 'Cómo usar Stock',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => StockGuidePage(admin: !widget.helper)),
+          ),
+          icon: const Icon(Icons.info_outline),
+        ),
         if (!widget.helper)
           IconButton(
             tooltip: 'Ayuda en el depósito',
