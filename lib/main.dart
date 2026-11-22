@@ -681,10 +681,6 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(3),
-          child: ColoredBox(color: AppColors.dorado, child: SizedBox(height: 3, width: double.infinity)),
-        ),
         actions: [
           const DataSaverButton(),
           IconButton(
@@ -818,7 +814,7 @@ class _HomePageState extends State<HomePage> {
       title: 'VENTAS',
       area: HomeArea.ventas,
       actions: [
-        HomeAction(Icons.receipt_long_outlined, 'Mis pedidos', () => _abrir(const OrdersPage())),
+        HomeAction(Icons.receipt_long_outlined, 'Pedidos', () => _abrir(const OrdersPage())),
         HomeAction(Icons.people_outline, 'Clientes', () => _abrir(const ClientsPage())),
         HomeAction(Icons.inventory_2_outlined, 'Productos', () => _abrir(const ProductsPage())),
         HomeAction(Icons.local_shipping_outlined, 'Lo que llevamos', () => _abrir(const VehicleLoadPage())),

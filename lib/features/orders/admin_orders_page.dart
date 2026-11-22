@@ -560,7 +560,7 @@ productos (
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestión de reparto'),
+        title: const Text('Reparto'),
         actions: [
           IconButton(
             tooltip: 'Anotar compra',
@@ -664,7 +664,7 @@ productos (
 
     if (_sinProgramar && _pedidos.isEmpty) {
       return const Center(
-        child: Text('No hay pedidos de catálogo sin programar.'),
+        child: Text('Todos los pedidos del catálogo ya tienen fecha de entrega.'),
       );
     }
     if (_pedidos.isEmpty) {
@@ -678,10 +678,11 @@ productos (
             child: Center(
               child: Text(
                 _mostrarVentaDirecta
-                    ? 'No hay ventas directas pendientes.'
+                    ? 'No hay ventas directas pendientes de entregar.\nLo vendido hoy está en la tarjeta de arriba.'
                     : _filtrarPorFecha
-                    ? 'No hay pedidos para esta fecha.'
-                    : 'No hay preventas pendientes.',
+                    ? 'No hay entregas para esta fecha.\nTocá la fecha para elegir otra, o la X para ver todas.'
+                    : 'No hay preventas para entregar.\nAparecen acá cuando se facturan.',
+                textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 18),
               ),
             ),

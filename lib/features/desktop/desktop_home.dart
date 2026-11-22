@@ -227,10 +227,6 @@ class _DesktopHomeState extends State<DesktopHome> {
           'Alberdi',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(3),
-          child: ColoredBox(color: AppColors.dorado, child: SizedBox(height: 3, width: double.infinity)),
-        ),
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',

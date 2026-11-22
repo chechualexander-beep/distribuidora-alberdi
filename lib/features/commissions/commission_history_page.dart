@@ -304,7 +304,7 @@ class _CommissionHistoryPageState extends State<CommissionHistoryPage> {
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
                 child: Text(
-                  'No hay liquidaciones para los filtros seleccionados.',
+                  'No hay liquidaciones con estos filtros.\nProbá con otras fechas o con otro preventista.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.gris, fontSize: 14),
                 ),

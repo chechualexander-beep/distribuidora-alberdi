@@ -235,7 +235,7 @@ class _CommercialSummaryPageState extends State<CommercialSummaryPage> {
           children: [
             // Abierto desde el inicio del teléfono no tiene barra de arriba: flecha para volver.
             if (Navigator.of(context).canPop()) const BackButton(),
-            Expanded(child: Text('Resumen comercial', style: theme.textTheme.headlineSmall)),
+            Expanded(child: Text('Resumen y estadísticas', style: theme.textTheme.headlineSmall)),
             // Estadísticas (antes solo dentro de Mis comisiones): ventas por preventista,
             // cliente y producto, y su evolución.
             FilledButton.tonalIcon(

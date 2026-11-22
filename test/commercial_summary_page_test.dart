@@ -82,7 +82,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final title = find.text('Resumen comercial');
+      final title = find.text('Resumen y estadísticas');
       final theme = Theme.of(tester.element(title));
       expect(theme.brightness, Brightness.dark);
       final background = tester.widget<Material>(

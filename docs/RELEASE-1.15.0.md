@@ -29,3 +29,16 @@ Sin cambios en la base de datos.
 - **Resumen y estadísticas**: botón "Estadísticas" en el Resumen comercial (antes solo estaba dentro
   de Mis comisiones), y flecha para volver en el teléfono.
 - Inicio y menú de Windows sin los botones repetidos.
+
+## Tanda 3: Comisiones más simple y títulos parejos
+- **Comisiones**: el preventista ya no se corta; período con tres opciones en una fila: **Lo impago**
+  (todo lo entregado y sin liquidar, sin importar la fecha; viene elegido), **Esta semana** (lunes a
+  sábado) y **Fechas** (un solo selector de rango). Se calcula solo al elegir el preventista o el
+  período (ya no hay botón Calcular). Trae de a 1000 filas, para que "Lo impago" no se corte.
+- **Liquidación**: "Generar reporte" y "Compartir detalle bruto PDF" arriba, junto a "Revisar y
+  registrar liquidación neta".
+- **Títulos iguales al botón**: Reparto (antes Gestión de reparto), Resumen y estadísticas, Contar y
+  ver stock; el preventista ve "Pedidos".
+- **Mensajes de "no hay nada" que dicen qué hacer** (Reparto, Facturar, Realizadas, Stock,
+  Historial de comisiones, Comisiones).
+- La barra de arriba del inicio usa la misma línea dorada que el resto (no doble).

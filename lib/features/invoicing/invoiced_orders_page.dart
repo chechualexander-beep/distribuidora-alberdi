@@ -160,9 +160,13 @@ class _InvoicedOrdersPageState extends State<InvoicedOrdersPage> {
 
     if (_pedidos.isEmpty) {
       return const Center(
-        child: Text(
-          'No hay facturas realizadas.',
-          style: TextStyle(fontSize: 18),
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Todavía no hay facturas.\nLas que hagas en "Para facturar" aparecen acá.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18),
+          ),
         ),
       );
     }

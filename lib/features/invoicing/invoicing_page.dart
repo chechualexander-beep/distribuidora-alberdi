@@ -192,9 +192,13 @@ class _InvoicingPageState extends State<InvoicingPage> {
 
     if (_pedidos.isEmpty) {
       return const Center(
-        child: Text(
-          'No hay pedidos pendientes de facturar.',
-          style: TextStyle(fontSize: 18),
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Está todo facturado.\nLos pedidos nuevos aparecen acá para facturarlos.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18),
+          ),
         ),
       );
     }

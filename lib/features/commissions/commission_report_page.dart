@@ -158,6 +158,74 @@ class CommissionReportPage extends StatelessWidget {
               icon: const Icon(Icons.payments_outlined),
               label: const Text('REVISAR Y REGISTRAR LIQUIDACIÓN NETA'),
             ),
+            // Reporte y PDF arriba: con muchos pedidos, al final quedaban lejos.
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: () async {
+                final pdf = await CommissionPdfService.generarPdf(
+                  preventista: preventista,
+                  desde: desde,
+                  hasta: hasta,
+                  ventaPedida: ventaPedida,
+                  ventaEntregada: ventaEntregada,
+                  ventaNoEntregada: ventaNoEntregada,
+                  comisionTotal: comisionTotal,
+                  detalles: detalles,
+                );
+
+                await Printing.layoutPdf(
+                  name:
+                      'Liquidacion_${preventista.replaceAll(' ', '_')}_${_formatearFecha(desde).replaceAll('/', '-')}_${_formatearFecha(hasta).replaceAll('/', '-')}.pdf',
+                  onLayout: (_) async => pdf,
+                );
+              },
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('GENERAR REPORTE'),
+            ),
+
+            const SizedBox(height: 10),
+
+            OutlinedButton.icon(
+              onPressed: () async {
+                final pdf = await CommissionPdfService.generarPdf(
+                  preventista: preventista,
+                  desde: desde,
+                  hasta: hasta,
+                  ventaPedida: ventaPedida,
+                  ventaEntregada: ventaEntregada,
+                  ventaNoEntregada: ventaNoEntregada,
+                  comisionTotal: comisionTotal,
+                  detalles: detalles,
+                );
+
+                final nombreArchivo =
+                    'Liquidacion_${preventista.replaceAll(' ', '_')}_${_formatearFecha(desde).replaceAll('/', '-')}_${_formatearFecha(hasta).replaceAll('/', '-')}.pdf';
+
+                final rutaArchivo =
+                    '${Directory.systemTemp.path}${Platform.pathSeparator}$nombreArchivo';
+
+                final archivoTemporal = File(rutaArchivo);
+
+                await archivoTemporal.writeAsBytes(pdf, flush: true);
+
+                await SharePlus.instance.share(
+                  ShareParams(
+                    files: [
+                      XFile(
+                        archivoTemporal.path,
+                        mimeType: 'application/pdf',
+                        name: nombreArchivo,
+                      ),
+                    ],
+                    subject: 'Liquidación de comisiones',
+                    text:
+                        'Liquidación de comisiones de $preventista - ${_formatearFecha(desde)} al ${_formatearFecha(hasta)}',
+                  ),
+                );
+              },
+              icon: const Icon(Icons.share_outlined),
+              label: const Text('COMPARTIR DETALLE BRUTO PDF'),
+            ),
             const SizedBox(height: 16),
             const Text(
               'Detalle por cliente y pedido',
@@ -277,72 +345,6 @@ class CommissionReportPage extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            FilledButton.icon(
-              onPressed: () async {
-                final pdf = await CommissionPdfService.generarPdf(
-                  preventista: preventista,
-                  desde: desde,
-                  hasta: hasta,
-                  ventaPedida: ventaPedida,
-                  ventaEntregada: ventaEntregada,
-                  ventaNoEntregada: ventaNoEntregada,
-                  comisionTotal: comisionTotal,
-                  detalles: detalles,
-                );
-
-                await Printing.layoutPdf(
-                  name:
-                      'Liquidacion_${preventista.replaceAll(' ', '_')}_${_formatearFecha(desde).replaceAll('/', '-')}_${_formatearFecha(hasta).replaceAll('/', '-')}.pdf',
-                  onLayout: (_) async => pdf,
-                );
-              },
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: const Text('GENERAR REPORTE'),
-            ),
-
-            const SizedBox(height: 10),
-
-            OutlinedButton.icon(
-              onPressed: () async {
-                final pdf = await CommissionPdfService.generarPdf(
-                  preventista: preventista,
-                  desde: desde,
-                  hasta: hasta,
-                  ventaPedida: ventaPedida,
-                  ventaEntregada: ventaEntregada,
-                  ventaNoEntregada: ventaNoEntregada,
-                  comisionTotal: comisionTotal,
-                  detalles: detalles,
-                );
-
-                final nombreArchivo =
-                    'Liquidacion_${preventista.replaceAll(' ', '_')}_${_formatearFecha(desde).replaceAll('/', '-')}_${_formatearFecha(hasta).replaceAll('/', '-')}.pdf';
-
-                final rutaArchivo =
-                    '${Directory.systemTemp.path}${Platform.pathSeparator}$nombreArchivo';
-
-                final archivoTemporal = File(rutaArchivo);
-
-                await archivoTemporal.writeAsBytes(pdf, flush: true);
-
-                await SharePlus.instance.share(
-                  ShareParams(
-                    files: [
-                      XFile(
-                        archivoTemporal.path,
-                        mimeType: 'application/pdf',
-                        name: nombreArchivo,
-                      ),
-                    ],
-                    subject: 'Liquidación de comisiones',
-                    text:
-                        'Liquidación de comisiones de $preventista - ${_formatearFecha(desde)} al ${_formatearFecha(hasta)}',
-                  ),
-                );
-              },
-              icon: const Icon(Icons.share_outlined),
-              label: const Text('COMPARTIR DETALLE BRUTO PDF'),
-            ),
             const SizedBox(height: 10),
 
             const SizedBox(height: 20),

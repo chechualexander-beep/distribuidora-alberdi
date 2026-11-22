@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'commission_groups_table.dart';
 import 'package:distribuidora_alberdi/core/app_theme.dart';
 import '../../core/desktop_records.dart';
@@ -33,6 +35,10 @@ class _CommissionsPageState extends State<CommissionsPage> {
   DateTime _desde = DateTime.now().subtract(const Duration(days: 30));
 
   DateTime _hasta = DateTime.now();
+
+  /// 'impago': todo lo entregado y sin liquidar; 'semana': lunes a sábado de esta semana
+  /// (se liquida los sábados); 'rango': fechas elegidas.
+  String _periodo = 'impago';
 
   List<Map<String, dynamic>> _detalles = [];
   bool _calculoRealizado = false;
@@ -85,13 +91,20 @@ class _CommissionsPageState extends State<CommissionsPage> {
     });
 
     try {
-      final desde = ArgentinaDateUtils.inicioDiaUtc(_desde);
+      _ajustarPeriodo();
+      final desde = ArgentinaDateUtils.inicioDiaUtc(
+        _periodo == 'impago' ? DateTime(2024) : _desde,
+      );
 
       final hastaExclusivo = ArgentinaDateUtils.finDiaExclusivoUtc(_hasta);
+      final client = Supabase.instance.client;
 
-      final respuesta = await Supabase.instance.client
-          .from('pedido_detalles')
-          .select('''
+      // De a 1000 filas: "Lo impago" puede traer muchos pedidos.
+      final filas = <Map<String, dynamic>>[];
+      for (var offset = 0; ; offset += 1000) {
+        final pagina = await client
+            .from('pedido_detalles')
+            .select('''
             id,
             cantidad,
             cantidad_entregada,
@@ -115,47 +128,68 @@ class _CommissionsPageState extends State<CommissionsPage> {
               )
             )
             ''')
-          .eq('pedidos.preventista_id', _preventistaId!)
-          .inFilter('pedidos.resultado_entrega', ['entregado', 'parcial'])
-          .not('pedidos.estado', 'in', '(cancelado,anulado)')
-          .gte('pedidos.fecha_finalizacion', desde.toIso8601String())
-          .lt('pedidos.fecha_finalizacion', hastaExclusivo.toIso8601String())
-          .order(
-            'fecha_finalizacion',
-            referencedTable: 'pedidos',
-            ascending: false,
-          );
+            .eq('pedidos.preventista_id', _preventistaId!)
+            .inFilter('pedidos.resultado_entrega', ['entregado', 'parcial'])
+            .not('pedidos.estado', 'in', '(cancelado,anulado)')
+            .gte('pedidos.fecha_finalizacion', desde.toIso8601String())
+            .lt('pedidos.fecha_finalizacion', hastaExclusivo.toIso8601String())
+            .order('id')
+            .range(offset, offset + 999);
+        final lista = List<Map<String, dynamic>>.from(pagina);
+        filas.addAll(lista);
+        if (lista.length < 1000) break;
+      }
 
       if (!mounted) return;
-      final idsRespuesta = List<Map<String, dynamic>>.from(respuesta)
+      final idsRespuesta = filas
           .map((detalle) => detalle['id']?.toString())
           .whereType<String>()
           .toList();
 
-      List<Map<String, dynamic>> detallesPendientes =
-          List<Map<String, dynamic>>.from(respuesta);
-
-      if (idsRespuesta.isNotEmpty) {
-        final liquidados = await Supabase.instance.client
+      // Lo ya liquidado, de a 150 (para no armar un pedido demasiado largo).
+      final idsLiquidados = <String>{};
+      for (var i = 0; i < idsRespuesta.length; i += 150) {
+        final tramo = idsRespuesta.sublist(i, math.min(i + 150, idsRespuesta.length));
+        final liquidados = await client
             .from('liquidacion_detalles')
             .select('pedido_detalle_id')
-            .inFilter('pedido_detalle_id', idsRespuesta);
-
-        final idsLiquidados = List<Map<String, dynamic>>.from(liquidados)
-            .map((fila) => fila['pedido_detalle_id']?.toString())
-            .whereType<String>()
-            .toSet();
-
-        detallesPendientes = detallesPendientes
-            .where(
-              (detalle) => !idsLiquidados.contains(detalle['id']?.toString()),
-            )
-            .toList();
+            .inFilter('pedido_detalle_id', tramo);
+        idsLiquidados.addAll(
+          List<Map<String, dynamic>>.from(liquidados)
+              .map((fila) => fila['pedido_detalle_id']?.toString())
+              .whereType<String>(),
+        );
       }
+
+      DateTime? fechaDe(Map<String, dynamic> d) => DateTime.tryParse(
+        (d['pedidos'] as Map?)?['fecha_finalizacion']?.toString() ?? '',
+      );
+      final detallesPendientes = filas
+          .where((detalle) => !idsLiquidados.contains(detalle['id']?.toString()))
+          .toList()
+        ..sort((a, b) {
+          final fa = fechaDe(a), fb = fechaDe(b);
+          if (fa == null || fb == null) return 0;
+          return fb.compareTo(fa);
+        });
+
+      if (!mounted) return;
       setState(() {
         _detalles = detallesPendientes;
         _calculoRealizado = true;
         _cargando = false;
+        // "Lo impago": el período arranca en el pedido impago más viejo.
+        if (_periodo == 'impago') {
+          final fechas = detallesPendientes.map(fechaDe).whereType<DateTime>().toList();
+          if (fechas.isNotEmpty) {
+            final primera = fechas.reduce((a, b) => a.isBefore(b) ? a : b).toUtc().subtract(
+              const Duration(hours: 3),
+            );
+            _desde = DateTime(primera.year, primera.month, primera.day);
+          } else {
+            _desde = _hasta;
+          }
+        }
       });
     } catch (_) {
       if (!mounted) return;
@@ -165,6 +199,42 @@ class _CommissionsPageState extends State<CommissionsPage> {
         _cargando = false;
       });
     }
+  }
+
+  /// Fechas según el período elegido (la semana va de lunes a sábado).
+  void _ajustarPeriodo() {
+    final ahora = ArgentinaDateUtils.ahoraArgentina();
+    final hoy = DateTime(ahora.year, ahora.month, ahora.day);
+    if (_periodo == 'semana') {
+      // Domingo: la semana que terminó ayer.
+      final base = hoy.weekday == DateTime.sunday ? hoy.subtract(const Duration(days: 1)) : hoy;
+      final lunes = base.subtract(Duration(days: base.weekday - 1));
+      _desde = lunes;
+      _hasta = base;
+    } else if (_periodo == 'impago') {
+      _hasta = hoy;
+    }
+  }
+
+  Future<void> _elegirPeriodo(String periodo) async {
+    if (periodo == 'rango') {
+      final ahora = ArgentinaDateUtils.ahoraArgentina();
+      final rango = await showDateRangePicker(
+        context: context,
+        firstDate: DateTime(2024),
+        lastDate: DateTime(ahora.year, ahora.month, ahora.day),
+        initialDateRange: DateTimeRange(start: _desde, end: _hasta),
+      );
+      if (rango == null || !mounted) return;
+      setState(() {
+        _periodo = 'rango';
+        _desde = rango.start;
+        _hasta = rango.end;
+      });
+    } else {
+      setState(() => _periodo = periodo);
+    }
+    if (_preventistaId != null) await _buscarComisiones();
   }
 
   double _numero(dynamic valor) {
@@ -240,44 +310,6 @@ class _CommissionsPageState extends State<CommissionsPage> {
     final anio = fecha.year.toString();
 
     return '$dia/$mes/$anio';
-  }
-
-  Future<void> _seleccionarDesde() async {
-    final fecha = await showDatePicker(
-      context: context,
-      initialDate: _desde,
-      firstDate: DateTime(2024),
-      lastDate: DateTime(2100),
-    );
-
-    if (fecha == null) return;
-
-    setState(() {
-      _desde = fecha;
-      _detalles = [];
-      _calculoRealizado = false;
-
-      if (_hasta.isBefore(_desde)) {
-        _hasta = _desde;
-      }
-    });
-  }
-
-  Future<void> _seleccionarHasta() async {
-    final fecha = await showDatePicker(
-      context: context,
-      initialDate: _hasta,
-      firstDate: _desde,
-      lastDate: DateTime(2100),
-    );
-
-    if (fecha == null) return;
-
-    setState(() {
-      _hasta = fecha;
-      _detalles = [];
-      _calculoRealizado = false;
-    });
   }
 
   void _mostrarMensaje(String mensaje) {
@@ -379,6 +411,7 @@ class _CommissionsPageState extends State<CommissionsPage> {
                 children: [
                   DropdownButtonFormField<String>(
                     initialValue: _preventistaId,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Preventista',
                       border: OutlineInputBorder(),
@@ -397,6 +430,8 @@ class _CommissionsPageState extends State<CommissionsPage> {
                         value: usuario['id'].toString(),
                         child: Text(
                           nombreCompleto.isEmpty ? 'Usuario' : nombreCompleto,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       );
                     }).toList(),
@@ -406,39 +441,49 @@ class _CommissionsPageState extends State<CommissionsPage> {
                         _detalles = [];
                         _calculoRealizado = false;
                       });
+                      // Se calcula solo al elegir el preventista.
+                      if (valor != null) _buscarComisiones();
                     },
                   ),
 
                   const SizedBox(height: 16),
 
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _seleccionarDesde,
-                          icon: const Icon(Icons.calendar_month_outlined),
-                          label: Text('Desde ${_formatearFecha(_desde)}'),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SegmentedButton<String>(
+                      key: const Key('periodo-comisiones'),
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: 'impago',
+                          icon: Icon(Icons.pending_actions_outlined),
+                          label: Text('Lo impago'),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _seleccionarHasta,
-                          icon: const Icon(Icons.calendar_month_outlined),
-                          label: Text('Hasta ${_formatearFecha(_hasta)}'),
+                        ButtonSegment(
+                          value: 'semana',
+                          icon: Icon(Icons.date_range_outlined),
+                          label: Text('Esta semana'),
                         ),
-                      ),
-                    ],
+                        ButtonSegment(
+                          value: 'rango',
+                          icon: Icon(Icons.calendar_month_outlined),
+                          label: Text('Fechas'),
+                        ),
+                      ],
+                      selected: {_periodo},
+                      onSelectionChanged: (s) => _elegirPeriodo(s.first),
+                    ),
                   ),
-
-                  const SizedBox(height: 16),
-
-                  FilledButton.icon(
-                    onPressed: _buscarComisiones,
-                    icon: const Icon(Icons.search),
-                    label: const Text('CALCULAR COMISIONES'),
+                  const SizedBox(height: 8),
+                  Text(
+                    _periodo == 'impago'
+                        ? (_calculoRealizado
+                              ? 'Todo lo entregado y sin liquidar: ${_formatearFecha(_desde)} al ${_formatearFecha(_hasta)}'
+                              : 'Todo lo entregado y sin liquidar, sin importar la fecha.')
+                        : '${_formatearFecha(_desde)} al ${_formatearFecha(_hasta)}'
+                              '${_periodo == 'semana' ? ' (lunes a sábado)' : ''}',
+                    style: const TextStyle(color: AppColors.gris),
                   ),
-
                   const SizedBox(height: 24),
 
                   if (_detalles.isNotEmpty) ...[
@@ -688,8 +733,10 @@ class _CommissionsPageState extends State<CommissionsPage> {
                     Center(
                       child: Text(
                         _calculoRealizado
-                            ? 'No hay comisiones pendientes de liquidar.'
-                            : 'Seleccioná un preventista y un período.',
+                            ? (_periodo == 'impago'
+                                  ? 'Está todo liquidado: no hay comisiones impagas.'
+                                  : 'No hay comisiones sin liquidar en estas fechas. Probá con "Lo impago".')
+                            : 'Elegí un preventista: las comisiones se calculan solas.',
                         textAlign: TextAlign.center,
                       ),
                     ),

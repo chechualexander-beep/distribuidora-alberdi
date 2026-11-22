@@ -384,7 +384,7 @@ class _StockHomePageState extends State<StockHomePage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text(widget.helper ? 'Depósito' : 'Stock'),
+      title: Text(widget.helper ? 'Contar y ver stock' : 'Stock'),
       actions: [
         if (!widget.helper)
           IconButton(
@@ -491,7 +491,10 @@ class _StockHomePageState extends State<StockHomePage> {
           if (visible.isEmpty)
             const Padding(
               padding: EdgeInsets.all(24),
-              child: Text('No hay productos con este filtro.', textAlign: TextAlign.center),
+              child: Text(
+                'No hay productos con este filtro.\nProbá con "Todos" o borrá la búsqueda.',
+                textAlign: TextAlign.center,
+              ),
             ),
           for (final item in visible)
             Card(
