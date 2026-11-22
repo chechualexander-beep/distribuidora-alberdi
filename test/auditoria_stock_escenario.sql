@@ -78,12 +78,12 @@ insert into r select 'tomado_del_deposito',
   and ((:'liq'::jsonb)->'ventas'->>'cantidad')::int >= 1;
 
 -- 2) Motivos: sin motivo aparece en "a revisar"; con motivo, no. Sin diferencia no se puede.
-select jsonb_array_length(stock_a_revisar()->'sin_motivo') as antes \gset
+select count(*) as antes from jsonb_array_elements(stock_a_revisar()->'sin_motivo') x where x->>'viaje_id' = :'viaje' \gset
 do $$ begin perform stock_liquidacion_motivos_guardar(current_setting('e.viaje')::uuid,
   jsonb_build_array(jsonb_build_object('producto_id', current_setting('e.pb'), 'motivo', 'rotura'))); raise exception 'debió fallar';
 exception when others then if sqlerrm <> 'Ese producto no tiene diferencia en este viaje' then raise; end if; end $$;
 select stock_liquidacion_motivos_guardar(:'viaje', jsonb_build_array(jsonb_build_object('producto_id',:'pa','motivo','rotura'))) as g \gset
-select jsonb_array_length(stock_a_revisar()->'sin_motivo') as despues \gset
+select count(*) as despues from jsonb_array_elements(stock_a_revisar()->'sin_motivo') x where x->>'viaje_id' = :'viaje' \gset
 select (stock_liquidacion_viaje(:'viaje')->'filas'->0->>'motivo') as mot \gset
 select (x->>'sin_motivo')::int as sm from jsonb_array_elements(stock_viajes_recientes(5)) x where x->>'id' = :'viaje' \gset
 insert into r select 'motivos', :antes = 1 and :despues = 0 and :'mot' = 'rotura' and :sm = 0;
