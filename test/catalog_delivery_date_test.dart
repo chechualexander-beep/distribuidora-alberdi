@@ -175,7 +175,7 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(
-        find.text('No hay pedidos de catálogo sin programar.'),
+        find.text('Todos los pedidos del catálogo ya tienen fecha de entrega.'),
         findsOneWidget,
       );
       invoiced = true; // Simula el paso de facturación por separado.
