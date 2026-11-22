@@ -90,7 +90,8 @@ void main() {
       );
       expect(background.color, theme.colorScheme.surface);
       final tile = find.text('Ventas');
-      await tester.ensureVisible(tile);
+      // Con el botón Estadísticas arriba, en el teléfono "Ventas" puede quedar más abajo.
+      await tester.scrollUntilVisible(tile, 200, scrollable: find.byType(Scrollable).first);
       await tester.tap(tile);
       await tester.pumpAndSettle();
       expect(find.text('Mercadería entregada'), findsOneWidget);
