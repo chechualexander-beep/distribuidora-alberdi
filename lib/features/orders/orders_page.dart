@@ -493,13 +493,20 @@ tipo_operacion,
                       if (result == true && mounted) await _cargarPedidos();
                     },
                   )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: pedidosFiltrados.length + 1,
+                : CustomScrollView(
+                    slivers: [
+                      // El resumen queda siempre armado: abierto es muy alto y en una lista perezosa trababa.
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        sliver: SliverToBoxAdapter(child: _tarjetaResumen(lineasResumen)),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        sliver: SliverList.separated(
+                    itemCount: pedidosFiltrados.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
-                      if (index == 0) return _tarjetaResumen(lineasResumen);
-                      final pedido = pedidosFiltrados[index - 1];
+                      final pedido = pedidosFiltrados[index];
 
                       final cliente =
                           pedido['clientes'] as Map<String, dynamic>?;
@@ -600,6 +607,9 @@ tipo_operacion,
                         ),
                       );
                     },
+                        ),
+                      ),
+                    ],
                   ),
           ),
         ],

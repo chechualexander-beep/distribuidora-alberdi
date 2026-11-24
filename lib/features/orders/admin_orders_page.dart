@@ -860,13 +860,7 @@ productos (
     }
     final visibles = _pedidosVisibles;
     final palabras = _palabrasBusqueda;
-    return RefreshIndicator(
-      onRefresh: _cargarPedidos,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: visibles.length + 2 + (visibles.isEmpty ? 1 : 0),
-        separatorBuilder: (_, _) => const SizedBox(height: 8),
-        itemBuilder: (context, index) {
+    Widget itemAt(BuildContext context, int index) {
           if (index == 0) return _encabezadoCompacto();
           if (index == 1) {
             return Card(
@@ -1100,7 +1094,32 @@ productos (
               ),
             ),
           );
-        },
+    }
+
+    return RefreshIndicator(
+      onRefresh: _cargarPedidos,
+      child: CustomScrollView(
+        slivers: [
+          // El encabezado y el resumen quedan siempre armados (no se rehacen al desplazarse): con muchos
+          // pedidos el resumen abierto es muy alto y, dentro de una lista perezosa, la hacía trabar.
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [itemAt(context, 0), const SizedBox(height: 8), itemAt(context, 1)],
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            sliver: SliverList.separated(
+              itemCount: visibles.isEmpty ? 1 : visibles.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, i) => itemAt(context, i + 2),
+            ),
+          ),
+        ],
       ),
     );
   }
