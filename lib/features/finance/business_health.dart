@@ -144,7 +144,7 @@ class BusinessHealth {
   );
 
   /// Meses ya cerrados con todos los gastos anotados.
-  List<HealthMonth> get cerrados => [for (final m in meses) if (m.completo && !m.actual) m];
+  List<HealthMonth> get cerrados => [for (final m in meses) if (m.completo && !m.actual && m.medido != null) m];
 
   /// Lo que se mide: los últimos 3 meses cerrados completos; si no hay, todo lo anotado desde la foto inicial.
   List<HealthMeasured> get base {

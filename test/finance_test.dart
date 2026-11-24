@@ -400,10 +400,10 @@ void main() {
     expect(mov('gasto', 'Combustible').reclasificable, isTrue);
   });
 
-  Map<String, dynamic> mes(String m, {bool actual = false, bool completo = true, double? gan, double retiros = 0,
+  Map<String, dynamic> mes(String m, {bool actual = false, bool? completo, double? gan, double retiros = 0,
       int dias = 30, double ventas = 10000000, double margen = 0.2, double? capIni, double? capFin}) => {
     'mes': m, 'actual': actual, 'ventas': ventas, 'ganancia_comercial': ventas * margen, 'margen': margen,
-    'completo': completo,
+    'completo': completo ?? gan != null,
     'medido': gan == null ? null : {
       'desde': '${m}T03:00:00Z', 'hasta': '${m}T03:00:00Z', 'dias': dias, 'ventas': ventas,
       'ganancia_comercial': ventas * margen, 'ganancia_negocio': gan, 'gastos_negocio': ventas * margen - gan,
