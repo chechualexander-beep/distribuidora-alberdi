@@ -151,6 +151,16 @@ class _DesktopHomeState extends State<DesktopHome> {
                         () => _go('En negativo'),
                         alert: (r?.negatives ?? 0) > 0,
                       ),
+                      if ((r?.toReorder ?? 0) > 0)
+                        TodayItem(HomeArea.reparto, '${r!.toReorder}', 'para reponer', () => _go('Stock')),
+                      if (r?.envelopesDue != null)
+                        TodayItem(
+                          HomeArea.plata,
+                          pesos(r!.envelopesDue!),
+                          'para los sobres',
+                          () => _go('Plata del negocio'),
+                          icon: Icons.savings_outlined,
+                        ),
                       if (r?.salaryDue != null)
                         TodayItem(
                           HomeArea.plata,

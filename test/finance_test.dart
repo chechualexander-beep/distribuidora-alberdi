@@ -476,4 +476,104 @@ void main() {
     expect(find.text('Gastos del negocio por categoría'), findsOneWidget);
     expect(find.textContaining('pusiste \$30.000 de tu bolsillo'), findsOneWidget);
   });
+
+  FinState conSobres() => FinState.fromJson({
+    ...{
+      'inicio': '2026-11-19T12:00:00Z',
+      'cuentas': [
+        {'codigo': 'efectivo', 'nombre': 'Efectivo', 'saldo': 600000},
+        {'codigo': 'billetera', 'nombre': 'Billetera virtual', 'saldo': 220000},
+        {'codigo': 'sobre_efectivo', 'nombre': 'Frasco (efectivo)', 'saldo': 180000},
+        {'codigo': 'sobre_billetera', 'nombre': 'Reserva (billetera)', 'saldo': 140000},
+      ],
+      'plata': 1140000, 'libre': 820000, 'sobre': 342000, 'faltan_sobres': 32000, 'deben': 0, 'disponible': 788000,
+      'sobres': [
+        {'codigo': 'sobre_efectivo', 'medio': 'efectivo', 'nombre': 'Frasco (efectivo)', 'saldo': 180000,
+          'deberia': 170000, 'faltan': 0, 'poner_sabado': 45000, 'sabado': '2026-11-28'},
+        {'codigo': 'sobre_billetera', 'medio': 'billetera', 'nombre': 'Reserva (billetera)', 'saldo': 140000,
+          'deberia': 172000, 'faltan': 32000, 'poner_sabado': 62000, 'sabado': '2026-11-28'},
+      ],
+      'gastos_fijos': [
+        {'id': 'v', 'nombre': 'Cuota del vehículo', 'importe': 535000, 'dia_pago': 10, 'ambito': 'negocio',
+          'medio': 'billetera', 'activo': true, 'vence': '2026-12-10', 'vencido': false, 'reservado': 172000,
+          'por_semana': 123000, 'pagado_mes': true, 'periodo_mes': '2026-11-10'},
+        {'id': 'luz', 'nombre': 'Luz', 'importe': 165000, 'dia_pago': 2, 'ambito': 'hogar', 'medio': 'billetera',
+          'activo': true, 'vence': '2026-12-02', 'vencido': false, 'reservado': 115000, 'por_semana': 38000,
+          'pagado_mes': false, 'periodo_mes': '2026-11-02'},
+      ],
+      'deudas': [], 'mes': {}, 'ultimos': [],
+      'sueldo': {'semanal': 230000, 'desde': '2026-11-24', 'semana': '2026-11-28', 'pendiente': true, 'pagado': null,
+        'por_mes': 996667},
+    },
+  });
+
+  Future<List<(String, Map<String, dynamic>)>> abrirConSobres(WidgetTester tester) async {
+    final calls = <(String, Map<String, dynamic>)>[];
+    await tester.binding.setSurfaceSize(const Size(800, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FinanceHomePage(
+          initial: conSobres(),
+          runner: (fn, a) async {
+            calls.add((fn, a));
+            return const StockOpOutcome({'id': 'x'});
+          },
+        ),
+      ),
+    );
+    return calls;
+  }
+
+  testWidgets('Sobres: plata libre aparte y lo que falta se descuenta del disponible', (tester) async {
+    await abrirConSobres(tester);
+    expect(find.text('Plata libre'), findsOneWidget);
+    expect(find.text('Frasco (efectivo)'), findsOneWidget);
+    expect(find.text('- Lo que falta en los sobres'.replaceFirst('-', '−')), findsOneWidget);
+    expect(find.text('\$788.000'), findsOneWidget);
+    expect(find.textContaining('faltan \$32.000'), findsOneWidget);
+    expect(find.textContaining('al día'), findsOneWidget);
+    expect(find.byKey(const Key('gastos-casa')), findsOneWidget);
+    expect(find.text('Cuota del vehículo · \$535.000'), findsOneWidget);
+  });
+
+  testWidgets('Sobres: el sábado se llenan los dos y se paga el sueldo de una vez', (tester) async {
+    final calls = await abrirConSobres(tester);
+    await tester.tap(find.byKey(const Key('llenar-sobres')));
+    await tester.pumpAndSettle();
+    expect(find.text('Llenar sobres y sueldo'), findsOneWidget);
+    await tester.tap(find.text('Listo, lo separé'));
+    await tester.pumpAndSettle();
+    expect(calls.length, 3);
+    expect(calls[0].$1, 'fin_movimiento');
+    expect(calls[0].$2['p_cuenta'], 'efectivo');
+    expect(calls[0].$2['p_cuenta_destino'], 'sobre_efectivo');
+    expect(calls[0].$2['p_importe'], 45000);
+    expect(calls[1].$2['p_cuenta'], 'billetera');
+    expect(calls[1].$2['p_cuenta_destino'], 'sobre_billetera');
+    expect(calls[1].$2['p_importe'], 62000);
+    expect(calls[2].$1, 'fin_pagar_sueldo');
+    expect(calls[2].$2['p_importe'], 230000);
+  });
+
+  testWidgets('Sobres: poner plata muestra lo que había más lo agregado', (tester) async {
+    final calls = await abrirConSobres(tester);
+    await tester.tap(find.byTooltip('Poner o sacar plata').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Cuánto ponés'), '20.000');
+    await tester.pump();
+    expect(find.text('Había \$180.000 + \$20.000 = \$200.000'), findsOneWidget);
+    await tester.tap(find.text('Guardar'));
+    await tester.pumpAndSettle();
+    expect(calls.single.$2['p_cuenta_destino'], 'sobre_efectivo');
+    expect(calls.single.$2['p_importe'], 20000);
+  });
+
+  testWidgets('Gastos de la casa: se marcan pagados con el sueldo, sin mover plata', (tester) async {
+    final calls = await abrirConSobres(tester);
+    await tester.tap(find.text('Ya lo pagué'));
+    await tester.pumpAndSettle();
+    expect(calls.single.$1, 'fin_gasto_casa_pagado');
+    expect(calls.single.$2, {'p_gasto_fijo_id': 'luz', 'p_periodo': '2026-12-02', 'p_pagado': true});
+  });
 }

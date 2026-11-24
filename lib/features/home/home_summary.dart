@@ -16,6 +16,8 @@ class HomeSummary {
     this.negatives,
     this.weekOrders,
     this.salaryDue,
+    this.envelopesDue,
+    this.toReorder,
     required this.at,
     this.cached = false,
   });
@@ -32,6 +34,12 @@ class HomeSummary {
   /// Administración: el sueldo de la semana ya llegó (sábado) y no se pagó → importe; si no, null.
   final double? salaryDue;
 
+  /// Administración, sábado o domingo: lo que falta poner en los sobres (null si nada).
+  final double? envelopesDue;
+
+  /// Productos "Para reponer".
+  final int? toReorder;
+
   /// Cuándo se leyó.
   final DateTime at;
 
@@ -46,6 +54,8 @@ class HomeSummary {
     'negativos': negatives,
     'semana': weekOrders,
     'sueldo': salaryDue,
+    'sobres': envelopesDue,
+    'reponer': toReorder,
     'at': at.toIso8601String(),
   };
 
@@ -57,6 +67,8 @@ class HomeSummary {
     negatives: json['negativos'] as int?,
     weekOrders: json['semana'] as int?,
     salaryDue: (json['sueldo'] as num?)?.toDouble(),
+    envelopesDue: (json['sobres'] as num?)?.toDouble(),
+    toReorder: json['reponer'] as int?,
     at: DateTime.tryParse(json['at']?.toString() ?? '') ?? DateTime.now(),
     cached: cached,
   );
@@ -64,6 +76,17 @@ class HomeSummary {
   /// Sin ningún dato (todo falló).
   bool get isEmpty =>
       toInvoice == null && toDeliver == null && tripOpen == null && negatives == null && weekOrders == null;
+}
+
+double? _salaryDue(Map<String, dynamic>? r) {
+  final s = r?['sueldo'];
+  return s is Map && s['pendiente'] == true ? stockNum(s['semanal']) : null;
+}
+
+double? _envelopesDue(Map<String, dynamic>? r) {
+  if (r == null || r['fin_de_semana'] != true) return null;
+  final v = stockNum(r['poner']);
+  return v > 0 ? v : null;
 }
 
 String get _cacheKey => appConfig.localPreferenceKey('inicio_resumen');
@@ -110,11 +133,15 @@ Future<HomeSummary> fetchHomeSummary(SupabaseClient client, {required bool admin
       }(),
       () async {
         try {
-          final Object? r = await client.rpc('fin_sueldo_estado', params: const {}, get: true);
-          if (r is Map && r['pendiente'] == true) return stockNum(r['semanal']);
+          final Object? r = await client.rpc('fin_sabado_estado', params: const {}, get: true);
+          if (r is Map) return Map<String, dynamic>.from(r);
         } catch (_) {}
         return null;
       }(),
+      _count(() async {
+        final List<dynamic> rows = await client.rpc('stock_reponer', params: const {'p_todos': false}, get: true);
+        return rows.length;
+      }),
       _count(() async {
         final List<dynamic> estado = await client.rpc('stock_estado', params: const {}, get: true);
         return estado.where((raw) {
@@ -129,8 +156,10 @@ Future<HomeSummary> fetchHomeSummary(SupabaseClient client, {required bool admin
       toDeliver: results[1] as int?,
       tripOpen: vehicle?.tripOpen,
       tripSince: vehicle?.openedAt,
-      negatives: results[4] as int?,
-      salaryDue: results[3] as double?,
+      negatives: results[5] as int?,
+      toReorder: results[4] as int?,
+      salaryDue: _salaryDue(results[3] as Map<String, dynamic>?),
+      envelopesDue: _envelopesDue(results[3] as Map<String, dynamic>?),
       at: now,
     );
   } else {

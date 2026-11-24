@@ -142,3 +142,13 @@ Prueba: `test/stock_vehiculo_escenario.sql`.
 4. Resumen de productos con stock y fraccionados (1.8.0).
 3. Reparto y cobros sin señal (hora real del teléfono), descontando del vehículo.
 4. Encender en producción (contar los primeros productos).
+
+## Para reponer (1.18.0)
+
+Migración `20261207010000_reponer_stock`. `stock_reponer(p_todos)`: por producto con control de stock (no "a pedido"),
+ritmo = unidades entregadas en 8 semanas (o desde la primera venta), libre = depósito + vehículo − facturado sin
+entregar; avisa si alcanza para menos de la demora del proveedor + 2 días y sugiere comprar para demora + 7 días.
+Proveedor = el de la última compra; demora en `stock_proveedores` (por defecto 1). Ajustes por producto en
+`stock_reposicion_ajustes` (no avisar, mínimo). Fraccionados: el ritmo de los sueltos suma al cerrado; un suelto bajo con
+cerrados en stock dice "abrir". Administración y ayuda en el depósito (sin costos). Prueba:
+`test/reponer_stock_escenario.sql`, `test/reorder_test.dart`.

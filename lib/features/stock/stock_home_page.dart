@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_theme.dart';
+import '../../core/money_format.dart';
 import '../../core/desktop_records.dart';
 import '../../core/network_status.dart';
 import 'stock_data.dart';
@@ -11,6 +12,7 @@ import 'stock_audit_data.dart';
 import 'stock_audit_pages.dart';
 import 'trip_settlement_page.dart';
 import 'stock_guide_page.dart';
+import 'stock_reorder.dart';
 import '../../core/text_search.dart';
 
 enum _Filter { controlled, onDemand, differences, all }
@@ -31,13 +33,20 @@ Future<bool?> openTransfer(BuildContext context, StockFormKind kind, {SupabaseCl
 }
 
 /// Abre Anotar compra directo (lee el stock y el viaje antes). El lugar se elige en la pantalla.
-Future<void> openPurchase(BuildContext context, {SupabaseClient? client}) async {
+/// Con [initialQuantities] y [initialSupplier] viene armada (desde "Para reponer").
+Future<void> openPurchase(
+  BuildContext context, {
+  SupabaseClient? client,
+  Map<String, double>? initialQuantities,
+  String? initialSupplier,
+}) async {
   final db = client ?? Supabase.instance.client;
   final messenger = ScaffoldMessenger.of(context);
   final navigator = Navigator.of(context);
   try {
     final items = await fetchStockItems(db);
     final vehicle = await fetchVehicleStock(db);
+    final hints = await fetchPurchaseHints(db);
     await navigator.push<bool>(
       MaterialPageRoute(
         builder: (_) => StockFormPage(
@@ -45,6 +54,9 @@ Future<void> openPurchase(BuildContext context, {SupabaseClient? client}) async 
           items: items,
           tripId: vehicle.tripId,
           client: client,
+          initialQuantities: initialQuantities,
+          initialSupplier: initialSupplier,
+          hints: hints,
         ),
       ),
     );
@@ -79,6 +91,9 @@ class _StockHomePageState extends State<StockHomePage> {
   /// "Stock a revisar" (null si no se pudo leer).
   StockReview? _review;
   bool _reviewOpen = true;
+
+  /// "Para reponer" (null si no se pudo leer).
+  List<ReorderLine>? _reorder;
   final _search = TextEditingController();
 
   @override
@@ -105,6 +120,10 @@ class _StockHomePageState extends State<StockHomePage> {
       try {
         review = await fetchStockReview(_client);
       } catch (_) {}
+      List<ReorderLine>? reorder;
+      try {
+        reorder = await fetchReorder(_client);
+      } catch (_) {}
       var names = _sellerNames;
       try {
         names = {
@@ -117,6 +136,7 @@ class _StockHomePageState extends State<StockHomePage> {
         _items = items;
         _vehicle = vehicle;
         _review = review;
+        _reorder = reorder;
         _sellerNames = names;
         if (!items.any((i) => i.controlled) && _filter == _Filter.controlled) _filter = _Filter.all;
         _loading = false;
@@ -480,6 +500,7 @@ class _StockHomePageState extends State<StockHomePage> {
         children: [
           _tripCard(),
           if (_review != null && !_review!.isEmpty) ...[const SizedBox(height: 12), _reviewCard(_review!)],
+          if (_reorder != null && _reorder!.isNotEmpty) ...[const SizedBox(height: 12), _reorderCard(_reorder!)],
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -725,6 +746,55 @@ class _StockHomePageState extends State<StockHomePage> {
   }
 
   /// "Stock a revisar": lo que necesita atención (negativos, diferencias sin motivo, sin contar).
+  Widget _reorderCard(List<ReorderLine> lines) {
+    final oscuro = Tonos.of(context).oscuro;
+    final fondo = oscuro ? const Color(0xFF412402) : const Color(0xFFFAEEDA);
+    final texto = oscuro ? const Color(0xFFFAC775) : const Color(0xFF633806);
+    final soon = lines.where((l) => (l.days ?? 0) < 1.5).length;
+    final cost = lines.fold<double>(0, (s, l) => s + (l.cost ?? 0));
+    return Material(
+      key: const Key('stock-para-reponer'),
+      color: fondo,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => ReorderPage(client: widget.client, helper: widget.helper)),
+          );
+          if (mounted) _load();
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+          child: Row(
+            children: [
+              Icon(Icons.shopping_cart_outlined, color: texto),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Para reponer', style: TextStyle(color: texto, fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text(
+                      [
+                        if (soon > 0) '$soon se ${soon == 1 ? 'acaba' : 'acaban'} mañana o ya',
+                        if (lines.length > soon) '${lines.length - soon} en pocos días',
+                        if (!widget.helper && cost > 0) 'reponer ≈ ${formatoPesos(cost)}',
+                      ].join(' · '),
+                      style: TextStyle(color: texto, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              Text('${lines.length}', style: TextStyle(color: texto, fontWeight: FontWeight.bold, fontSize: 18)),
+              Icon(Icons.chevron_right, color: texto),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _reviewCard(StockReview r) {
     final oscuro = Tonos.of(context).oscuro;
     final fondo = oscuro ? const Color(0xFF501313) : const Color(0xFFFCEBEB);

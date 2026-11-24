@@ -894,6 +894,16 @@ class _HomePageState extends State<HomePage> {
             () => _abrir(const StockHomePage(onlyNegatives: true)),
             alert: (r?.negatives ?? 0) > 0,
           ),
+          if ((r?.toReorder ?? 0) > 0)
+            TodayItem(HomeArea.reparto, '${r!.toReorder}', 'para reponer', () => _irA(3)),
+          if (r?.envelopesDue != null)
+            TodayItem(
+              HomeArea.plata,
+              pesos(r!.envelopesDue!),
+              'para los sobres',
+              () => _abrir(const FinanceHomePage()),
+              icon: Icons.savings_outlined,
+            ),
           if (r?.salaryDue != null)
             TodayItem(
               HomeArea.plata,

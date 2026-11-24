@@ -175,6 +175,56 @@ class _FinanceHomePageState extends State<FinanceHomePage> {
     if (request != null) await _run(request);
   }
 
+  Future<void> _envelope(Envelope e) async {
+    final request = await showEnvelopeForm(context, e, suggested: e.ponerSabado);
+    if (request != null) await _run(request);
+  }
+
+  /// El sábado: sobres y sueldo, uno detrás del otro.
+  Future<void> _saturday() async {
+    final state = _state;
+    if (state == null) return;
+    final requests = await showSaturdayForm(context, state);
+    if (requests == null || _busy) return;
+    setState(() => _busy = true);
+    var offline = false;
+    try {
+      for (final r in requests) {
+        final outcome = await runFinOp(
+          widget.client,
+          rpc: r.rpc,
+          args: r.args,
+          description: r.description,
+          total: r.total,
+          runner: widget.runner,
+        );
+        offline = offline || outcome.savedOffline;
+      }
+      _snack(offline ? 'Sin señal: quedó guardado y se envía solo.' : 'Listo: sobres llenos.');
+    } catch (error) {
+      _snack(stockErrorText(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (widget.runner == null) await _load();
+  }
+
+  Future<void> _homePaid(FixedExpense g, bool paid) async {
+    final period = paid ? g.vence : (g.periodoMes ?? g.vence);
+    final args = {'p_gasto_fijo_id': g.id, 'p_periodo': isoDate(period), 'p_pagado': paid};
+    try {
+      if (widget.runner != null) {
+        await widget.runner!('fin_gasto_casa_pagado', args);
+      } else {
+        await _client.rpc('fin_gasto_casa_pagado', params: args);
+      }
+      _snack(paid ? '${g.nombre}: pagado con tu sueldo.' : '${g.nombre}: vuelve a pendiente.');
+      if (widget.runner == null) await _load();
+    } catch (error) {
+      _snack(isUncertainRequestError(error) ? 'Sin señal: se marca con conexión.' : stockErrorText(error));
+    }
+  }
+
   Future<void> _editFixed([FixedExpense? current]) async {
     final params = await showFixedExpenseForm(context, current: current);
     if (params == null) return;
@@ -323,6 +373,7 @@ class _FinanceHomePageState extends State<FinanceHomePage> {
                           _actions(),
                           _salaryCard(state),
                           _envelopeCard(state),
+                          if (state.deLaCasa.isNotEmpty) _homeExpensesCard(state),
                           if (state.deudas.isNotEmpty) _debtsCard(state),
                           _monthCard(state),
                           _recentCard(state),
@@ -392,25 +443,37 @@ class _FinanceHomePageState extends State<FinanceHomePage> {
   Widget _moneyCard(FinState s) {
     final t = Tonos.of(context);
     final short = s.disponible < 0;
+    // Servidor sin sobres (versión anterior): se muestra como antes.
+    final conSobres = s.libre != null;
+    final libres = conSobres ? s.cuentas.where((c) => c.codigo == efectivo || c.codigo == billetera) : s.cuentas;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _title('Plata hoy'),
-            for (final c in s.cuentas) _line(c.nombre, c.saldo),
+            _title(conSobres ? 'Plata libre' : 'Plata hoy'),
+            for (final c in libres) _line(c.nombre, c.saldo),
             const Divider(),
-            _line('Total', s.plata, bold: true),
-            _line('− Apartado para gastos fijos', -s.sobre, color: t.secundario),
+            _line('Total', conSobres ? s.libre! : s.plata, bold: true),
+            if (!conSobres) _line('− Apartado para gastos fijos', -s.sobre, color: t.secundario),
             if (s.deben > 0) _line('− Proveedores a pagar', -s.deben, color: t.secundario),
+            if (conSobres && s.faltanSobres > 0) _line('− Lo que falta en los sobres', -s.faltanSobres, color: t.secundario),
             const Divider(),
             _line('Disponible para mercadería', s.disponible, bold: true, size: 18, color: short ? t.rojo : t.verde),
+            if (conSobres)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Lo de los sobres no está acá: el arqueo de todos los días es solo de esta plata.',
+                  style: TextStyle(fontSize: 12, color: t.secundario),
+                ),
+              ),
             if (short)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  'No alcanza para lo apartado: cobrá saldos o frená compras y retiros.',
+                  'No alcanza: cobrá saldos o frená compras y retiros.',
                   style: TextStyle(color: t.rojo),
                 ),
               ),
@@ -552,41 +615,143 @@ class _FinanceHomePageState extends State<FinanceHomePage> {
 
   Widget _envelopeCard(FinState s) {
     final t = Tonos.of(context);
-    final total = s.gastosFijosMes;
+    final negocio = s.delNegocio;
+    final sobres = [for (final e in s.sobres) if (e.deberia > 0 || e.saldo > 0 || e.ponerSabado > 0) e];
     return Card(
+      key: const Key('sobres'),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _title(
-              'Sobre de gastos fijos',
+              'Sobres de gastos fijos',
               trailing: TextButton.icon(
                 onPressed: () => _editFixed(),
                 icon: const Icon(Icons.add),
                 label: const Text('Agregar'),
               ),
             ),
-            if (s.gastosFijos.isEmpty)
+            if (negocio.isEmpty)
               const Text(
-                'Cargá tus gastos fijos (luz, cuota del vehículo, tarjeta…) y la app te dice cuánto '
-                'apartar cada semana para que el día de pago la plata ya esté.',
+                'Cargá los gastos fijos del negocio (cuota del vehículo, alquiler…) y cómo se pagan. Cada sábado '
+                'la app te dice cuánto poner en el frasco (efectivo) y en la reserva de la billetera.',
               )
             else ...[
-              Text(
-                'Apartá ${pesos(s.apartarPorSemana)} por semana',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              if (s.sobres.isEmpty)
+                Text('Apartá ${pesos(s.apartarPorSemana)} por semana', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              for (final e in sobres) _envelopeRow(e),
+              if (s.sobres.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      FilledButton.tonalIcon(
+                        key: const Key('llenar-sobres'),
+                        onPressed: _busy ? null : _saturday,
+                        icon: const Icon(Icons.event_available_outlined),
+                        label: Text(s.ponerSabado > 0 ? 'Llenar sobres · ${pesos(s.ponerSabado)}' : 'Llenar sobres'),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: total <= 0 ? 0 : (s.sobre / total).clamp(0, 1).toDouble(),
-                minHeight: 8,
-              ),
-              const SizedBox(height: 4),
-              Text('Apartado hoy ${pesos(s.sobre)} de ${pesos(total)}', style: TextStyle(color: t.secundario)),
-              const SizedBox(height: 8),
-              for (final g in s.gastosFijos) _fixedRow(g),
+              for (final g in negocio) _fixedRow(g),
             ],
+            if (s.sobres.isNotEmpty && negocio.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Los sobres cambian solo cuando ponés plata o pagás desde ahí. "Debería tener" es para hoy; '
+                  'lo del sábado cubre hasta el sábado siguiente.',
+                  style: TextStyle(fontSize: 12, color: t.secundario),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _envelopeRow(Envelope e) {
+    final t = Tonos.of(context);
+    final ok = e.faltan <= 0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(e.codigo == sobreEfectivo ? Icons.savings_outlined : Icons.account_balance_outlined),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: Text(e.nombre, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600))),
+                    Text(pesos(e.saldo), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Text(
+                  'Para hoy debería tener ${pesos(e.deberia)} · ${ok ? 'al día' : 'faltan ${pesos(e.faltan)}'}',
+                  style: TextStyle(fontSize: 13, color: ok ? t.verde : t.rojo),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Poner o sacar plata',
+            onPressed: _busy ? null : () => _envelope(e),
+            icon: const Icon(Icons.add_circle_outline),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _homeExpensesCard(FinState s) {
+    final t = Tonos.of(context);
+    return Card(
+      key: const Key('gastos-casa'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _title('Gastos de la casa (con tu sueldo)'),
+            Text(
+              'No salen del negocio: marcalos cuando los pagues. Suman ${pesos(s.deLaCasa.where((g) => g.activo).fold(0.0, (a, g) => a + g.importe))} por mes.',
+              style: TextStyle(fontSize: 13, color: t.secundario),
+            ),
+            for (final g in s.deLaCasa)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                onTap: () => _editFixed(g),
+                title: Text('${g.nombre} · ${pesos(g.importe)}', style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: g.activo ? null : t.secundario,
+                  decoration: g.activo ? null : TextDecoration.lineThrough,
+                )),
+                subtitle: Text(
+                  !g.activo
+                      ? 'Apagado'
+                      : g.pagadoMes
+                      ? 'Pagado este mes · próximo ${diaMes(g.vence)}'
+                      : g.vencido
+                      ? 'VENCIDO el ${diaMes(g.vence)}'
+                      : 'Vence el ${diaMes(g.vence)}',
+                  style: TextStyle(color: g.vencido && !g.pagadoMes ? t.rojo : t.secundario),
+                ),
+                trailing: !g.activo
+                    ? null
+                    : g.pagadoMes
+                    ? TextButton(onPressed: _busy ? null : () => _homePaid(g, false), child: const Text('Deshacer'))
+                    : TextButton(onPressed: _busy ? null : () => _homePaid(g, true), child: const Text('Ya lo pagué')),
+              ),
           ],
         ),
       ),
@@ -600,12 +765,18 @@ class _FinanceHomePageState extends State<FinanceHomePage> {
       'mixto' => t.etiquetaGris,
       _ => t.etiquetaVerde,
     };
+    Widget tag(String text, (Color, Color) colors) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(color: colors.$1, borderRadius: BorderRadius.circular(6)),
+      child: Text(text, style: TextStyle(fontSize: 11, color: colors.$2, fontWeight: FontWeight.w600)),
+    );
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
       onTap: () => _editFixed(g),
       title: Wrap(
         spacing: 6,
+        runSpacing: 2,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
@@ -617,18 +788,8 @@ class _FinanceHomePageState extends State<FinanceHomePage> {
               decoration: g.activo ? null : TextDecoration.lineThrough,
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-            child: Text(
-              switch (g.ambito) {
-                'hogar' => 'hogar',
-                'mixto' => 'mixto',
-                _ => 'negocio',
-              },
-              style: TextStyle(fontSize: 11, color: fg, fontWeight: FontWeight.w600),
-            ),
-          ),
+          tag(g.ambito == 'mixto' ? 'mixto' : 'negocio', (bg, fg)),
+          tag(g.medio == efectivo ? 'efectivo' : 'transferencia', t.etiquetaGris),
         ],
       ),
       subtitle: Text(
@@ -636,7 +797,7 @@ class _FinanceHomePageState extends State<FinanceHomePage> {
             ? 'Apagado'
             : g.vencido
             ? 'VENCIDO el ${diaMes(g.vence)}'
-            : 'Vence el ${diaMes(g.vence)} · apartado ${pesos(g.reservado)}',
+            : 'Vence el ${diaMes(g.vence)}',
         style: TextStyle(color: g.vencido ? t.rojo : t.secundario),
       ),
       trailing: g.activo

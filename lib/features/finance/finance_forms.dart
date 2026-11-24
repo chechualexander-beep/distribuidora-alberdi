@@ -40,6 +40,26 @@ Widget accountPicker(String value, ValueChanged<String> onChanged) => SegmentedB
   onSelectionChanged: (v) => onChanged(v.first),
 );
 
+/// Las cuatro cuentas: la plata libre y los dos sobres.
+Widget anyAccountPicker(String value, ValueChanged<String> onChanged) => Wrap(
+  spacing: 6,
+  runSpacing: 6,
+  children: [
+    for (final c in const [efectivo, billetera, sobreEfectivo, sobreBilletera])
+      ChoiceChip(
+        avatar: Icon(switch (c) {
+          efectivo => Icons.payments_outlined,
+          billetera => Icons.phone_android,
+          sobreEfectivo => Icons.savings_outlined,
+          _ => Icons.account_balance_outlined,
+        }, size: 18),
+        label: Text(cuentaNombre(c)),
+        selected: value == c,
+        onSelected: (_) => onChanged(c),
+      ),
+  ],
+);
+
 Widget _error(String? text) => text == null
     ? const SizedBox.shrink()
     : Padding(
@@ -360,6 +380,7 @@ Future<Map<String, dynamic>?> showFixedExpenseForm(BuildContext context, {FixedE
   final day = TextEditingController(text: current?.diaPago.toString() ?? '1');
   var ambito = current?.ambito ?? 'negocio';
   var activo = current?.activo ?? true;
+  var medio = current?.medio ?? billetera;
   String? error;
   return _form<Map<String, dynamic>>(
     context,
@@ -400,13 +421,34 @@ Future<Map<String, dynamic>?> showFixedExpenseForm(BuildContext context, {FixedE
           padding: const EdgeInsets.only(top: 6),
           child: Text(
             switch (ambito) {
-              'hogar' => 'Se paga con plata del negocio pero es de la casa: cuenta como plata para el hogar.',
+              'hogar' => 'Es de la casa: se paga con tu sueldo. No va al sobre del negocio.',
               'mixto' => 'Como la tarjeta: al pagarlo indicás cuánto fue para la casa.',
               _ => 'Gasto del negocio.',
             },
             style: const TextStyle(fontSize: 13, color: AppColors.gris),
           ),
         ),
+        if (ambito != 'hogar') ...[
+          const SizedBox(height: 12),
+          const Text('Se paga con', style: TextStyle(color: AppColors.gris)),
+          const SizedBox(height: 4),
+          SegmentedButton<String>(
+            key: const Key('medio-gasto-fijo'),
+            segments: const [
+              ButtonSegment(value: efectivo, label: Text('Efectivo'), icon: Icon(Icons.payments_outlined)),
+              ButtonSegment(value: billetera, label: Text('Transferencia'), icon: Icon(Icons.phone_android)),
+            ],
+            selected: {medio},
+            onSelectionChanged: (v) => set(() => medio = v.first),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              medio == efectivo ? 'Se aparta en el frasco.' : 'Se aparta en la reserva de la billetera.',
+              style: const TextStyle(fontSize: 13, color: AppColors.gris),
+            ),
+          ),
+        ],
         if (current != null)
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -439,6 +481,7 @@ Future<Map<String, dynamic>?> showFixedExpenseForm(BuildContext context, {FixedE
         'p_dia': d,
         'p_ambito': ambito,
         'p_activo': activo,
+        'p_medio': medio,
       };
     },
   );
@@ -448,7 +491,7 @@ Future<Map<String, dynamic>?> showFixedExpenseForm(BuildContext context, {FixedE
 Future<FinRequest?> showPayFixedForm(BuildContext context, FixedExpense expense) {
   final amount = TextEditingController(text: importeEditable(expense.importe));
   final home = TextEditingController();
-  var cuenta = efectivo;
+  var cuenta = expense.conSueldo ? expense.medio : sobreDe(expense.medio);
   String? error;
   return _form<FinRequest>(
     context,
@@ -468,7 +511,7 @@ Future<FinRequest?> showPayFixedForm(BuildContext context, FixedExpense expense)
         const SizedBox(height: 12),
         const Text('Lo pagaste con', style: TextStyle(color: AppColors.gris)),
         const SizedBox(height: 4),
-        accountPicker(cuenta, (v) => set(() => cuenta = v)),
+        anyAccountPicker(cuenta, (v) => set(() => cuenta = v)),
         _error(error),
       ],
     ),
@@ -619,7 +662,7 @@ Future<FinRequest?> showCountForm(BuildContext context, FinState state) {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        accountPicker(cuenta, (v) => set(() => cuenta = v)),
+        anyAccountPicker(cuenta, (v) => set(() => cuenta = v)),
         const SizedBox(height: 8),
         Text(
           'Según la app hay ${pesos(state.saldo(cuenta))}.',
@@ -628,7 +671,12 @@ Future<FinRequest?> showCountForm(BuildContext context, FinState state) {
         const SizedBox(height: 12),
         moneyField(
           amount,
-          cuenta == efectivo ? '¿Cuánto efectivo contaste?' : '¿Cuánto dice la billetera?',
+          switch (cuenta) {
+            efectivo => '¿Cuánto efectivo contaste?',
+            sobreEfectivo => '¿Cuánto hay en el frasco?',
+            sobreBilletera => '¿Cuánto dice la reserva?',
+            _ => '¿Cuánto dice la billetera?',
+          },
           autofocus: true,
         ),
         const SizedBox(height: 8),
@@ -651,6 +699,183 @@ Future<FinRequest?> showCountForm(BuildContext context, FinState state) {
         'Arqueo · ${cuentaNombre(cuenta)}',
         value,
       );
+    },
+  );
+}
+
+/// Poner plata en un sobre (o sacarla): un pase entre la plata libre y el sobre.
+Future<FinRequest?> showEnvelopeForm(BuildContext context, Envelope envelope, {double? suggested}) {
+  final amount = TextEditingController(text: suggested == null || suggested <= 0 ? '' : importeEditable(suggested));
+  var sacar = false;
+  String? error;
+  final libre = libreDe(envelope.codigo);
+  return _form<FinRequest>(
+    context,
+    title: envelope.nombre,
+    body: (context, set) {
+      final value = parseMoney(amount.text) ?? 0;
+      final queda = envelope.saldo + (sacar ? -value : value);
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('Poner'), icon: Icon(Icons.add)),
+              ButtonSegment(value: true, label: Text('Sacar'), icon: Icon(Icons.remove)),
+            ],
+            selected: {sacar},
+            onSelectionChanged: (v) => set(() => sacar = v.first),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: amount,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: const [ImporteInputFormatter()],
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            onChanged: (_) => set(() {}),
+            decoration: InputDecoration(
+              labelText: sacar ? 'Cuánto sacás' : 'Cuánto ponés',
+              prefixText: '\$ ',
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Había ${pesos(envelope.saldo)} ${sacar ? '−' : '+'} ${pesos(value)} = ${pesos(queda)}',
+            key: const Key('sobre-cuenta'),
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          Text(
+            sacar ? 'Vuelve a ${cuentaNombre(libre)}.' : 'Sale de ${cuentaNombre(libre)}.',
+            style: const TextStyle(fontSize: 13, color: AppColors.gris),
+          ),
+          _error(error),
+        ],
+      );
+    },
+    onSave: (set) {
+      final value = parseMoney(amount.text);
+      if (value == null || value <= 0) {
+        set(() => error = 'Escribí el importe (mayor que 0).');
+        return null;
+      }
+      if (sacar && value > envelope.saldo + 0.001) {
+        set(() => error = 'En el sobre hay ${pesos(envelope.saldo)}.');
+        return null;
+      }
+      return FinRequest(
+        'fin_movimiento',
+        {
+          'p_tipo': 'pase',
+          'p_cuenta': sacar ? envelope.codigo : libre,
+          'p_importe': value,
+          'p_categoria': sacar ? 'Saqué del sobre' : 'Al sobre',
+          'p_descripcion': null,
+          'p_cuenta_destino': sacar ? libre : envelope.codigo,
+        },
+        '${sacar ? 'Saqué de' : 'Puse en'} ${envelope.nombre}',
+        value,
+      );
+    },
+  );
+}
+
+/// El sábado: llenar los dos sobres y pagarte el sueldo, todo junto.
+Future<List<FinRequest>?> showSaturdayForm(BuildContext context, FinState state) {
+  final envelopes = [for (final e in state.sobres) if (e.ponerSabado > 0 || e.deberia > 0 || e.saldo > 0) e];
+  final amounts = {
+    for (final e in envelopes) e.codigo: TextEditingController(text: e.ponerSabado > 0 ? importeEditable(e.ponerSabado) : ''),
+  };
+  final salary = state.sueldo;
+  final paySalary = salary != null && salary.fijado && salary.pagado == null && salary.semana != null;
+  final salaryAmount = TextEditingController(text: paySalary ? importeEditable(salary?.semanal ?? 0) : '');
+  final week = paySalary ? (salary?.semana ?? DateTime.now()) : DateTime.now();
+  var salaryAccount = efectivo;
+  String? error;
+  return _form<List<FinRequest>>(
+    context,
+    title: 'Llenar sobres y sueldo',
+    saveLabel: 'Listo, lo separé',
+    body: (context, set) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Una vez por semana. Lo que ponés cubre los gastos fijos hasta el sábado que viene.',
+          style: TextStyle(color: AppColors.gris),
+        ),
+        for (final e in envelopes) ...[
+          const SizedBox(height: 12),
+          moneyField(
+            amounts[e.codigo]!,
+            e.codigo == sobreEfectivo ? 'Al frasco (sale del efectivo)' : 'A la reserva (sale de la billetera)',
+            helper: 'Hay ${pesos(e.saldo)}. Vacío o 0 si no ponés nada.',
+          ),
+        ],
+        if (envelopes.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: Text('No hay gastos fijos del negocio cargados: no hace falta llenar sobres.'),
+          ),
+        if (paySalary) ...[
+          const SizedBox(height: 16),
+          moneyField(salaryAmount, 'Tu sueldo (semana del ${sabado(week)})',
+              helper: 'Vacío si esta semana no te lo pagás.'),
+          const SizedBox(height: 6),
+          accountPicker(salaryAccount, (v) => set(() => salaryAccount = v)),
+        ],
+        _error(error),
+      ],
+    ),
+    onSave: (set) {
+      final out = <FinRequest>[];
+      for (final e in envelopes) {
+        final text = amounts[e.codigo]!.text.trim();
+        if (text.isEmpty) continue;
+        final value = parseMoney(text);
+        if (value == null) {
+          set(() => error = 'Revisá el importe de ${e.nombre}.');
+          return null;
+        }
+        if (value <= 0) continue;
+        out.add(
+          FinRequest(
+            'fin_movimiento',
+            {
+              'p_tipo': 'pase',
+              'p_cuenta': libreDe(e.codigo),
+              'p_importe': value,
+              'p_categoria': 'Al sobre',
+              'p_descripcion': 'Sábado',
+              'p_cuenta_destino': e.codigo,
+            },
+            'Puse en ${e.nombre}',
+            value,
+          ),
+        );
+      }
+      if (paySalary && salaryAmount.text.trim().isNotEmpty) {
+        final value = parseMoney(salaryAmount.text);
+        if (value == null || value <= 0) {
+          set(() => error = 'Revisá el importe del sueldo (o dejalo vacío).');
+          return null;
+        }
+        out.add(
+          FinRequest(
+            'fin_pagar_sueldo',
+            {'p_semana': isoDate(week), 'p_cuenta': salaryAccount, 'p_importe': value},
+            'Mi sueldo · ${sabado(week)}',
+            value,
+          ),
+        );
+      }
+      if (out.isEmpty) {
+        set(() => error = 'No hay nada para anotar.');
+        return null;
+      }
+      return out;
     },
   );
 }

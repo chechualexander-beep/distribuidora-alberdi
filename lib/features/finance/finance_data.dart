@@ -9,7 +9,22 @@ import 'package:distribuidora_alberdi/core/money_format.dart';
 const efectivo = 'efectivo';
 const billetera = 'billetera';
 
-String cuentaNombre(String codigo) => codigo == efectivo ? 'Efectivo' : 'Billetera virtual';
+/// Los sobres de verdad: el frasco (efectivo apartado) y la reserva (apartada dentro de la billetera).
+const sobreEfectivo = 'sobre_efectivo';
+const sobreBilletera = 'sobre_billetera';
+
+String cuentaNombre(String codigo) => switch (codigo) {
+  efectivo => 'Efectivo',
+  sobreEfectivo => 'Frasco (efectivo)',
+  sobreBilletera => 'Reserva (billetera)',
+  _ => 'Billetera virtual',
+};
+
+/// El sobre donde va un gasto fijo según cómo se paga.
+String sobreDe(String medio) => medio == efectivo ? sobreEfectivo : sobreBilletera;
+
+/// De dónde sale la plata para llenar un sobre.
+String libreDe(String sobre) => sobre == sobreEfectivo ? efectivo : billetera;
 
 /// 15000 → "$ 15.000"; 1500.5 → "$ 1.500,50"; −200 → "−$ 200".
 String pesos(double value) => formatoPesos(value);
@@ -48,6 +63,8 @@ class FixedExpense {
     required this.reservado,
     required this.porSemana,
     required this.pagadoMes,
+    this.medio = billetera,
+    this.periodoMes,
   });
 
   final String id;
@@ -68,6 +85,15 @@ class FixedExpense {
   final double porSemana;
   final bool pagadoMes;
 
+  /// efectivo o billetera (transferencia): define a qué sobre va.
+  final String medio;
+
+  /// El vencimiento de este mes (para deshacer "ya lo pagué").
+  final DateTime? periodoMes;
+
+  /// Gasto de la casa: se paga con el sueldo, no va al sobre.
+  bool get conSueldo => ambito == 'hogar';
+
   static FixedExpense fromJson(Map<String, dynamic> j) => FixedExpense(
     id: j['id'].toString(),
     nombre: j['nombre']?.toString() ?? '',
@@ -80,6 +106,42 @@ class FixedExpense {
     reservado: stockNum(j['reservado']),
     porSemana: stockNum(j['por_semana']),
     pagadoMes: j['pagado_mes'] == true,
+    medio: j['medio']?.toString() == efectivo ? efectivo : billetera,
+    periodoMes: _date(j['periodo_mes']),
+  );
+}
+
+/// Un sobre: lo que hay, lo que debería haber hoy y lo que hay que poner el sábado.
+class Envelope {
+  const Envelope({
+    required this.codigo,
+    required this.medio,
+    required this.nombre,
+    required this.saldo,
+    required this.deberia,
+    required this.faltan,
+    required this.ponerSabado,
+    this.sabado,
+  });
+
+  final String codigo;
+  final String medio;
+  final String nombre;
+  final double saldo;
+  final double deberia;
+  final double faltan;
+  final double ponerSabado;
+  final DateTime? sabado;
+
+  static Envelope fromJson(Map<String, dynamic> j) => Envelope(
+    codigo: j['codigo']?.toString() ?? sobreBilletera,
+    medio: j['medio']?.toString() ?? billetera,
+    nombre: j['nombre']?.toString() ?? '',
+    saldo: stockNum(j['saldo']),
+    deberia: stockNum(j['deberia']),
+    faltan: stockNum(j['faltan']),
+    ponerSabado: stockNum(j['poner_sabado']),
+    sabado: _date(j['sabado']),
   );
 }
 
@@ -273,6 +335,9 @@ class FinState {
     required this.mes,
     required this.ultimos,
     this.sueldo,
+    this.libre,
+    this.sobres = const [],
+    this.faltanSobres = 0,
   });
 
   /// Foto inicial; null = todavía no se hizo.
@@ -292,8 +357,19 @@ class FinState {
   final List<FinMovement> ultimos;
   final SalaryStatus? sueldo;
 
+  /// Efectivo + billetera, sin los sobres (null: el servidor todavía no tiene sobres).
+  final double? libre;
+  final List<Envelope> sobres;
+
+  /// Lo que falta en los sobres para estar al día hoy (se descuenta del disponible).
+  final double faltanSobres;
+
   bool get started => inicio != null;
-  List<FixedExpense> get activos => gastosFijos.where((g) => g.activo).toList();
+  List<FixedExpense> get activos => gastosFijos.where((g) => g.activo && !g.conSueldo).toList();
+  List<FixedExpense> get delNegocio => gastosFijos.where((g) => !g.conSueldo).toList();
+  List<FixedExpense> get deLaCasa => gastosFijos.where((g) => g.conSueldo).toList();
+  double get ponerSabado => sobres.fold(0, (s, e) => s + e.ponerSabado);
+  Envelope? sobre(String codigo) => sobres.where((e) => e.codigo == codigo).firstOrNull;
   double get gastosFijosMes => activos.fold(0, (s, g) => s + g.importe);
   double get apartarPorSemana => activos.fold(0, (s, g) => s + g.porSemana);
   double saldo(String cuenta) => cuentas.where((c) => c.codigo == cuenta).map((c) => c.saldo).firstOrNull ?? 0;
@@ -318,6 +394,9 @@ class FinState {
       mes: FinMonth({for (final e in mes.entries) e.key: stockNum(e.value)}),
       ultimos: [for (final m in list('ultimos')) FinMovement.fromJson(m)],
       sueldo: SalaryStatus.fromJson(j['sueldo']),
+      libre: j['libre'] == null ? null : stockNum(j['libre']),
+      sobres: [for (final e in list('sobres')) Envelope.fromJson(e)],
+      faltanSobres: stockNum(j['faltan_sobres']),
     );
   }
 }

@@ -174,6 +174,8 @@ class Tonos {
       oscuro ? (const Color(0xFF501313), const Color(0xFFF7C1C1)) : (const Color(0xFFFCEBEB), const Color(0xFF791F1F));
   (Color, Color) get etiquetaVioleta =>
       oscuro ? (const Color(0xFF26215C), const Color(0xFFCECBF6)) : (const Color(0xFFEEEDFE), const Color(0xFF3C3489));
+  (Color, Color) get etiquetaAmarilla =>
+      oscuro ? (const Color(0xFF412402), const Color(0xFFFAC775)) : (const Color(0xFFFAEEDA), const Color(0xFF633806));
   (Color, Color) get etiquetaGris =>
       oscuro ? (const Color(0xFF2C2C2A), const Color(0xFFD3D1C7)) : (const Color(0xFFF1EFE8), const Color(0xFF444441));
 

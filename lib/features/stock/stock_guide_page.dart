@@ -31,6 +31,15 @@ const _temas = <_Tema>[
   ], avoid: [
     'Anotarla en el vehículo si la bajaste al depósito (o al revés): después el vehículo "tiene" lo que no tiene.',
   ], adminOnly: true),
+  _Tema(Icons.shopping_cart_outlined, 'Para reponer', [
+    'La tarjeta amarilla "Para reponer" aparece arriba cuando algo se va a acabar antes de la próxima compra.',
+    'Se calcula con lo vendido en las últimas 8 semanas y lo libre (sin lo ya facturado para el reparto).',
+    'Avisa cuando alcanza para menos de lo que tarda el proveedor + 2 días, y sugiere comprar para una semana.',
+    'Si un suelto se acaba y hay cerrados, dice "abrir" en lugar de comprar.',
+    'Desde la lista se comparte por WhatsApp; el administrador puede anotar la compra ya armada.',
+  ], avoid: [
+    'No contar: si el stock está mal, la alerta también. Contá lo que veas raro.',
+  ]),
   _Tema(Icons.point_of_sale, 'Vender con el viaje abierto', [
     'Las ventas directas y las entregas salen del vehículo del viaje.',
     'Si arriba no alcanza, la app toma lo que falta del depósito sola, y queda marcado como "tomado del depósito" en la liquidación.',

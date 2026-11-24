@@ -82,3 +82,20 @@ Migración `20261205010000_sueldo_y_salud`.
   Aparece con el primer mes completo y es firme con 3.
 
 Prueba: `test/sueldo_y_salud_escenario.sql`, `test/finance_test.dart`.
+
+## Etapa 4 — Sobres de verdad (1.18.0)
+
+Migración `20261206010000_sobres_reales`.
+
+- Dos cuentas nuevas: **frasco** (`sobre_efectivo`) y **reserva** de la billetera (`sobre_billetera`). Lo que hay
+  adentro cambia solo al poner plata (pase desde efectivo o billetera) o al pagar un gasto fijo desde ahí.
+- Cada gasto fijo del negocio dice cómo se paga (efectivo o transferencia) y va a ese sobre. "Pagar" sale del sobre.
+- Los gastos fijos de la casa (`ambito = hogar`) se pagan con el sueldo: no van al sobre y se marcan "Ya lo pagué"
+  (`fin_gasto_casa_pagado`), sin mover plata del negocio.
+- `fin_sobres`: por sobre, lo que hay, lo que debería haber hoy (lo proporcional de cada gasto), lo que falta y lo que
+  hay que poner el sábado para cubrir hasta el sábado siguiente (lo que vence en esa semana, entero), redondeado a mil.
+- **Llenar sobres** (botón, y "para los sobres" en Hoy el sábado y el domingo): los dos pases y el sueldo de una vez.
+- Disponible para mercadería = efectivo + billetera − proveedores − lo que falta en los sobres. El arqueo puede ser de
+  cualquiera de las cuatro cuentas; el de todos los días es solo de la plata libre.
+
+Prueba: `test/sobres_escenario.sql`, `test/finance_test.dart`.

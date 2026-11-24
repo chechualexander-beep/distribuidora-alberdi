@@ -36,6 +36,9 @@ class StockFormPage extends StatefulWidget {
     this.initialLocation,
     this.reload,
     this.store,
+    this.initialQuantities,
+    this.initialSupplier,
+    this.hints,
   });
 
   final StockFormKind kind;
@@ -57,6 +60,13 @@ class StockFormPage extends StatefulWidget {
 
   /// Lista compartida de cargar/bajar. Sin esto, en la app se usa la de la base (con [reload]).
   final TransferStore? store;
+
+  /// Compra armada desde "Para reponer": cantidades y proveedor.
+  final Map<String, double>? initialQuantities;
+  final String? initialSupplier;
+
+  /// Debajo de cada producto (compra): "Vende ~X por semana · alcanza N días".
+  final Map<String, String>? hints;
 
 
   @override
@@ -291,6 +301,16 @@ class _StockFormPageState extends State<StockFormPage> {
         }
       }
       _onlyFilled = true;
+    }
+    if (_kind == StockFormKind.purchase) {
+      final initial = widget.initialQuantities;
+      if (initial != null && initial.isNotEmpty) {
+        for (final e in initial.entries) {
+          _controller(e.key).text = formatQty(e.value);
+        }
+        _onlyFilled = true;
+      }
+      if (widget.initialSupplier != null) _supplier.text = widget.initialSupplier!;
     }
     if (_kind == StockFormKind.load) _loadSellers();
     if (_isTransfer && (widget.reload != null || _store != null)) {
@@ -1885,6 +1905,12 @@ class _StockFormPageState extends State<StockFormPage> {
                     item.name,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
+                  if (_kind == StockFormKind.purchase && widget.hints?[item.id] != null)
+                    Text(
+                      widget.hints![item.id]!,
+                      key: Key('pista-${item.id}'),
+                      style: const TextStyle(fontSize: 12.5, color: AppColors.azul),
+                    ),
                   Text(
                     _kind == StockFormKind.closeTrip && item.controlled
                         ? 'Debería quedar ${formatQty(item.vehicle)}'
