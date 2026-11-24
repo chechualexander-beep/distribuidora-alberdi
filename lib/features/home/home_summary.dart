@@ -15,6 +15,7 @@ class HomeSummary {
     this.tripSince,
     this.negatives,
     this.weekOrders,
+    this.salaryDue,
     required this.at,
     this.cached = false,
   });
@@ -27,6 +28,9 @@ class HomeSummary {
 
   /// Preventista: sus pedidos de esta semana (desde el lunes).
   final int? weekOrders;
+
+  /// Administración: el sueldo de la semana ya llegó (sábado) y no se pagó → importe; si no, null.
+  final double? salaryDue;
 
   /// Cuándo se leyó.
   final DateTime at;
@@ -41,6 +45,7 @@ class HomeSummary {
     'viaje_desde': tripSince?.toIso8601String(),
     'negativos': negatives,
     'semana': weekOrders,
+    'sueldo': salaryDue,
     'at': at.toIso8601String(),
   };
 
@@ -51,6 +56,7 @@ class HomeSummary {
     tripSince: DateTime.tryParse(json['viaje_desde']?.toString() ?? ''),
     negatives: json['negativos'] as int?,
     weekOrders: json['semana'] as int?,
+    salaryDue: (json['sueldo'] as num?)?.toDouble(),
     at: DateTime.tryParse(json['at']?.toString() ?? '') ?? DateTime.now(),
     cached: cached,
   );
@@ -102,6 +108,13 @@ Future<HomeSummary> fetchHomeSummary(SupabaseClient client, {required bool admin
           return null;
         }
       }(),
+      () async {
+        try {
+          final Object? r = await client.rpc('fin_sueldo_estado', params: const {}, get: true);
+          if (r is Map && r['pendiente'] == true) return stockNum(r['semanal']);
+        } catch (_) {}
+        return null;
+      }(),
       _count(() async {
         final List<dynamic> estado = await client.rpc('stock_estado', params: const {}, get: true);
         return estado.where((raw) {
@@ -116,7 +129,8 @@ Future<HomeSummary> fetchHomeSummary(SupabaseClient client, {required bool admin
       toDeliver: results[1] as int?,
       tripOpen: vehicle?.tripOpen,
       tripSince: vehicle?.openedAt,
-      negatives: results[3] as int?,
+      negatives: results[4] as int?,
+      salaryDue: results[3] as double?,
       at: now,
     );
   } else {

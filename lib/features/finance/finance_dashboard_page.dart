@@ -5,6 +5,7 @@ import '../../core/app_theme.dart';
 import '../../core/desktop_records.dart';
 import '../../core/network_status.dart';
 import '../stock/stock_data.dart';
+import 'business_health.dart';
 import 'finance_data.dart';
 import 'finance_forms.dart' show isoDate;
 
@@ -75,6 +76,11 @@ class Dashboard {
     required this.capital,
     required this.capitalInicio,
     required this.capitalCierre,
+    this.sueldo = 0,
+    this.casa = 0,
+    this.personal = 0,
+    this.aportes = 0,
+    this.gastosPorCategoria = const {},
   });
 
   final DateTime mes;
@@ -98,6 +104,15 @@ class Dashboard {
   final CapitalSnapshot? capital;
   final CapitalSnapshot? capitalInicio;
   final CapitalSnapshot? capitalCierre;
+
+  /// Retiros por separado (suman [hogar]).
+  final double sueldo;
+  final double casa;
+  final double personal;
+
+  /// Plata tuya que entró al negocio (no es ganancia).
+  final double aportes;
+  final Map<String, double> gastosPorCategoria;
 
   static Dashboard fromJson(Map<String, dynamic> j) {
     double? opt(String k) => j[k] == null ? null : stockNum(j[k]);
@@ -123,6 +138,14 @@ class Dashboard {
       capital: CapitalSnapshot.fromJson(j['capital']),
       capitalInicio: CapitalSnapshot.fromJson(j['capital_inicio']),
       capitalCierre: CapitalSnapshot.fromJson(j['capital_cierre']),
+      sueldo: stockNum(j['sueldo']),
+      casa: stockNum(j['casa']),
+      personal: stockNum(j['personal']),
+      aportes: stockNum(j['aportes']),
+      gastosPorCategoria: {
+        for (final e in Map<String, dynamic>.from(j['gastos_por_categoria'] as Map? ?? const {}).entries)
+          e.key: stockNum(e.value),
+      },
     );
   }
 }
@@ -148,11 +171,12 @@ String _pct(double v) => '${(v * 100).toStringAsFixed(1).replaceAll('.', ',')}%'
 
 /// Tablero del mes: ganancia real, cuánto fue a la casa, cuánto hay que vender y el capital.
 class FinanceDashboardPage extends StatefulWidget {
-  const FinanceDashboardPage({super.key, this.client, this.initial});
+  const FinanceDashboardPage({super.key, this.client, this.initial, this.initialHealth});
   final SupabaseClient? client;
 
   /// Solo para pruebas.
   final Dashboard? initial;
+  final BusinessHealth? initialHealth;
 
   @override
   State<FinanceDashboardPage> createState() => _FinanceDashboardPageState();
@@ -162,6 +186,7 @@ class _FinanceDashboardPageState extends State<FinanceDashboardPage> {
   SupabaseClient get _client => widget.client ?? Supabase.instance.client;
   late DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   Dashboard? _data;
+  BusinessHealth? _health;
   String? _error;
   bool _loading = false;
 
@@ -169,12 +194,25 @@ class _FinanceDashboardPageState extends State<FinanceDashboardPage> {
   void initState() {
     super.initState();
     _data = widget.initial;
+    _health = widget.initialHealth;
     if (_data == null) _first();
+  }
+
+  /// La salud no frena el tablero: si falla, la tarjeta no aparece.
+  Future<void> _loadHealth() async {
+    try {
+      final h = await fetchBusinessHealth(_client);
+      if (mounted) setState(() => _health = h);
+    } catch (_) {}
   }
 
   Future<void> _first() async {
     await saveCapitalSnapshot(_client);
     await _load();
+  }
+
+  Future<void> _refresh() async {
+    await Future.wait([_load(), if (widget.initial == null) _loadHealth()]);
   }
 
   Future<void> _load() async {
@@ -183,6 +221,7 @@ class _FinanceDashboardPageState extends State<FinanceDashboardPage> {
       _error = null;
     });
     try {
+      if (_health == null && widget.initial == null) _loadHealth();
       final data = await fetchDashboard(_client, _month);
       if (!mounted) return;
       setState(() {
@@ -216,7 +255,7 @@ class _FinanceDashboardPageState extends State<FinanceDashboardPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tablero del mes'),
-        actions: [IconButton(tooltip: 'Actualizar', icon: const Icon(Icons.refresh), onPressed: _loading ? null : _load)],
+        actions: [IconButton(tooltip: 'Actualizar', icon: const Icon(Icons.refresh), onPressed: _loading ? null : _refresh)],
       ),
       body: DesktopForm(
         maxWidth: 900,
@@ -248,11 +287,13 @@ class _FinanceDashboardPageState extends State<FinanceDashboardPage> {
                             ),
                     )
                   : RefreshIndicator(
-                      onRefresh: _load,
+                      onRefresh: _refresh,
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
                         children: [
+                          if (isCurrent && _health != null) HealthCard(health: _health!),
                           _result(data),
+                          if (data.gastosPorCategoria.isNotEmpty) _expenses(data),
                           _breakEven(data),
                           _capital(data),
                           _yearSales(data),
@@ -342,18 +383,25 @@ class _FinanceDashboardPageState extends State<FinanceDashboardPage> {
         ),
         _line('− Gastos del negocio', -d.gastosNegocio, color: t.secundario),
         _line('= Ganancia del negocio', d.gananciaNegocio, bold: true, color: d.gananciaNegocio < 0 ? t.rojo : t.verde),
-        _line('− Para la casa', -d.hogar, color: t.secundario),
+        _line('− Retiros (sueldo, casa y personal)', -d.hogar, color: t.secundario),
+        if (d.sueldo > 0) _line('      Mi sueldo', -d.sueldo, color: t.secundario, size: 13),
+        if (d.casa > 0) _line('      Casa', -d.casa, color: t.secundario, size: 13),
+        if (d.personal > 0) _line('      Personal', -d.personal, color: t.secundario, size: 13),
         const Divider(),
         _line('= Quedó para el negocio', d.quedo, bold: true, size: 18, color: d.quedo < 0 ? t.rojo : t.verde),
         if (d.quedo < 0)
-          _box('Salió del capital: a la casa fueron ${pesos(-d.quedo)} más de lo que ganó el negocio.', good: false)
+          _box('Salió del capital: te llevaste ${pesos(-d.quedo)} más de lo que ganó el negocio.', good: false)
         else if (d.gananciaComercial > 0)
           _box('Quedaron ${pesos(d.quedo)} para reponer mercadería, ahorrar o crecer.', good: true),
+        if (d.aportes > 0)
+          _note('Además pusiste ${pesos(d.aportes)} de tu bolsillo: entra a la caja pero no es ganancia.'),
         if (d.plataParcial)
           _note(
             d.plataDesde == null
                 ? 'Falta la foto inicial en "Plata del negocio": los gastos y lo de la casa todavía no se cuentan.'
-                : 'Los gastos y lo de la casa se cuentan desde el ${diaMes(d.plataDesde!.toLocal())} (foto inicial).',
+                : 'Los gastos y los retiros se cuentan desde el ${diaMes(d.plataDesde!.toLocal())} (foto inicial); '
+                      'las ventas, desde el 1: este mes la ganancia del negocio se ve más alta de lo que es. '
+                      'La salud del negocio lo mide bien.',
           ),
         if (d.actual && d.dia > 0 && d.dia < d.dias && d.ventas > 0)
           _note(
@@ -362,6 +410,17 @@ class _FinanceDashboardPageState extends State<FinanceDashboardPage> {
           ),
       ],
     );
+  }
+
+  Widget _expenses(Dashboard d) {
+    final rows = d.gastosPorCategoria.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final total = rows.fold(0.0, (s, e) => s + e.value);
+    return _card('Gastos del negocio por categoría', [
+      for (final e in rows)
+        _line(e.key, e.value, hint: total <= 0 ? null : porcentaje(e.value / total)),
+      const Divider(),
+      _line('Total', total, bold: true),
+    ]);
   }
 
   Widget _breakEven(Dashboard d) {
@@ -375,7 +434,7 @@ class _FinanceDashboardPageState extends State<FinanceDashboardPage> {
     final ratio = d.ventas / need;
     return _card('¿Cuánto hay que vender?', [
       Text(
-        'Con tu margen de ${_pct(d.margen!)}, para cubrir los gastos del negocio y lo de la casa '
+        'Con tu margen de ${_pct(d.margen!)}, para cubrir los gastos del negocio y los retiros '
         '${d.actual ? 'anotados hasta hoy ' : ''}hay que vender ${pesos(need)}.',
       ),
       const SizedBox(height: 10),

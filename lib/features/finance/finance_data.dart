@@ -150,13 +150,34 @@ class FinMovement {
     descripcion: j['descripcion']?.toString(),
   );
 
+  /// De quién es una salida: negocio, casa, personal o sueldo (null si no es gasto ni retiro).
+  String? get deQuien => switch (tipo) {
+    'gasto' || 'gasto_fijo' => 'negocio',
+    'hogar' => switch (categoria) {
+      'Sueldo' => 'sueldo',
+      'Personal' => 'personal',
+      _ => 'casa',
+    },
+    _ => null,
+  };
+
+  bool get esAporte => tipo == 'ingreso' && categoria == aporteDelDueno;
+
+  /// Se puede pasar de negocio a casa/personal o al revés (el sueldo y los gastos fijos no).
+  bool get reclasificable => anulable && (tipo == 'gasto' || (tipo == 'hogar' && categoria != 'Sueldo'));
+
   /// "Gasto · Combustible", "Cobro · Kiosco Pepe"...
   String get titulo {
     final base = switch (tipo) {
       'saldo_inicial' => 'Foto inicial',
       'gasto' => 'Gasto',
       'gasto_fijo' => 'Gasto fijo',
-      'hogar' => 'Para la casa',
+      'hogar' => switch (categoria) {
+        'Sueldo' => 'Mi sueldo',
+        'Personal' => 'Personal',
+        _ => 'Para la casa',
+      },
+      'ingreso' when categoria == aporteDelDueno => aporteDelDueno,
       'compra' => 'Compra',
       'pago_proveedor' => 'Pago a proveedor',
       'pase' => 'Pase entre cuentas',
@@ -168,7 +189,8 @@ class FinMovement {
       _ => tipo,
     };
     final detalle = [
-      if (categoria != null && categoria!.isNotEmpty && categoria != base && tipo != 'cobro') categoria!,
+      if (categoria != null && categoria!.isNotEmpty && categoria != base && tipo != 'cobro' && tipo != 'hogar')
+        categoria!,
       if (descripcion != null && descripcion!.isNotEmpty) descripcion!,
     ];
     return detalle.isEmpty ? base : '$base · ${detalle.join(' · ')}';
@@ -180,6 +202,63 @@ class FinMonth {
   final Map<String, double> values;
   double operator [](String key) => values[key] ?? 0;
 }
+
+/// Sueldo fijo semanal (se paga los sábados; semana de lunes a sábado).
+class SalaryStatus {
+  const SalaryStatus({
+    this.semanal,
+    this.desde,
+    this.semana,
+    this.pendiente = false,
+    this.pagado,
+    this.ultimoSemana,
+    this.ultimoImporte,
+    this.porMes = 0,
+  });
+
+  /// null = todavía no se fijó un sueldo.
+  final double? semanal;
+  final DateTime? desde;
+
+  /// La semana a pagar (su sábado): la pendiente o, si está al día, la próxima.
+  final DateTime? semana;
+
+  /// El sábado ya llegó y no se pagó.
+  final bool pendiente;
+
+  /// Importe si [semana] ya está pagada (se adelantó).
+  final double? pagado;
+  final DateTime? ultimoSemana;
+  final double? ultimoImporte;
+  final double porMes;
+
+  bool get fijado => semanal != null;
+
+  static SalaryStatus? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final j = Map<String, dynamic>.from(raw);
+    final pagado = j['pagado'] is Map ? Map<String, dynamic>.from(j['pagado'] as Map) : null;
+    final ultimo = j['ultimo'] is Map ? Map<String, dynamic>.from(j['ultimo'] as Map) : null;
+    return SalaryStatus(
+      semanal: j['semanal'] == null ? null : stockNum(j['semanal']),
+      desde: _date(j['desde']),
+      semana: _date(j['semana']),
+      pendiente: j['pendiente'] == true,
+      pagado: pagado == null ? null : stockNum(pagado['importe']),
+      ultimoSemana: _date(ultimo?['semana']),
+      ultimoImporte: ultimo == null ? null : stockNum(ultimo['importe']),
+      porMes: stockNum(j['por_mes']),
+    );
+  }
+}
+
+Future<SalaryStatus?> fetchSalaryStatus(SupabaseClient client) async {
+  final result = await client.rpc('fin_sueldo_estado', params: const {}, get: true);
+  return SalaryStatus.fromJson(result);
+}
+
+/// "sábado 28/11".
+String sabado(DateTime d) => 'sábado ${diaMes(d)}';
 
 class FinState {
   const FinState({
@@ -193,6 +272,7 @@ class FinState {
     required this.disponible,
     required this.mes,
     required this.ultimos,
+    this.sueldo,
   });
 
   /// Foto inicial; null = todavía no se hizo.
@@ -210,6 +290,7 @@ class FinState {
   final double disponible;
   final FinMonth mes;
   final List<FinMovement> ultimos;
+  final SalaryStatus? sueldo;
 
   bool get started => inicio != null;
   List<FixedExpense> get activos => gastosFijos.where((g) => g.activo).toList();
@@ -236,6 +317,7 @@ class FinState {
       disponible: stockNum(j['disponible']),
       mes: FinMonth({for (final e in mes.entries) e.key: stockNum(e.value)}),
       ultimos: [for (final m in list('ultimos')) FinMovement.fromJson(m)],
+      sueldo: SalaryStatus.fromJson(j['sueldo']),
     );
   }
 }
@@ -267,6 +349,8 @@ Future<StockOpOutcome> runFinOp(
 }) => runner != null
     ? runner(rpc, args)
     : runStockOp(client ?? Supabase.instance.client, rpc: rpc, args: args, description: description, total: total);
+
+const aporteDelDueno = 'Aporte del dueño';
 
 const categoriasGasto = [
   'Combustible',

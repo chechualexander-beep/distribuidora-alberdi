@@ -1,3 +1,4 @@
+import 'package:distribuidora_alberdi/features/finance/business_health.dart';
 import 'package:distribuidora_alberdi/features/finance/finance_dashboard_page.dart';
 import 'package:distribuidora_alberdi/features/finance/finance_data.dart';
 import 'package:distribuidora_alberdi/features/finance/finance_home_page.dart';
@@ -6,7 +7,8 @@ import 'package:distribuidora_alberdi/features/stock/stock_form_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-FinState estado({bool started = true}) => FinState.fromJson({
+FinState estado({bool started = true, Map<String, dynamic>? sueldo}) => FinState.fromJson({
+  'sueldo': sueldo,
   'inicio': started ? '2026-11-19T12:00:00Z' : null,
   'cuentas': [
     {'codigo': 'efectivo', 'nombre': 'Efectivo', 'saldo': 850000},
@@ -265,5 +267,213 @@ void main() {
     expect(find.textContaining('hay que vender \$13.636.363,64'), findsOneWidget);
     expect(find.text('El negocio se achicó \$360.000.'), findsOneWidget);
     expect(find.text('\$27.849.600'), findsOneWidget);
+  });
+
+  Future<(String?, Map<String, dynamic>?) Function()> abrirPlata(WidgetTester tester, FinState s) async {
+    String? rpc;
+    Map<String, dynamic>? args;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FinanceHomePage(
+          initial: s,
+          runner: (fn, a) async {
+            rpc = fn;
+            args = a;
+            return const StockOpOutcome({'id': 'x'});
+          },
+        ),
+      ),
+    );
+    return () => (rpc, args);
+  }
+
+  testWidgets('Anotar gasto: si es de la casa va como retiro y no pide categoría', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final last = await abrirPlata(tester, estado());
+    await tester.pump();
+    await tester.tap(find.text('Anotar gasto'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('de-quien')), findsOneWidget);
+    await tester.tap(find.text('Casa'));
+    await tester.pump();
+    expect(find.widgetWithText(ChoiceChip, 'Combustible'), findsNothing);
+    expect(find.textContaining('no baja la ganancia'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'Importe'), '12.000');
+    await tester.tap(find.text('Guardar'));
+    await tester.pumpAndSettle();
+    final (rpc, args) = last();
+    expect(rpc, 'fin_movimiento');
+    expect(args!['p_tipo'], 'hogar');
+    expect(args['p_categoria'], 'Casa');
+    expect(args['p_importe'], 12000);
+  });
+
+  testWidgets('Ingreso o aporte: la plata de afuera queda como aporte del dueño', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final last = await abrirPlata(tester, estado());
+    await tester.pump();
+    await tester.tap(find.text('Ingreso o aporte'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Aporte mío'));
+    await tester.pump();
+    await tester.enterText(find.widgetWithText(TextField, 'Importe'), '100.000');
+    await tester.tap(find.text('Guardar'));
+    await tester.pumpAndSettle();
+    final (rpc, args) = last();
+    expect(rpc, 'fin_movimiento');
+    expect(args!['p_tipo'], 'ingreso');
+    expect(args['p_categoria'], 'Aporte del dueño');
+  });
+
+  testWidgets('Mi sueldo: sin fijar ofrece fijarlo', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final last = await abrirPlata(tester, estado(sueldo: {'semanal': null}));
+    await tester.pump();
+    await tester.tap(find.text('Fijar sueldo'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Sueldo por semana'), '40.000');
+    await tester.tap(find.text('Guardar'));
+    await tester.pumpAndSettle();
+    final (rpc, args) = last();
+    expect(rpc, 'fin_sueldo_guardar');
+    expect(args, {'p_importe': 40000});
+  });
+
+  testWidgets('Mi sueldo: el del sábado pendiente se paga desde la tarjeta', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final last = await abrirPlata(
+      tester,
+      estado(
+        sueldo: {
+          'semanal': 50000, 'desde': '2026-11-20', 'semana': '2026-11-28', 'pendiente': true, 'pagado': null,
+          'ultimo': null, 'por_mes': 216667,
+        },
+      ),
+    );
+    await tester.pump();
+    expect(find.text('\$50.000 por semana'), findsOneWidget);
+    expect(find.text('Pendiente: el del sábado 28/11'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Pagar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Semana del sábado 28/11.'), findsOneWidget);
+    await tester.tap(find.text('Pagado'));
+    await tester.pumpAndSettle();
+    final (rpc, args) = last();
+    expect(rpc, 'fin_pagar_sueldo');
+    expect(args, {'p_semana': '2026-11-28', 'p_cuenta': 'efectivo', 'p_importe': 50000});
+  });
+
+  testWidgets('Un gasto mal anotado se pasa a Personal sin anularlo', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final last = await abrirPlata(tester, estado());
+    await tester.pump();
+    await tester.scrollUntilVisible(find.text('Gasto · Combustible'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.longPress(find.text('Gasto · Combustible'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cambiar de quién es'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Personal'));
+    await tester.pump();
+    await tester.tap(find.text('Cambiar'));
+    await tester.pumpAndSettle();
+    final (rpc, args) = last();
+    expect(rpc, 'fin_reclasificar');
+    expect(args, {'p_id': 'm1', 'p_de_quien': 'personal', 'p_categoria': null});
+  });
+
+  test('movimientos: sueldo, personal y aporte se nombran por lo que son', () {
+    FinMovement mov(String tipo, String cat, [String? d]) => FinMovement.fromJson({
+      'id': 'x', 'fecha': '2026-11-28T15:00:00Z', 'tipo': tipo, 'cuenta': 'efectivo', 'importe': -1,
+      'parte_hogar': 1, 'categoria': cat, 'descripcion': d, 'anulable': true,
+    });
+    expect(mov('hogar', 'Sueldo', 'Semana del sábado 28/11').titulo, 'Mi sueldo · Semana del sábado 28/11');
+    expect(mov('hogar', 'Sueldo').reclasificable, isFalse);
+    expect(mov('hogar', 'Personal').titulo, 'Personal');
+    expect(mov('hogar', 'Personal').deQuien, 'personal');
+    expect(mov('hogar', 'Hogar').deQuien, 'casa');
+    expect(mov('ingreso', 'Aporte del dueño').titulo, 'Aporte del dueño');
+    expect(mov('gasto', 'Combustible').reclasificable, isTrue);
+  });
+
+  Map<String, dynamic> mes(String m, {bool actual = false, bool completo = true, double? gan, double retiros = 0,
+      int dias = 30, double ventas = 10000000, double margen = 0.2, double? capIni, double? capFin}) => {
+    'mes': m, 'actual': actual, 'ventas': ventas, 'ganancia_comercial': ventas * margen, 'margen': margen,
+    'completo': completo,
+    'medido': gan == null ? null : {
+      'desde': '${m}T03:00:00Z', 'hasta': '${m}T03:00:00Z', 'dias': dias, 'ventas': ventas,
+      'ganancia_comercial': ventas * margen, 'ganancia_negocio': gan, 'gastos_negocio': ventas * margen - gan,
+      'retiros': retiros, 'sueldo': retiros, 'casa': 0, 'personal': 0, 'aportes': 0,
+    },
+    'capital_inicio': capIni, 'capital_inicio_fecha': capIni == null ? null : m, 'capital_fin': capFin,
+  };
+
+  test('salud: con pocos días de gastos no sugiere sueldo y avisa', () {
+    final h = BusinessHealth.fromJson({
+      'inicio': '2026-11-18T13:00:00Z', 'sueldo_semanal': null,
+      'meses': [
+        mes('2026-09-01'), mes('2026-10-01'),
+        mes('2026-11-01', actual: true, completo: false, gan: 300000, dias: 6, retiros: 100000),
+      ],
+    });
+    expect(h.cerrados, isEmpty);
+    expect(h.sueldoSugerido, isNull);
+    expect(h.dias, 6);
+    expect(h.primerMesCompleto, DateTime(2026, 12));
+    final s = h.senales;
+    expect(s.length, 5);
+    expect(s[0].estado, Semaforo.verde);
+    expect(s[1].estado, Semaforo.verde, reason: 'el margen se compara con los meses de antes, que sí tienen ventas');
+    expect(s[3].estado, Semaforo.verde, reason: 'retiró un tercio de la ganancia');
+    expect(s[4].estado, Semaforo.gris, reason: 'no hay foto del capital de antes');
+  });
+
+  test('salud: con 3 meses completos el sueldo sugerido deja 25% de reserva', () {
+    final h = BusinessHealth.fromJson({
+      'inicio': '2026-08-01T03:00:00Z', 'sueldo_semanal': 200000,
+      'meses': [
+        mes('2026-08-01', gan: 1000000, retiros: 1200000, capIni: 9000000),
+        mes('2026-09-01', gan: 1000000, retiros: 1200000),
+        mes('2026-10-01', gan: 1000000, retiros: 1200000),
+        mes('2026-11-01', actual: true, completo: true, gan: 500000, dias: 23, margen: 0.15, capFin: 8500000),
+      ],
+    });
+    expect(h.firme, isTrue);
+    expect(h.dias, 90);
+    // 3.000.000 en 90 días → 1.013.333 por mes; × 0,75 ÷ 4,33 = 175.384 → 175.000.
+    expect(h.sueldoSugerido, 175000);
+    final s = h.senales;
+    expect(s[1].estado, Semaforo.rojo, reason: 'el margen bajó 5 puntos');
+    expect(s[3].estado, Semaforo.rojo, reason: 'se llevó más de lo que ganó');
+    expect(s[4].estado, Semaforo.rojo, reason: 'el capital bajó 5,5%');
+  });
+
+  testWidgets('Tablero: la salud del negocio arriba', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final now = DateTime.now();
+    final m = '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
+    final d = Dashboard.fromJson({
+      'mes': m, 'actual': true, 'dia': 5, 'dias': 30, 'ventas': 1000000, 'costo': 800000, 'comisiones': 0,
+      'notas_credito': 0, 'ganancia_comercial': 200000, 'margen': 0.2, 'gastos_negocio': 50000,
+      'ganancia_negocio': 150000, 'hogar': 80000, 'quedo': 70000, 'sueldo': 50000, 'casa': 20000,
+      'personal': 10000, 'aportes': 30000, 'gastos_por_categoria': {'Combustible': 40000, 'Otros': 10000},
+      'plata_parcial': false, 'ventas_12_meses': 1000000,
+    });
+    final h = BusinessHealth.fromJson({
+      'inicio': '${m}T03:00:00Z', 'sueldo_semanal': 50000,
+      'meses': [mes(m, actual: true, completo: true, gan: 150000, dias: 5, retiros: 80000)],
+    });
+    await tester.pumpWidget(MaterialApp(home: FinanceDashboardPage(initial: d, initialHealth: h)));
+    expect(find.byKey(const Key('salud-del-negocio')), findsOneWidget);
+    expect(find.text('Salud del negocio'), findsOneWidget);
+    expect(find.textContaining('El sueldo sugerido se calcula cuando cierre'), findsOneWidget);
+    expect(find.text('      Mi sueldo'), findsOneWidget);
+    expect(find.text('Gastos del negocio por categoría'), findsOneWidget);
+    expect(find.textContaining('pusiste \$30.000 de tu bolsillo'), findsOneWidget);
   });
 }

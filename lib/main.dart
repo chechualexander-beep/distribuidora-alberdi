@@ -42,6 +42,7 @@ import 'features/stock/stock_home_page.dart';
 import 'features/stock/vehicle_load_page.dart';
 import 'features/orders/finalization_request.dart';
 import 'features/finance/finance_home_page.dart';
+import 'features/finance/finance_data.dart' show pesos;
 import 'features/finance/finance_dashboard_page.dart';
 import 'features/sales/special_sale_page.dart';
 import 'features/calculator/calculator_page.dart';
@@ -893,6 +894,14 @@ class _HomePageState extends State<HomePage> {
             () => _abrir(const StockHomePage(onlyNegatives: true)),
             alert: (r?.negatives ?? 0) > 0,
           ),
+          if (r?.salaryDue != null)
+            TodayItem(
+              HomeArea.plata,
+              pesos(r!.salaryDue!),
+              'tu sueldo, sin pagar',
+              () => _abrir(const FinanceHomePage()),
+              alert: true,
+            ),
         ],
       ),
     );

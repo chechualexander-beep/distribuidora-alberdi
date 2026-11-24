@@ -19,6 +19,7 @@ import '../balances/balances_page.dart';
 import '../catalog/general_catalog_page.dart';
 import '../../core/pending_orders_page.dart';
 import '../finance/finance_home_page.dart';
+import '../finance/finance_data.dart' show pesos;
 import '../finance/finance_dashboard_page.dart';
 import '../sales/special_sale_page.dart';
 import '../calculator/calculator_page.dart';
@@ -150,6 +151,14 @@ class _DesktopHomeState extends State<DesktopHome> {
                         () => _go('En negativo'),
                         alert: (r?.negatives ?? 0) > 0,
                       ),
+                      if (r?.salaryDue != null)
+                        TodayItem(
+                          HomeArea.plata,
+                          pesos(r!.salaryDue!),
+                          'tu sueldo, sin pagar',
+                          () => _go('Plata del negocio'),
+                          alert: true,
+                        ),
                     ],
                   ),
                 ),

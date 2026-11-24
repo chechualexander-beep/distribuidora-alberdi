@@ -73,21 +73,43 @@ Future<T?> _form<T>(
   ),
 );
 
-/// Gasto del negocio, plata para la casa, pase entre cuentas o ingreso extra.
+/// "¿De quién es?": negocio, casa o personal. Lo de casa y personal no baja la ganancia del negocio.
+Widget ownerPicker(String value, ValueChanged<String> onChanged, {bool negocio = true}) => SegmentedButton<String>(
+  key: const Key('de-quien'),
+  segments: [
+    if (negocio) const ButtonSegment(value: 'negocio', label: Text('Negocio'), icon: Icon(Icons.storefront_outlined)),
+    const ButtonSegment(value: 'casa', label: Text('Casa'), icon: Icon(Icons.home_outlined)),
+    const ButtonSegment(value: 'personal', label: Text('Personal'), icon: Icon(Icons.person_outline)),
+  ],
+  selected: {value},
+  onSelectionChanged: (v) => onChanged(v.first),
+);
+
+String ownerHelp(String owner) => switch (owner) {
+  'casa' => 'Gasto de la casa pagado con plata del negocio: cuenta como retiro, no baja la ganancia.',
+  'personal' => 'Gasto tuyo pagado con plata del negocio: cuenta como retiro, no baja la ganancia.',
+  _ => 'Gasto del negocio: baja la ganancia.',
+};
+
+/// Gasto (del negocio, de la casa o personal), retiro, pase entre cuentas, ingreso extra o aporte del dueño.
 Future<FinRequest?> showMovementForm(BuildContext context, {required String tipo}) {
   final amount = TextEditingController();
   final note = TextEditingController();
   var cuenta = efectivo;
   var destino = efectivo;
+  var owner = tipo == 'hogar' ? 'casa' : 'negocio';
+  var aporte = false;
   String? categoria;
   String? error;
   final title = switch (tipo) {
     'gasto' => 'Anotar gasto',
-    'hogar' => 'Dejé plata en casa',
+    'hogar' => 'Retiro para la casa o personal',
     'pase' => 'Pase entre cuentas',
-    _ => 'Ingreso extra',
+    _ => 'Ingreso o aporte',
   };
   if (tipo == 'pase') cuenta = billetera;
+  const gray = TextStyle(color: AppColors.gris);
+  const small = TextStyle(fontSize: 13, color: AppColors.gris);
   return _form<FinRequest>(
     context,
     title: title,
@@ -95,11 +117,40 @@ Future<FinRequest?> showMovementForm(BuildContext context, {required String tipo
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (tipo == 'hogar')
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: Text('Lo que sale del negocio para la casa. No hace falta anotar en qué se gasta.'),
+        if (tipo == 'gasto' || tipo == 'hogar') ...[
+          Text('¿De quién es?', style: gray),
+          const SizedBox(height: 4),
+          ownerPicker(owner, (v) => set(() => owner = v), negocio: tipo == 'gasto'),
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 12),
+            child: Text(
+              tipo == 'hogar'
+                  ? 'Plata que sacás del negocio para la casa o para vos. No hace falta anotar en qué se gasta.'
+                  : ownerHelp(owner),
+              style: small,
+            ),
           ),
+        ],
+        if (tipo == 'ingreso') ...[
+          SegmentedButton<bool>(
+            key: const Key('tipo-ingreso'),
+            segments: const [
+              ButtonSegment(value: false, label: Text('Ingreso extra')),
+              ButtonSegment(value: true, label: Text('Aporte mío')),
+            ],
+            selected: {aporte},
+            onSelectionChanged: (v) => set(() => aporte = v.first),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 12),
+            child: Text(
+              aporte
+                  ? 'Plata tuya (de afuera) que ponés en el negocio. Suma a la caja pero no es ganancia.'
+                  : 'Plata que entra al negocio y no es un cobro a clientes.',
+              style: small,
+            ),
+          ),
+        ],
         moneyField(amount, 'Importe', autofocus: true),
         const SizedBox(height: 12),
         if (tipo == 'pase')
@@ -115,13 +166,13 @@ Future<FinRequest?> showMovementForm(BuildContext context, {required String tipo
             }),
           )
         else ...[
-          Text(tipo == 'ingreso' ? 'Entró en' : 'Salió de', style: const TextStyle(color: AppColors.gris)),
+          Text(tipo == 'ingreso' ? 'Entró en' : 'Salió de', style: gray),
           const SizedBox(height: 4),
           accountPicker(cuenta, (v) => set(() => cuenta = v)),
         ],
-        if (tipo == 'gasto') ...[
+        if (tipo == 'gasto' && owner == 'negocio') ...[
           const SizedBox(height: 12),
-          const Text('¿En qué?', style: TextStyle(color: AppColors.gris)),
+          Text('¿En qué?', style: gray),
           const SizedBox(height: 4),
           Wrap(
             spacing: 6,
@@ -146,25 +197,158 @@ Future<FinRequest?> showMovementForm(BuildContext context, {required String tipo
         set(() => error = 'Escribí el importe (mayor que 0).');
         return null;
       }
-      if (tipo == 'gasto' && categoria == null) {
+      final retiro = tipo == 'hogar' || (tipo == 'gasto' && owner != 'negocio');
+      if (tipo == 'gasto' && !retiro && categoria == null) {
         set(() => error = 'Elegí en qué fue el gasto.');
         return null;
       }
       if (tipo == 'pase') destino = cuenta == efectivo ? billetera : efectivo;
       final detail = note.text.trim();
+      final cat = retiro
+          ? (owner == 'personal' ? 'Personal' : 'Casa')
+          : tipo == 'ingreso' && aporte
+          ? aporteDelDueno
+          : categoria;
       return FinRequest(
         'fin_movimiento',
         {
-          'p_tipo': tipo,
+          'p_tipo': retiro ? 'hogar' : tipo,
           'p_cuenta': cuenta,
           'p_importe': value,
-          'p_categoria': categoria,
+          'p_categoria': cat,
           'p_descripcion': detail.isEmpty ? null : detail,
           'p_cuenta_destino': tipo == 'pase' ? destino : null,
         },
-        '$title${categoria == null ? '' : ' · $categoria'}',
+        '$title${cat == null ? '' : ' · $cat'}',
         value,
       );
+    },
+  );
+}
+
+/// Fijar, cambiar o quitar el sueldo semanal. Devuelve el importe (null = quitarlo); cancelar → no cambia nada.
+Future<({double? importe})?> showSalaryForm(BuildContext context, {double? current, double? suggested}) {
+  final amount = TextEditingController(text: current == null ? '' : importeEditable(current));
+  String? error;
+  return _form<({double? importe})>(
+    context,
+    title: 'Mi sueldo',
+    body: (context, set) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Un importe fijo que te pagás cada sábado, como un empleado más. Lo de la casa y lo personal '
+          'sale de ahí: anotá un retiro aparte solo cuando saques plata extra del negocio.',
+        ),
+        if (suggested != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Con lo que ganó el negocio, el sueldo sugerido es ${pesos(suggested)} por semana.',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ],
+        const SizedBox(height: 12),
+        moneyField(amount, 'Sueldo por semana', autofocus: true, helper: 'Dejalo vacío para no usar sueldo fijo.'),
+        _error(error),
+      ],
+    ),
+    onSave: (set) {
+      final text = amount.text.trim();
+      if (text.isEmpty) return (importe: null);
+      final value = parseMoney(text);
+      if (value == null || value <= 0) {
+        set(() => error = 'Escribí el sueldo (mayor que 0) o dejalo vacío.');
+        return null;
+      }
+      return (importe: value);
+    },
+  );
+}
+
+/// Pagarse el sueldo de una semana.
+Future<FinRequest?> showPaySalaryForm(BuildContext context, SalaryStatus salary) {
+  final amount = TextEditingController(text: importeEditable(salary.semanal ?? 0));
+  var cuenta = efectivo;
+  String? error;
+  final week = salary.semana ?? DateTime.now();
+  return _form<FinRequest>(
+    context,
+    title: 'Pagarme el sueldo',
+    saveLabel: 'Pagado',
+    body: (context, set) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Semana del ${sabado(week)}.', style: const TextStyle(color: AppColors.gris)),
+        const SizedBox(height: 12),
+        moneyField(amount, 'Lo que te pagás', helper: 'Cambialo si esta semana es otro importe.'),
+        const SizedBox(height: 12),
+        const Text('Sale de', style: TextStyle(color: AppColors.gris)),
+        const SizedBox(height: 4),
+        accountPicker(cuenta, (v) => set(() => cuenta = v)),
+        _error(error),
+      ],
+    ),
+    onSave: (set) {
+      final value = parseMoney(amount.text);
+      if (value == null || value <= 0) {
+        set(() => error = 'Escribí el importe (mayor que 0).');
+        return null;
+      }
+      return FinRequest(
+        'fin_pagar_sueldo',
+        {'p_semana': isoDate(week), 'p_cuenta': cuenta, 'p_importe': value},
+        'Mi sueldo · ${sabado(week)}',
+        value,
+      );
+    },
+  );
+}
+
+/// Cambiar de quién es un gasto o retiro ya anotado. Devuelve (de quién, categoría si es del negocio).
+Future<({String deQuien, String? categoria})?> showReclassifyForm(BuildContext context, FinMovement m) {
+  var owner = m.deQuien ?? 'negocio';
+  String? categoria = m.tipo == 'gasto' && categoriasGasto.contains(m.categoria) ? m.categoria : null;
+  String? error;
+  return _form<({String deQuien, String? categoria})>(
+    context,
+    title: '¿De quién es?',
+    saveLabel: 'Cambiar',
+    body: (context, set) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('${m.titulo} · ${pesos(-m.importe)}', style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(diaMesHora(m.fecha), style: const TextStyle(color: AppColors.gris)),
+        const SizedBox(height: 12),
+        ownerPicker(owner, (v) => set(() => owner = v)),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(ownerHelp(owner), style: const TextStyle(fontSize: 13, color: AppColors.gris)),
+        ),
+        if (owner == 'negocio') ...[
+          const SizedBox(height: 12),
+          const Text('¿En qué?', style: TextStyle(color: AppColors.gris)),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final c in categoriasGasto)
+                ChoiceChip(label: Text(c), selected: categoria == c, onSelected: (_) => set(() => categoria = c)),
+            ],
+          ),
+        ],
+        _error(error),
+      ],
+    ),
+    onSave: (set) {
+      if (owner == 'negocio' && categoria == null) {
+        set(() => error = 'Elegí en qué fue el gasto.');
+        return null;
+      }
+      return (deQuien: owner, categoria: owner == 'negocio' ? categoria : null);
     },
   );
 }

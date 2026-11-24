@@ -55,3 +55,30 @@ Prueba: `test/tablero_del_mes_escenario.sql`, `test/finance_test.dart`.
 3. **Crecer**: margen por producto, categoría y cliente; punto de equilibrio; días de cobro;
    rotación; fondo de reserva.
 4. **Hogar con detalle** (más adelante, si hace falta): presupuesto semanal y en qué se gasta.
+
+## Etapa 3 — Negocio separado de lo de afuera, sueldo y salud (1.17.0)
+
+Migración `20261205010000_sueldo_y_salud`.
+
+- **¿De quién es?** al anotar un gasto: Negocio (con categoría), Casa o Personal. Casa y Personal se
+  guardan como retiro (`tipo = 'hogar'`, categoría `Casa`/`Personal`): salen de la caja pero no bajan la
+  ganancia del negocio. Los "hogar" viejos cuentan como Casa.
+- **Retiro casa / personal** (antes "Dejé plata en casa") e **Ingreso o aporte**: el aporte del dueño
+  (categoría `Aporte del dueño`) es plata de afuera que entra a la caja; no es ingreso ni ganancia.
+- **Cambiar de quién es**: manteniendo apretado un gasto o retiro (`fin_reclasificar`), para corregir lo
+  anotado mezclado sin anularlo. El sueldo y los gastos fijos no se reclasifican.
+- **Mi sueldo**: importe semanal fijo (`fin_config.sueldo_semanal`), semana de lunes a sábado. Desde el
+  sábado aparece pendiente (tarjeta en Plata del negocio y en "Hoy") hasta pagarlo (`fin_pagar_sueldo`,
+  una vez por semana, se puede adelantar la próxima). Es un retiro con categoría `Sueldo`.
+- **Tablero**: los retiros separados (sueldo, casa, personal), los aportes y los gastos del negocio por
+  categoría.
+- **Salud del negocio** (`fin_salud`, arriba en el Tablero del mes actual): cinco señales con semáforo —
+  ganancia del negocio, margen de la venta (este mes contra los 3 anteriores), gastos sobre lo que deja
+  la venta (<50% verde, <80% amarillo), retiros sobre la ganancia (≤80% verde, ≤100% amarillo) y capital
+  (sin contar aportes). Ventas y margen se miden en meses enteros; la ganancia, los gastos y los retiros
+  solo desde la foto inicial, con las ventas de ese mismo tramo. Se toman los últimos 3 meses completos;
+  mientras no haya uno, lo anotado hasta hoy, marcado como referencia.
+- **Sueldo sugerido** = ganancia del negocio por mes × 75% (25% de reserva) ÷ 4,33, redondeado a mil.
+  Aparece con el primer mes completo y es firme con 3.
+
+Prueba: `test/sueldo_y_salud_escenario.sql`, `test/finance_test.dart`.
