@@ -372,7 +372,8 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final last = await abrirPlata(tester, estado());
     await tester.pump();
-    await tester.scrollUntilVisible(find.text('Gasto · Combustible'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.ensureVisible(find.text('Gasto · Combustible'));
+    await tester.pumpAndSettle();
     await tester.longPress(find.text('Gasto · Combustible'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cambiar de quién es'));
