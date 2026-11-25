@@ -790,8 +790,8 @@ Future<List<FinRequest>?> showSaturdayForm(BuildContext context, FinState state)
   };
   final salary = state.sueldo;
   final paySalary = salary != null && salary.fijado && salary.pagado == null && salary.semana != null;
-  final semanal = salary == null ? 0.0 : (salary.semanal ?? 0.0);
-  final week = salary == null ? DateTime.now() : (salary.semana ?? DateTime.now());
+  final semanal = state.sueldo?.semanal ?? 0.0;
+  final week = state.sueldo?.semana ?? DateTime.now();
   final salaryAmount = TextEditingController(text: paySalary ? importeEditable(semanal) : '');
   var salaryAccount = efectivo;
   String? error;
