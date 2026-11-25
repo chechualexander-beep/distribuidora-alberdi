@@ -41,6 +41,9 @@ class OrderProductsPage extends StatefulWidget {
 
   /// Para pruebas: productos ya cargados, elección de cliente y resumen.
   final List<Map<String, dynamic>>? productosIniciales;
+
+  /// Solo para pruebas: lo que lleva el vehículo (venta directa con el viaje abierto).
+  final VehicleStock? vehiculoInicial;
   final Future<Map<String, dynamic>?> Function(BuildContext context)?
   elegirCliente;
   final void Function(OrderDraft pedido)? abrirResumen;
@@ -58,6 +61,7 @@ class OrderProductsPage extends StatefulWidget {
     this.tipoPrecioInicial,
     this.client,
     this.productosIniciales,
+    this.vehiculoInicial,
     this.elegirCliente,
     this.abrirResumen,
   });
@@ -82,7 +86,8 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
 
   // Venta directa con un viaje abierto: se ofrece lo que lleva el vehículo.
   VehicleStock? _vehiculo;
-  bool _soloVehiculo = true;
+  /// Venta directa con el viaje abierto: qué productos se ven sin buscar.
+  _Vista _vista = _Vista.libre;
   bool _avisoNoOfrecido = false;
 
   /// Lo que el cliente compró la última vez (producto → cantidad).
@@ -121,7 +126,9 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     } else {
       _cargarProductos();
     }
-    if (widget.tipoOperacion == 'venta_directa' && widget.pedidoId == null) {
+    if (widget.vehiculoInicial != null) {
+      if (widget.vehiculoInicial!.tripOpen && widget.vehiculoInicial!.lines.isNotEmpty) _vehiculo = widget.vehiculoInicial;
+    } else if (widget.tipoOperacion == 'venta_directa' && widget.pedidoId == null) {
       _cargarVehiculo();
       if (_cliente != null) _cargarUltimaCompra();
     }
@@ -160,13 +167,32 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     } catch (_) {}
   }
 
-  bool get _modoVehiculo => _vehiculo != null && _soloVehiculo;
+  bool get _modoVehiculo => _vehiculo != null && _vista != _Vista.todo;
+
+  /// Arriba y sin dueño: se puede vender.
+  bool _esLibre(Map<String, dynamic> p) => (_vehiculo?.lines[p['id'].toString()]?.available ?? 0) > 0;
+
+  /// En el vehículo (o por cargar) pero todo reservado para entregas.
+  bool _esReservado(Map<String, dynamic> p) {
+    final l = _vehiculo?.lines[p['id'].toString()];
+    return l != null && l.available <= 0 && l.reparto > 0;
+  }
 
   /// Lo que queda en el vehículo descontando lo que ya está en esta venta.
   double? _quedanEnVehiculo(Map<String, dynamic> producto) {
     final linea = _vehiculo?.lines[producto['id'].toString()];
     if (linea == null) return null;
     return linea.available - _cantidadProducto(producto);
+  }
+
+  /// "Vehículo: quedan 3 · 2 para entregar", "Vehículo: reservado para entregas".
+  String _textoVehiculo(Map<String, dynamic> producto) {
+    final quedan = _quedanEnVehiculo(producto)!;
+    final linea = _vehiculo!.lines[producto['id'].toString()]!;
+    if (quedan <= 0) {
+      return linea.available <= 0 && linea.reparto > 0 ? 'Vehículo: reservado para entregas' : 'Vehículo: no queda';
+    }
+    return 'Vehículo: quedan ${formatQty(quedan)}${linea.reparto > 0 ? ' · ${formatQty(linea.reparto)} para entregar' : ''}';
   }
 
   /// Productos del vehículo con algo para vender que no están en la venta.
@@ -630,11 +656,11 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     final productosFiltrados = _productos.where((producto) {
 
 
-      if (_modoVehiculo &&
-          texto.isEmpty &&
-          !_vehiculo!.lines.containsKey(producto['id'].toString()) &&
-          _cantidadProducto(producto) == 0) {
-        return false;
+      // Sin buscar: "Para vender" muestra solo lo libre; "Reservado", lo que ya tiene dueño. Lo que ya está en
+      // esta venta se ve siempre, y con el buscador se encuentra cualquier producto.
+      if (_modoVehiculo && texto.isEmpty && _cantidadProducto(producto) == 0) {
+        if (_vista == _Vista.libre && !_esLibre(producto)) return false;
+        if (_vista == _Vista.reservado && !_esReservado(producto)) return false;
       }
 
       return coincideBusqueda(texto, [producto['nombre'], producto['codigo']]);
@@ -706,22 +732,22 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
         if (_vehiculo != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-            child: Row(
-              children: [
-                FilterChip(
-                  avatar: const Icon(Icons.local_shipping_outlined, size: 18),
-                  label: const Text('Solo lo del vehículo'),
-                  selected: _soloVehiculo,
-                  onSelected: (v) => setState(() => _soloVehiculo = v),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${_vehiculo!.lines.values.where((l) => l.available > 0).length} productos para ofrecer',
-                    style: const TextStyle(color: AppColors.gris),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<_Vista>(
+                key: const Key('vista-vehiculo'),
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                    value: _Vista.libre,
+                    label: Text('Para vender · ${_productos.where(_esLibre).length}'),
                   ),
-                ),
-              ],
+                  ButtonSegment(value: _Vista.reservado, label: Text('Reservado · ${_productos.where(_esReservado).length}')),
+                  const ButtonSegment(value: _Vista.todo, label: Text('Todo')),
+                ],
+                selected: {_vista},
+                onSelectionChanged: (v) => setState(() => _vista = v.first),
+              ),
             ),
           ),
         Padding(
@@ -747,7 +773,29 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
         ),
         Expanded(
           child: productosFiltrados.isEmpty
-              ? const Center(child: Text('No se encontraron productos'))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _modoVehiculo && texto.isEmpty
+                              ? (_vista == _Vista.libre
+                                    ? 'No queda nada libre en el vehículo: lo que hay arriba es para entregar.'
+                                    : 'No hay nada reservado para entregas.')
+                              : 'No se encontraron productos',
+                          textAlign: TextAlign.center,
+                        ),
+                        if (_modoVehiculo && texto.isEmpty)
+                          TextButton(
+                            onPressed: () => setState(() => _vista = _Vista.todo),
+                            child: const Text('Ver todos los productos'),
+                          ),
+                      ],
+                    ),
+                  ),
+                )
               : useDesktopLayout(context)
               ? DesktopRecords(
                   records: productosFiltrados,
@@ -834,9 +882,23 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                 )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  itemCount: productosFiltrados.length,
+                  itemCount: productosFiltrados.length + (_vista == _Vista.libre && texto.isEmpty && _vehiculo != null && _productos.any(_esReservado) ? 1 : 0),
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
+                    if (index == productosFiltrados.length) {
+                      return Card(
+                        key: const Key('ver-reservado'),
+                        child: ListTile(
+                          leading: const Icon(Icons.chevron_right),
+                          title: Text(
+                            'Reservado para entregas (${_productos.where(_esReservado).length})',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: const Text('Arriba, pero ya tiene dueño. Tocá para ver.'),
+                          onTap: () => setState(() => _vista = _Vista.reservado),
+                        ),
+                      );
+                    }
                     final producto = productosFiltrados[index];
 
                     final nombre =
@@ -898,9 +960,7 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                                   if (_quedanEnVehiculo(producto) != null) ...[
                                     const SizedBox(height: 4),
                                     Text(
-                                      (_quedanEnVehiculo(producto)! <= 0)
-                                          ? 'Vehículo: no queda'
-                                          : 'Vehículo: quedan ${formatQty(_quedanEnVehiculo(producto)!)}',
+                                      _textoVehiculo(producto),
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: _quedanEnVehiculo(producto)! <= 0
@@ -1059,3 +1119,5 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     }
   }
 }
+
+enum _Vista { libre, reservado, todo }
