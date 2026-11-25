@@ -369,7 +369,7 @@ class FinState {
   List<FixedExpense> get delNegocio => gastosFijos.where((g) => !g.conSueldo).toList();
   List<FixedExpense> get deLaCasa => gastosFijos.where((g) => g.conSueldo).toList();
   double get ponerSabado => sobres.fold(0, (s, e) => s + e.ponerSabado);
-  Envelope? sobre(String codigo) => sobres.where((e) => e.codigo == codigo).firstOrNull;
+  Envelope? envelope(String codigo) => sobres.where((e) => e.codigo == codigo).firstOrNull;
   double get gastosFijosMes => activos.fold(0, (s, g) => s + g.importe);
   double get apartarPorSemana => activos.fold(0, (s, g) => s + g.porSemana);
   double saldo(String cuenta) => cuentas.where((c) => c.codigo == cuenta).map((c) => c.saldo).firstOrNull ?? 0;
