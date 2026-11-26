@@ -656,9 +656,9 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
     final productosFiltrados = _productos.where((producto) {
 
 
-      // Sin buscar: "Para vender" muestra solo lo libre; "Reservado", lo que ya tiene dueño. Lo que ya está en
-      // esta venta se ve siempre, y con el buscador se encuentra cualquier producto.
-      if (_modoVehiculo && texto.isEmpty && _cantidadProducto(producto) == 0) {
+      // "Para vender" muestra solo lo libre y "Reservado", lo que ya tiene dueño, también al buscar (para buscar
+      // en toda la mercadería está "Todo"). Lo que ya está en esta venta se ve siempre.
+      if (_modoVehiculo && _cantidadProducto(producto) == 0) {
         if (_vista == _Vista.libre && !_esLibre(producto)) return false;
         if (_vista == _Vista.reservado && !_esReservado(producto)) return false;
       }
@@ -780,17 +780,22 @@ class _OrderProductsPageState extends State<OrderProductsPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          _modoVehiculo && texto.isEmpty
+                          !_modoVehiculo
+                              ? 'No se encontraron productos'
+                              : texto.isNotEmpty
                               ? (_vista == _Vista.libre
+                                    ? 'No está libre en el vehículo.'
+                                    : 'No está entre lo reservado para entregas.')
+                              : (_vista == _Vista.libre
                                     ? 'No queda nada libre en el vehículo: lo que hay arriba es para entregar.'
-                                    : 'No hay nada reservado para entregas.')
-                              : 'No se encontraron productos',
+                                    : 'No hay nada reservado para entregas.'),
                           textAlign: TextAlign.center,
                         ),
-                        if (_modoVehiculo && texto.isEmpty)
+                        if (_modoVehiculo)
                           TextButton(
+                            key: const Key('buscar-en-todo'),
                             onPressed: () => setState(() => _vista = _Vista.todo),
-                            child: const Text('Ver todos los productos'),
+                            child: Text(texto.isNotEmpty ? 'Buscar en todos los productos' : 'Ver todos los productos'),
                           ),
                       ],
                     ),

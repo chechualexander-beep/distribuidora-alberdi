@@ -7,7 +7,7 @@ Map<String, dynamic> prod(String id, String nombre) =>
     {'id': id, 'nombre': nombre, 'codigo': id.toUpperCase(), 'precio_normal': 1000, 'precio_promo': 900, 'precio_interior': 1100};
 
 void main() {
-  testWidgets('Venta directa: sin buscar se ve solo lo libre; lo reservado aparte', (tester) async {
+  testWidgets('Venta directa: se ve y se busca solo lo libre; lo reservado aparte; Todo busca en todo', (tester) async {
     await tester.binding.setSurfaceSize(const Size(420, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
@@ -59,6 +59,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'chizitos');
     await tester.pumpAndSettle();
-    expect(find.text('Chizitos del depósito'), findsOneWidget, reason: 'el buscador encuentra todo');
+    expect(find.text('Chizitos del depósito'), findsNothing, reason: 'en "Para vender" busca solo lo libre');
+    expect(find.text('No está libre en el vehículo.'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, 'copos');
+    await tester.pumpAndSettle();
+    expect(find.text('Copos libres'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, 'chizitos');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('buscar-en-todo')));
+    await tester.pumpAndSettle();
+    expect(find.text('Chizitos del depósito'), findsOneWidget, reason: 'en "Todo" busca en toda la mercadería');
   });
 }
